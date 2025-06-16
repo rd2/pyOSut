@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "osut"
+version = "0.6.0a1"
+requires-python = ">=3.2"
+authors = [
+  {name = "Denis Bourgeois", email = "denis@rd2.ca"}
+]
+maintainers = [
+  {name = "Denis Bourgeois", email = "denis@rd2.ca"}
+]
+description = "OpenStudio SDK utilities for Python"
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3.2",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Operating System :: OS Independent",
+]
+keywords = ["openstudio", "logger"]
+
+[project.urls]
+"Homepage" = "https://github.com/rd2/pyOSut"
+"Bug Tracker" = "https://github.com/rd2/pyOSut/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/osut"]
