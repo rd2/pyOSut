@@ -39,6 +39,7 @@ INF = osut.CN.INF
 WRN = osut.CN.WRN
 ERR = osut.CN.ERR
 FTL = osut.CN.FTL
+NS  = osut.CN.NS
 
 class TestOSutModuleMethods(unittest.TestCase):
     def test00_oslg_constants(self):
