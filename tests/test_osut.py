@@ -45,9 +45,25 @@ class TestOSutModuleMethods(unittest.TestCase):
     def test00_oslg_constants(self):
         self.assertEqual(DBG, 1)
 
-    def test01_open_osm(self):
+    def test01_osm_instantiation(self):
         model = osut.instantiate_new_osm()
         print(model)
+
+    def test02_tuples(self):
+        self.assertEqual(len(osut.sidz()), 6)
+        self.assertEqual(len(osut.mass()), 4)
+        self.assertEqual(osut.sidz()[5], "west")
+        self.assertEqual(osut.mass()[1], "light")
+
+    def test03_dictionaries(self):
+        self.assertEqual(len(osut.mats()),9)
+        self.assertEqual(len(osut.film()),10)
+        self.assertEqual(len(osut.uo()),10)
+        self.assertTrue("concrete" in osut.mats())
+        self.assertTrue("skylight" in osut.film())
+        self.assertTrue("skylight" in osut.uo())
+        self.assertEqual(osut.film().keys(), osut.uo().keys())
+
 
 if __name__ == "__main__":
     unittest.main()
