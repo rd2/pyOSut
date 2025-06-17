@@ -29,6 +29,7 @@
 
 import sys
 sys.path.append("./src/osut")
+sys.path.append("./src/oslg")
 
 import unittest
 import osut
