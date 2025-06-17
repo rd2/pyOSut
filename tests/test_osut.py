@@ -33,5 +33,17 @@ sys.path.append("./src/osut/oslg")
 
 import unittest
 import osut
+from osut import oslg
 
-# .... more to come
+DBG = oslg.CN.DEBUG
+INF = oslg.CN.INFO
+WRN = oslg.CN.WARN
+ERR = oslg.CN.ERROR
+FTL = oslg.CN.FATAL
+
+class TestOSutModuleMethods(unittest.TestCase):
+    def test00_oslg_constants(self):
+        self.assertEqual(DBG, 1)
+
+if __name__ == "__main__":
+    unittest.main()
