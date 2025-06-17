@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Operating System :: OS Independent",
 ]
-keywords = ["openstudio", "logger"]
+keywords = ["openstudio", "utilities"]
 
 [project.urls]
 "Homepage" = "https://github.com/rd2/pyOSut"

@@ -28,8 +28,9 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import sys
-sys.path.append("./src/oslg")
+sys.path.append("./src/osut")
 
 import unittest
+import osut
 
 # .... more to come
