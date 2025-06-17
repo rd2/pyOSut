@@ -26,3 +26,28 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+from oslg import oslg
+
+# DBG = oslg.CN.DEBUG
+# INF = oslg.CN.INFO
+# WRN = oslg.CN.WARN
+# ERR = oslg.CN.ERROR
+# FTL = oslg.CN.FATAL
+
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class _CN:
+    DBG = oslg.CN.DEBUG
+    INF = oslg.CN.INFO
+    WRN = oslg.CN.WARN
+    ERR = oslg.CN.ERROR
+    FTL = oslg.CN.FATAL
+    NS  = "nameString"
+CN = _CN()
+
+import openstudio
+
+def instantiate_new_osm():
+    return openstudio.model.Model()
