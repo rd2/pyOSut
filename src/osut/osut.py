@@ -29,4 +29,25 @@
 
 from oslg import oslg
 
-print(oslg.CN.DEBUG)
+# DBG = oslg.CN.DEBUG
+# INF = oslg.CN.INFO
+# WRN = oslg.CN.WARN
+# ERR = oslg.CN.ERROR
+# FTL = oslg.CN.FATAL
+
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class _CN:
+    DBG = oslg.CN.DEBUG
+    INF = oslg.CN.INFO
+    WRN = oslg.CN.WARN
+    ERR = oslg.CN.ERROR
+    FTL = oslg.CN.FATAL
+    NS  = "nameString"
+CN = _CN()
+
+import openstudio
+
+def instantiate_new_osm():
+    return openstudio.model.Model()

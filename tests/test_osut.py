@@ -33,17 +33,20 @@ sys.path.append("./src/osut/oslg")
 
 import unittest
 import osut
-from osut import oslg
 
-DBG = oslg.CN.DEBUG
-INF = oslg.CN.INFO
-WRN = oslg.CN.WARN
-ERR = oslg.CN.ERROR
-FTL = oslg.CN.FATAL
+DBG = osut.CN.DBG
+INF = osut.CN.INF
+WRN = osut.CN.WRN
+ERR = osut.CN.ERR
+FTL = osut.CN.FTL
 
 class TestOSutModuleMethods(unittest.TestCase):
     def test00_oslg_constants(self):
         self.assertEqual(DBG, 1)
+
+    def test01_open_osm(self):
+        model = osut.instantiate_new_osm()
+        print(model)
 
 if __name__ == "__main__":
     unittest.main()
