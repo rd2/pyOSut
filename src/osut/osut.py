@@ -113,6 +113,32 @@ _uo = dict(
      skylight = 3.500  # all skylight technologies
     )
 
+# Standard opaque materials, taken from a variety of sources (e.g. energy
+# codes, NREL's BCL).
+#   - sand
+#   - concrete
+#   - brick
+#
+# Material properties remain largely constant between projects. What does
+# tend to vary (between projects) are thicknesses. Actual OpenStudio opaque
+# material objects can be (re)set in more than one way by class methods.
+# In genConstruction, OpenStudio object identifiers are later suffixed with
+# actual material thicknesses, in mm, e.g.:
+#   - "concrete200" : 200mm concrete slab
+#   - "drywall13"   : 1/2" gypsum board
+#   - "drywall16"   : 5/8" gypsum board
+#
+# Surface absorptances are also defaulted in OpenStudio:
+#   - thermal, long-wave   (thm) : 90%
+#   - solar                (sol) : 70%
+#   - visible              (vis) : 70%
+#
+# These can also be explicitly set (see :sand).
+_mats["material"]["rgh"] = "MediumSmooth"
+_mats["material"]["k"  ] =    0.115
+_mats["material"]["rho"] =  540.000
+_mats["material"]["cp" ] = 1200.000
+
 def sidz():
     """Returns available 'sidz' keyword tuple."""
     return _sidz

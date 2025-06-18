@@ -64,6 +64,16 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue("skylight" in osut.uo())
         self.assertEqual(osut.film().keys(), osut.uo().keys())
 
+    def test04_materials(self):
+        self.assertTrue("rgh" in osut.mats()["material"])
+        self.assertTrue("k"   in osut.mats()["material"])
+        self.assertTrue("rho" in osut.mats()["material"])
+        self.assertTrue("cp"  in osut.mats()["material"])
+
+# _mats["material"]["rgh"] = "MediumSmooth"
+# _mats["material"]["k  "] =    0.115
+# _mats["material"]["rho"] =  540.000
+# _mats["material"]["cp "] = 1200.000
 
 if __name__ == "__main__":
     unittest.main()
