@@ -31,7 +31,7 @@ import sys
 sys.path.append("./src/osut")
 
 import unittest
-from osut import osut
+import osut
 
 DBG = osut.CN.DBG
 INF = osut.CN.INF
