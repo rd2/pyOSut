@@ -68,6 +68,12 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue("k"   in osut.mats()["material"])
         self.assertTrue("rho" in osut.mats()["material"])
         self.assertTrue("cp"  in osut.mats()["material"])
+        self.assertTrue(osut.mats()["material"]["rgh"], "MediumSmooth")
+        self.assertTrue(round(osut.mats()["material"]["k"  ], 3),    0.115)
+        self.assertTrue(round(osut.mats()["material"]["rho"], 3),  540.000)
+        self.assertTrue(round(osut.mats()["material"]["cp" ], 3), 1200.000)
+
+
 
 # _mats["material"]["rgh"] = "MediumSmooth"
 # _mats["material"]["k  "] =    0.115
