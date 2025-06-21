@@ -68,17 +68,17 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue("k"   in osut.mats()["material"])
         self.assertTrue("rho" in osut.mats()["material"])
         self.assertTrue("cp"  in osut.mats()["material"])
-        self.assertTrue(osut.mats()["material"]["rgh"], "MediumSmooth")
-        self.assertTrue(round(osut.mats()["material"]["k"  ], 3),    0.115)
-        self.assertTrue(round(osut.mats()["material"]["rho"], 3),  540.000)
-        self.assertTrue(round(osut.mats()["material"]["cp" ], 3), 1200.000)
+        self.assertTrue("thm" in osut.mats()["sand"])
+        self.assertTrue("sol" in osut.mats()["sand"])
+        self.assertTrue("vis" in osut.mats()["sand"])
+        self.assertEqual(osut.mats()["material"]["rgh"], "MediumSmooth")
+        self.assertEqual(round(osut.mats()["material"]["k"   ], 3),    0.115)
+        self.assertEqual(round(osut.mats()["material"]["rho" ], 3),  540.000)
+        self.assertEqual(round(osut.mats()["material"]["cp"  ], 3), 1200.000)
+        self.assertEqual(round(osut.mats()["sand"    ]["thm" ], 3),    0.900)
+        self.assertEqual(round(osut.mats()["sand"    ]["sol" ], 3),    0.700)
+        self.assertEqual(round(osut.mats()["sand"    ]["vis" ], 3),    0.700)
 
-
-
-# _mats["material"]["rgh"] = "MediumSmooth"
-# _mats["material"]["k  "] =    0.115
-# _mats["material"]["rho"] =  540.000
-# _mats["material"]["cp "] = 1200.000
 
 if __name__ == "__main__":
     unittest.main()

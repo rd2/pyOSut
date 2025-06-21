@@ -133,11 +133,51 @@ _uo = dict(
 #   - solar                (sol) : 70%
 #   - visible              (vis) : 70%
 #
-# These can also be explicitly set (see :sand).
-_mats["material"]["rgh"] = "MediumSmooth"
-_mats["material"]["k"  ] =    0.115
-_mats["material"]["rho"] =  540.000
-_mats["material"]["cp" ] = 1200.000
+# These can also be explicitly set (see "sand").
+_mats["material" ]["rgh"] = "MediumSmooth"
+_mats["material" ]["k"  ] =    0.115
+_mats["material" ]["rho"] =  540.000
+_mats["material" ]["cp" ] = 1200.000
+
+_mats["sand"     ]["rgh"] = "Rough"
+_mats["sand"     ]["k"  ] =    1.290
+_mats["sand"     ]["rho"] = 2240.000
+_mats["sand"     ]["cp" ] =  830.000
+_mats["sand"     ]["thm"] =    0.900
+_mats["sand"     ]["sol"] =    0.700
+_mats["sand"     ]["vis"] =    0.700
+
+_mats["concrete" ]["rgh"] = "MediumRough"
+_mats["concrete" ]["k"  ] =    1.730
+_mats["concrete" ]["rho"] = 2240.000
+_mats["concrete" ]["cp" ] =  830.000
+
+_mats["brick"    ]["rgh"] = "Rough"
+_mats["brick"    ]["k"  ] =    0.675
+_mats["brick"    ]["rho"] = 1600.000
+_mats["brick"    ]["cp" ] =  790.000
+
+_mats["drywall"  ]["k"  ] =    0.160
+_mats["drywall"  ]["rho"] =  785.000
+_mats["drywall"  ]["cp" ] = 1090.000
+
+_mats["mineral"  ]["k"  ] =    0.050
+_mats["mineral"  ]["rho"] =   19.000
+_mats["mineral"  ]["cp" ] =  960.000
+
+_mats["polyiso"  ]["k"  ] =    0.025
+_mats["polyiso"  ]["rho"] =   25.000
+_mats["polyiso"  ]["cp" ] = 1590.000
+
+_mats["cellulose"]["rgh"] = "VeryRough"
+_mats["cellulose"]["k"  ] =    0.050
+_mats["cellulose"]["rho"] =   80.000
+_mats["cellulose"]["cp" ] =  835.000
+
+_mats["door"     ]["rgh"] = "MediumSmooth"
+_mats["door"     ]["k"  ] =    0.080
+_mats["door"     ]["rho"] =  600.000
+_mats["door"     ]["cp" ] = 1000.000
 
 def sidz():
     """Returns available 'sidz' keyword tuple."""
