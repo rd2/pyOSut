@@ -29,10 +29,9 @@
 
 import sys
 sys.path.append("./src/osut")
-# sys.path.append("./src/osut/oslg")
 
 import unittest
-import osut
+from osut import osut
 
 DBG = osut.CN.DBG
 INF = osut.CN.INF
