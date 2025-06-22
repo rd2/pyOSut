@@ -201,3 +201,15 @@ def uo():
 
 def instantiate_new_osm():
     return openstudio.model.Model()
+
+def genConstruction(model=None, specs=dict()):
+    mth = "OSut::genConstruction"
+    cl1 = openstudio.model.Model
+    cl2 = dict
+
+    if not isinstance(model, openstudio.model.Model):
+        return oslg.mismatch("model", model, cl1, mth, CN.DBG)
+    if not isinstance(specs, cl2):
+        return oslg.mismatch("specs", specs, cl2, mth, CN.DBG)
+
+    return None

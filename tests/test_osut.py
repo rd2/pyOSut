@@ -30,6 +30,7 @@
 import sys
 sys.path.append("./src/osut")
 
+import openstudio
 import unittest
 import osut
 
@@ -46,7 +47,8 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     def test01_osm_instantiation(self):
         model = osut.instantiate_new_osm()
-        print(model)
+        self.assertTrue(isinstance(model, openstudio.model.Model))
+        del(model)
 
     def test02_tuples(self):
         self.assertEqual(len(osut.sidz()), 6)
@@ -78,6 +80,19 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(round(osut.mats()["sand"    ]["thm" ], 3),    0.900)
         self.assertEqual(round(osut.mats()["sand"    ]["sol" ], 3),    0.700)
         self.assertEqual(round(osut.mats()["sand"    ]["vis" ], 3),    0.700)
+
+    def test05_genConstruction(self):
+        self.assertEqual(osut.oslg.status(), 0)
+        self.assertEqual(osut.oslg.level(), INF)
+        self.assertEqual(osut.oslg.reset(DBG), DBG)
+        self.assertEqual(osut.oslg.level(), DBG)
+        model = osut.instantiate_new_osm()
+        self.assertEqual(osut.genConstruction(model, dict()), None)
+        self.assertEqual(len(osut.oslg.logs()),0)
+        self.assertEqual(osut.genConstruction(float, dict()), None)
+        self.assertEqual(len(osut.oslg.logs()),1)
+        print(osut.oslg.logs())
+        del(model)
 
 
 if __name__ == "__main__":
