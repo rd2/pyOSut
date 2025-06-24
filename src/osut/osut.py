@@ -209,7 +209,7 @@ def genConstruction(model=None, specs=dict()):
 
     if not isinstance(model, openstudio.model.Model):
         return oslg.mismatch("model", model, cl1, mth, CN.DBG)
-    if not isinstance(specs, cl2):
+    if not isinstance(specs, type(cl2)):
         return oslg.mismatch("specs", specs, cl2, mth, CN.DBG)
 
     return None
