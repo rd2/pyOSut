@@ -82,8 +82,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(round(osut.mats()["sand"    ]["vis" ], 3),    0.700)
 
     def test05_genConstruction(self):
+        m1 = "'model' type? expecting Model (OSut::genConstruction)"
+        m2 = "'specs' type? expecting dict (OSut::genConstruction)"
         o = osut.oslg
-
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.level(), INF)
         self.assertEqual(o.reset(DBG), DBG)
@@ -94,7 +95,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(osut.genConstruction(float, dict()), None)
         self.assertEqual(len(o.logs()),1)
         self.assertEqual(o.logs()[0]["level"], DBG)
-        self.assertTrue("Model (OSut::genConstruction)" in o.logs()[0]["message"])
+        self.assertEqual(m1, o.logs()[0]["message"])
+        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(len(o.logs()),0)
+        self.assertEqual(osut.genConstruction(model, 1000), None)
+        self.assertEqual(len(o.logs()),1)
+        self.assertEqual(o.logs()[0]["level"], DBG)
+        self.assertTrue(m2, o.logs()[0]["message"])
         self.assertTrue(o.clean(), DBG)
         self.assertEqual(len(o.logs()),0)
         del(model)
