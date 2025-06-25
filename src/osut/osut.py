@@ -208,6 +208,5 @@ def genConstruction(model=None, specs=dict()):
     if not isinstance(specs, dict):
         oslg.mismatch("specs", specs, dict, mth, CN.DBG)
         return None
-        # mismatch("dictionary", [], dict, "index", ERR), None)
 
     return None
