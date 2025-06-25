@@ -46,7 +46,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(DBG, 1)
 
     def test01_osm_instantiation(self):
-        model = osut.instantiate_new_osm()
+        model = openstudio.model.Model()
         self.assertTrue(isinstance(model, openstudio.model.Model))
         del(model)
 
@@ -82,26 +82,26 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(round(osut.mats()["sand"    ]["vis" ], 3),    0.700)
 
     def test05_genConstruction(self):
-        m1 = "'model' type? expecting Model (OSut::genConstruction)"
-        m2 = "'specs' type? expecting dict (OSut::genConstruction)"
-        o = osut.oslg
+        m1 = "'specs' list? expecting dict (osut.genConstruction)"
+        m2 = "'model' str? expecting Model (osut.genConstruction)"
+        o  = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.level(), INF)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        model = osut.instantiate_new_osm()
+        model = openstudio.model.Model()
         self.assertEqual(osut.genConstruction(model, dict()), None)
-        self.assertEqual(len(o.logs()),0)
-        self.assertEqual(osut.genConstruction(float, dict()), None)
+        self.assertFalse(o.logs())
+        self.assertEqual(osut.genConstruction(model, []), None)
         self.assertEqual(len(o.logs()),1)
         self.assertEqual(o.logs()[0]["level"], DBG)
-        self.assertEqual(m1, o.logs()[0]["message"])
+        self.assertEqual(o.logs()[0]["message"], m1)
         self.assertTrue(o.clean(), DBG)
-        self.assertEqual(len(o.logs()),0)
-        self.assertEqual(osut.genConstruction(model, 1000), None)
+        self.assertFalse(o.logs())
+        self.assertEqual(osut.genConstruction("model", dict()), None)
         self.assertEqual(len(o.logs()),1)
         self.assertEqual(o.logs()[0]["level"], DBG)
-        self.assertTrue(m2, o.logs()[0]["message"])
+        self.assertTrue(o.logs()[0]["message"], m2)
         self.assertTrue(o.clean(), DBG)
         self.assertEqual(len(o.logs()),0)
         del(model)

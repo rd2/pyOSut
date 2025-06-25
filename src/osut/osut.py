@@ -179,37 +179,35 @@ _mats["door"     ]["k"  ] =    0.080
 _mats["door"     ]["rho"] =  600.000
 _mats["door"     ]["cp" ] = 1000.000
 
-def sidz():
-    """Returns available 'sidz' keyword tuple."""
+def sidz() -> tuple:
+    """Returns available 'sidz' keywords."""
     return _sidz
 
-def mass():
-    """Returns available 'mass' keyword tuple."""
+def mass() -> tuple:
+    """Returns available 'mass' keywords."""
     return _mass
 
-def mats():
+def mats() -> dict:
     """Returns stored materials dictionary."""
     return _mats
 
-def film():
+def film() -> dict:
     """Returns inside + outside air film resistance dictionary."""
     return _film
 
-def uo():
+def uo() -> dict:
     """Returns (surface type-specific) Uo dictionary."""
     return _uo
 
-def instantiate_new_osm():
-    return openstudio.model.Model()
-
 def genConstruction(model=None, specs=dict()):
-    mth = "OSut::genConstruction"
-    cl1 = openstudio.model.Model
-    cl2 = dict
+    mth = "osut.genConstruction"
 
     if not isinstance(model, openstudio.model.Model):
-        return oslg.mismatch("model", model, cl1, mth, CN.DBG)
-    if not isinstance(specs, type(cl2)):
-        return oslg.mismatch("specs", specs, cl2, mth, CN.DBG)
+        oslg.mismatch("model", model, openstudio.model.Model, mth, CN.DBG)
+        return None
+    if not isinstance(specs, dict):
+        oslg.mismatch("specs", specs, dict, mth, CN.DBG)
+        return None
+        # mismatch("dictionary", [], dict, "index", ERR), None)
 
     return None
