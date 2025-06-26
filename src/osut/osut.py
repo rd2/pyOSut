@@ -209,4 +209,208 @@ def genConstruction(model=None, specs=dict()):
         oslg.mismatch("specs", specs, dict, mth, CN.DBG)
         return None
 
+    if "type" not in specs: specs["type"] = "wall"
+    if "id"   not in specs: specs["id"  ] = ""
+
+    id = oslg.trim(specs["id"])
+    if not id: id = "OSut.CON." + specs["type"]
+
+    if specs["type"] not in uo():
+        return oslg.invalid("surface type", mth, 2, CN.ERR)
+
+    if "uo" not in specs: specs["uo"] = uo()[ specs["type"] ]
+    u = specs["uo"]
+
+    if u:
+        try:
+            u = float(u)
+        except ValueError as e:
+            return oslg.mismatch(id + " Uo", u, float, mth, CN.ERR)
+
+        if u < 0:
+            return oslg.negative(id + " Uo", mth, CN.ERR)
+        if u > 5.678:
+            return oslg.invalid(id + " Uo (> 5.678)", mth, 2, CN.ERR)
+
+    # Optional specs. Log/reset if invalid.
+    if "clad"   not in specs: specs["clad"  ] = "light" # exterior
+    if "frame"  not in specs: specs["frame" ] = "light"
+    if "finish" not in specs: specs["finish"] = "light" # interior
+    if specs["clad"  ] not in mass(): oslg.log(CN.WRN, "Reset to light cladding")
+    if specs["frame" ] not in mass(): oslg.log(CN.WRN, "Reset to light framing")
+    if specs["finish"] not in mass(): oslg.log(CN.WRN, "Reset to light finish")
+    if specs["clad"  ] not in mass(): specs["clad"  ] = "light"
+    if specs["frame" ] not in mass(): specs["frame" ] = "light"
+    if specs["frame" ] not in mass(): specs["finish"] = "light"
+
+    flm = film()[ specs["type"] ]
+
+    # Layered assembly (max 4 layers):
+    #   - cladding
+    #   - intermediate sheathing
+    #   - composite insulating/framing
+    #   - interior finish
+    a = dict(clad={}, sheath={}, compo={}, finish={}, glazing={})
+
+    if specs["type"] == "shading":
+        mt = "material"
+        d  = 0.015
+        a["compo"]["mat"] = mats()[mt]
+        a["compo"]["d"  ] = d
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+    elif specs["type"] == "partition":
+        if not specs["clad"]:
+            mt = "drywall"
+            d  = 0.015
+            a["clad"]["mat"] = mats()[mt]
+            a["clad"]["d"  ] = d
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        mt = "concrete"
+        d  = 0.015
+        if specs["frame"] == "light": mt = "material"
+        if u:                         mt = "mineral"
+        if specs["frame"] == "medium": d = 0.100
+        if specs["frame"] == "heavy":  d = 0.200
+        if u:                          d = 0.100
+        a["compo"]["mat"] = mats()[mt]
+        a["compo"]["d"  ] = d
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        if not specs["finish"]:
+            mt = "drywall"
+            d  = 0.015
+            a["finish"]["mat"] = mats()[mt]
+            a["finish"]["d"  ] = d
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+    elif specs["type"] == "wall":
+        if not specs["clad"]:
+            mt = "material"
+            d  = 0.100
+            if specs["clad"] == "medium": mt = "brick"
+            if specs["clad"] == "heavy":  mt = "concrete"
+            if specs["clad"] == "light":   d = 0.015
+            a["clad"]["mat"] = mats()[mt]
+            a["clad"]["d"  ] = d
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        mt = "drywall"
+        d  = 0.100
+        if specs["frame"] == "medium": mt = "mineral"
+        if specs["frame"] == "heavy":  mt = "polyiso"
+        if specs["frame"] == "light":   d = 0.015
+        a["sheath"]["mat"] = mats()[mt]
+        a["sheath"]["d"  ] = d
+        a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        mt = "mineral"
+        d  = 0.100
+        if specs["frame"] == "medium": mt = "cellulose"
+        if specs["frame"] == "heavy":  mt = "concrete"
+        if not u:                      mt = "material"
+        if specs["frame"] == "heavy":   d = 0.200
+        if not u:                       d = 0.015
+        a["compo"]["mat"] = mats()[mt]
+        a["compo"]["d"  ] = d
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        if not specs["finish"]:
+            mt = "concrete"
+            d  = 0.015
+            if specs["finish"] == "light":  mt = "drywall"
+            if specs["finish"] == "medium":  d = 0.100
+            if specs["finish"] == "heavy":   d = 0.200
+            a["finish"]["mat"] = mats()[mt]
+            a["finish"]["d"  ] = d
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+    elif specs["type"] == "roof":
+        if not specs["clad"]:
+            mt = "concrete"
+            d  = 0.015
+            if specs["clad"] == "light": mt = "material"
+            if specs["clad"] == "medium": d = 0.100 # e.g. terrace
+            if specs["clad"] == "heavy":  d = 0.200 # e.g. parking garage
+            a["clad"]["mat"] = mats()[mt]
+            a["clad"]["d"  ] = d
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        mt = "mineral"
+        d  = 0.100
+        if specs["frame"] == "medium": mt = "polyiso"
+        if specs["frame"] == "heavy":  mt = "cellulose"
+        if not u:                      mt = "material"
+        if not u:                       d = 0.015
+        a["compo"][:"mat"] = mats()[mt]
+        a["compo"][:"d"  ] = d
+        a["compo"][:"id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        if not specs["finish"]:
+            mt = "concrete"
+            d  = 0.015
+            if specs["finish"] == "light":  mt = "drywall"
+            if specs["finish"] == "medium":  d = 0.100 # proxy for steel decking
+            if specs["finish"] == "heavy":   d = 0.200
+            a["finish"]["mat"] = mats()[mt]
+            a["finish"]["d"  ] = d
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+    elif specs["type"] == "floor":
+        if not specs["clad"]:
+            mt = "material"
+            d  = 0.015
+            a["clad"]["mat"] = mats()[mt]
+            a["clad"]["d"  ] = d
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        mt = "mineral"
+        d  = 0.100
+        if specs["frame"] == "medium": mt = "polyiso"
+        if specs["frame"] == "heavy":  mt = "cellulose"
+        if not u:                      mt = "material"
+        if not u:                       d = 0.015
+        a["compo"]["mat"] = mats()[mt]
+        a["compo"]["d"  ] = d
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        if not specs["finish"]:
+            mt = "concrete"
+            d  = 0.015
+            if specs["finish"] == "light": mt = "material"
+            if specs["finish"] == "medium": d = 0.100
+            if specs["finish"] == "heavy":  d = 0.200
+            a["finish"][:"mat"] = mats()[mt]
+            a["finish"][:"d"  ] = d
+            a["finish"][:"id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+    elif specs["type"] == "slab":
+        mt = "sand"
+        d  = 0.100
+        a["clad"]["mat"] = mats()[mt]
+        a["clad"]["d"  ] = d
+        a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        if not specs["frame"]:
+            mt = "polyiso"
+            d  = 0.025
+            a["sheath"]["mat"] = mats()[mt]
+            a["sheath"]["d"  ] = d
+            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        mt = "concrete"
+        d  = 0.100
+        if specs["frame"] == "heavy": d = 0.200
+        a["compo"]["mat"] = mats()[mt]
+        a["compo"]["d"  ] = d
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        if not specs["finish"]:
+            mt = "material"
+            d  = 0.015
+            a["finish"]["mat"] = mats()[mt]
+            a["finish"]["d"  ] = d
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
     return None

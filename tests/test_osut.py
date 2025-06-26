@@ -90,8 +90,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
         model = openstudio.model.Model()
-        self.assertEqual(osut.genConstruction(model, dict()), None)
-        self.assertFalse(o.logs())
         self.assertEqual(osut.genConstruction(model, []), None)
         self.assertEqual(len(o.logs()),1)
         self.assertEqual(o.logs()[0]["level"], DBG)
@@ -104,6 +102,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(o.logs()[0]["message"], m2)
         self.assertTrue(o.clean(), DBG)
         self.assertEqual(len(o.logs()),0)
+        self.assertEqual(osut.genConstruction(model, dict()), None)
+        self.assertFalse(o.logs())
         del(model)
 
 
