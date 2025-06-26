@@ -413,4 +413,108 @@ def genConstruction(model=None, specs=dict()):
             a["finish"]["d"  ] = d
             a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
+    elif specs["type"] == "basement":
+        if not specs["clad"]:
+            mt = "concrete"
+            d  = 0.100
+            if specs["clad"] == "light": mt = "material"
+            if specs["clad"] == "light":  d = 0.015
+            a["clad"][:"mat"] = mats[mt]
+            a["clad"][:"d"  ] = d
+            a["clad"][:"id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+            mt = "polyiso"
+            d  = 0.025
+            a["sheath"]["mat"] = mats()[mt]
+            a["sheath"]["d"  ] = d
+            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+            mt = "concrete"
+            d  = 0.200
+            a["compo"]["mat"] = mats()[mt]
+            a["compo"]["d"  ] = d
+            a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        else:
+            mt = "concrete"
+            d  = 0.200
+            a["sheath"]["mat"] = mats()[mt]
+            a["sheath"]["d"  ] = d
+            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+            if not specs["finish"]:
+                mt = "mineral"
+                d  = 0.075
+                a["compo"]["mat"] = mats()[mt]
+                a["compo"]["d"  ] = d
+                a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+                mt = "drywall"
+                d  = 0.015
+                a["finish"]["mat"] = mats()[mt]
+                a["finish"]["d"  ] = d
+                a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+    elif specs["type"] == "door":
+        mt = "door"
+        d  = 0.045
+        a["compo"  ]["mat" ] = mats()[mt]
+        a["compo"  ]["d"   ] = d
+        a["compo"  ]["id"  ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+    elif specs["type"] == "window":
+        a["glazing"]["u"   ]  = specs["uo"]
+        a["glazing"]["id"  ]  = "OSut.window"
+        a["glazing"]["id"  ] += ".U%.1f"  % a["glazing"]["u"]
+        a["glazing"]["id"  ] += ".SHGC%d" % a["glazing"]["shgc"]*100
+        a["glazing"]["shgc"]  = 0.450
+        if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
+
+    elif specs["type"] == "skylight":
+        a["glazing"]["u"   ]  = specs["uo"]
+        a["glazing"]["id"  ]  = "OSut.skylight"
+        a["glazing"]["id"  ] += ".U%.1f"  % a["glazing"]["u"]
+        a["glazing"]["id"  ] += ".SHGC%d" % a["glazing"]["shgc"]*100
+        a["glazing"]["shgc"]  = 0.450
+        if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
+
+    if bool(a["glazing"]):
+        layers = openstudio.model.FenestrationMaterialVector()
+
+        u    = a["glazing"]["u"   ]
+        shgc = a["glazing"]["shgc"]
+        lyr  = model.getSimpleGlazingByName(a["glazing"]["id"])
+
+        # if lyr.empty?
+        #     lyr = OpenStudio::Model::SimpleGlazing.new(model, u, shgc)
+        #     lyr.setName(a[:glazing][:id])
+        #     else
+        #     lyr = lyr.get
+        #
+        #     layers << lyr
+    else:
+        layers = openstudio.model.OpaqueMaterialVector()
+
+        # Loop through each layer spec, and generate construction.
+        # a.each do |i, l|
+        #     next if l.empty?
+        #
+        #     lyr = model.getStandardOpaqueMaterialByName(l["id"])
+        #
+        #     if lyr.empty?
+        #         lyr = OpenStudio::Model::StandardOpaqueMaterial.new(model)
+        #         lyr.setName(l[:id])
+        #         lyr.setThickness(l[:d])
+        #         lyr.setRoughness(         l[:mat][:rgh]) if l[:mat].key?(:rgh)
+        #         lyr.setConductivity(      l[:mat][:k  ]) if l[:mat].key?(:k  )
+        #         lyr.setDensity(           l[:mat][:rho]) if l[:mat].key?(:rho)
+        #         lyr.setSpecificHeat(      l[:mat][:cp ]) if l[:mat].key?(:cp )
+        #         lyr.setThermalAbsorptance(l[:mat][:thm]) if l[:mat].key?(:thm)
+        #         lyr.setSolarAbsorptance(  l[:mat][:sol]) if l[:mat].key?(:sol)
+        #         lyr.setVisibleAbsorptance(l[:mat][:vis]) if l[:mat].key?(:vis)
+        #     else:
+        #         lyr = lyr.get
+        #
+        #     layers << lyr
+
+
     return None
