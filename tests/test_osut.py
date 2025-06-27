@@ -102,7 +102,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(o.logs()[0]["message"], m2)
         self.assertTrue(o.clean(), DBG)
         self.assertEqual(len(o.logs()),0)
-        self.assertEqual(osut.genConstruction(model, dict()), None)
+        c = osut.genConstruction(model, dict())
+        self.assertTrue(isinstance(c, openstudio.model.Construction))
         self.assertFalse(o.logs())
         del(model)
 

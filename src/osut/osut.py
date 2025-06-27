@@ -179,32 +179,202 @@ _mats["door"     ]["k"  ] =    0.080
 _mats["door"     ]["rho"] =  600.000
 _mats["door"     ]["cp" ] = 1000.000
 
+
 def sidz() -> tuple:
     """Returns available 'sidz' keywords."""
     return _sidz
+
 
 def mass() -> tuple:
     """Returns available 'mass' keywords."""
     return _mass
 
+
 def mats() -> dict:
     """Returns stored materials dictionary."""
     return _mats
+
 
 def film() -> dict:
     """Returns inside + outside air film resistance dictionary."""
     return _film
 
+
 def uo() -> dict:
     """Returns (surface type-specific) Uo dictionary."""
     return _uo
 
+
+def rsi(lc=None, film=0.0, t=0.0) -> float:
+    """
+    Returns a construction's 'standard calc' thermal resistance (m2•K/W), which
+    includes air film resistances. It excludes insulating effects of shades,
+    screens, etc. in the case of fenestrated constructions. Adapted from BTAP's
+    'Material' Module "get_conductance" (P. Lopez).
+
+    Args:
+        lc:
+            an OpenStudio layered construction
+        film:
+            thermal resistance of surface air films (m2•K/W)
+        t:
+            gas temperature (°C) (optional)
+
+    Returns:
+        Layered construction's thermal resistance (0 if invalid input, see logs).
+
+    """
+    mth = "osut.rsi"
+    cl1 = openstudio.model.LayeredConstruction
+
+    if not hasattr(lc, CN.NS):
+        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
+
+    id = lc.nameString()
+
+    if not isinstance(lc, cl1):
+        return oslg.mismatch(id, lc, cl1, mth, CN.DBG, 0.0)
+
+    try:
+        film = float(film)
+    except ValueError as e:
+        return oslg.mismatch(id + " film", film, float, mth, CN.DBG, 0.0)
+
+    try:
+        t = float(t)
+    except ValueError as e:
+        return oslg.mismatch(id + " temp K", t, float, mth, CN.DBG, 0.0)
+
+    t += 273.0 # °C to K
+
+    if t < 0:
+        return oslg.negative(id + " temp K", mth, CN.ERR, 0.0)
+
+    if film < 0:
+        return oslg.negative(id + " film", mth, ERR, 0.0)
+
+    rsi = film
+
+    for m in lc.layers():
+        if m.to_SimpleGlazing():
+            return 1 / m.to_SimpleGlazing().get().uFactor()
+        elif m.to_StandardGlazing():
+            rsi += m.to_StandardGlazing().get().thermalResistance()
+        elif m.to_RefractionExtinctionGlazing():
+            rsi += m.to_RefractionExtinctionGlazing().get().thermalResistance()
+        elif m.to_Gas():
+            rsi += m.to_Gas().get().getThermalResistance(t)
+        elif m.to_GasMixture():
+            rsi += m.to_GasMixture().get().getThermalResistance(t)
+
+        # Opaque materials next.
+        if m.to_StandardOpaqueMaterial():
+            rsi += m.to_StandardOpaqueMaterial().get().thermalResistance()
+        elif m.to_MasslessOpaqueMaterial():
+            rsi += m.to_MasslessOpaqueMaterial()
+        elif m.to_RoofVegetation():
+            rsi += m.to_RoofVegetation().get().thermalResistance()
+        elif m.to_AirGap():
+            rsi += m.to_AirGap().get().thermalResistance()
+
+    return rsi
+
+
+def insulatingLayer(lc=None) -> dict:
+    """
+    Identifies a layered construction's (opaque) insulating layer. Returns an
+    insulating-layer dictionary:
+        "index": insulating layer index [0, n layers) within construction
+        "type" : layer material type ("standard" or "massless")
+        "r"    : material thermal resistance in m2•K/W.
+    If unsuccessful, DEBUG errors are logged. Dictionary is voided as follows:
+        "index": None
+        "type" : None
+        "r"    : 0.0
+
+    Args:
+        lc:
+            [openStudio.model.LayeredConstruction] a layered construction
+
+    Returns:
+        Insulating layer dictionary.
+
+    """
+    mth = "osut.insulatingLayer"
+    cl  = openstudio.model.LayeredConstruction
+    res = dict(index=None, type=None, r=0.0)
+    i   = 0  # iterator
+    if not hasattr(lc, CN.NS): return oslg.invalid("lc", mth, 1, DBG, res)
+    id  = lc.nameString()
+    if not isinstance(lc, cl): return oslg.mismatch(id, lc, cl, mth, DBG, res)
+
+    for m in lc.layers():
+        if m.to_MasslessOpaqueMaterial():
+            m = m.to_MasslessOpaqueMaterial().get()
+
+            if m.thermalResistance() < 0.001 or m.thermalResistance() < res["r"]:
+                i += 1
+                continue
+            else:
+                res["r"    ] = m.thermalResistance()
+                res["index"] = i
+                res["type" ] = "massless"
+
+        if m.to_StandardOpaqueMaterial():
+            m = m.to_StandardOpaqueMaterial().get()
+            k = m.thermalConductivity()
+            d = m.thickness()
+
+            if (d < 0.003) or (k > 3.0) or (d / k < res["r"]):
+                i += 1
+                continue
+            else:
+                res["r"    ] = d / k
+                res["index"] = i
+                res["type" ] = "standard"
+
+        i += 1
+
+    return res
+
+##
+  # Generates an OpenStudio multilayered construction, + materials if needed.
+  #
+  # @param model [OpenStudio::Model::Model] a model
+  # @param [Hash] specs OpenStudio construction specifications
+  # @option specs [#to_s] :id ("") construction identifier
+  # @option specs [Symbol] :type (:wall), see @@uo
+  # @option specs [Numeric] :uo assembly clear-field Uo, in W/m2•K, see @@uo
+  # @option specs [Symbol] :clad (:light) exterior cladding, see @@mass
+  # @option specs [Symbol] :frame (:light) assembly framing, see @@mass
+  # @option specs [Symbol] :finish (:light) interior finishing, see @@mass
+  #
+  # @return [OpenStudio::Model::Construction] generated construction
+  # @return [nil] if invalid inputs (see logs)
 def genConstruction(model=None, specs=dict()):
+    """
+    Generates an OpenStudio multilayered construction, + materials if needed.
+
+    Args:
+        lc: dict
+            A dictionary holding multilayered construction parameters:
+            - "id": construction identifier
+            - "type": surface type - see OSut 'uo()'
+            - "uo": assembly clear-field Uo, in W/m2•K - see OSut 'uo()'
+            - "clad": exterior cladding - see OSut 'mass()'
+            - "frame": assembly framing - see OSut 'mass()'
+            - "finish": interior finish - see OSut 'mass()'
+
+    Returns:
+        Generated construction, or None if invalid inputs (see logs).
+
+    """
     mth = "osut.genConstruction"
 
     if not isinstance(model, openstudio.model.Model):
         oslg.mismatch("model", model, openstudio.model.Model, mth, CN.DBG)
         return None
+
     if not isinstance(specs, dict):
         oslg.mismatch("specs", specs, dict, mth, CN.DBG)
         return None
@@ -213,12 +383,14 @@ def genConstruction(model=None, specs=dict()):
     if "id"   not in specs: specs["id"  ] = ""
 
     id = oslg.trim(specs["id"])
+
     if not id: id = "OSut.CON." + specs["type"]
 
     if specs["type"] not in uo():
         return oslg.invalid("surface type", mth, 2, CN.ERR)
 
     if "uo" not in specs: specs["uo"] = uo()[ specs["type"] ]
+
     u = specs["uo"]
 
     if u:
@@ -236,9 +408,9 @@ def genConstruction(model=None, specs=dict()):
     if "clad"   not in specs: specs["clad"  ] = "light" # exterior
     if "frame"  not in specs: specs["frame" ] = "light"
     if "finish" not in specs: specs["finish"] = "light" # interior
-    if specs["clad"  ] not in mass(): oslg.log(CN.WRN, "Reset to light cladding")
-    if specs["frame" ] not in mass(): oslg.log(CN.WRN, "Reset to light framing")
-    if specs["finish"] not in mass(): oslg.log(CN.WRN, "Reset to light finish")
+    if specs["clad"  ] not in mass(): oslg.log(CN.WRN, "Reset: light cladding")
+    if specs["frame" ] not in mass(): oslg.log(CN.WRN, "Reset: light framing")
+    if specs["finish"] not in mass(): oslg.log(CN.WRN, "Reset: light finish")
     if specs["clad"  ] not in mass(): specs["clad"  ] = "light"
     if specs["frame" ] not in mass(): specs["frame" ] = "light"
     if specs["frame" ] not in mass(): specs["finish"] = "light"
@@ -477,44 +649,94 @@ def genConstruction(model=None, specs=dict()):
         a["glazing"]["shgc"]  = 0.450
         if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
 
-    if bool(a["glazing"]):
+    if a["glazing"]:
         layers = openstudio.model.FenestrationMaterialVector()
 
         u    = a["glazing"]["u"   ]
         shgc = a["glazing"]["shgc"]
         lyr  = model.getSimpleGlazingByName(a["glazing"]["id"])
 
-        # if lyr.empty?
-        #     lyr = OpenStudio::Model::SimpleGlazing.new(model, u, shgc)
-        #     lyr.setName(a[:glazing][:id])
-        #     else
-        #     lyr = lyr.get
-        #
-        #     layers << lyr
+        if lyr:
+            lyr = lyr.get()
+        else:
+            lyr = openstudio.model.SimpleGlazing(model, u, shgc)
+            lyr.setName(a["glazing"]["id"])
+
+        layers.append(lyr)
     else:
         layers = openstudio.model.OpaqueMaterialVector()
 
         # Loop through each layer spec, and generate construction.
-        # a.each do |i, l|
-        #     next if l.empty?
-        #
-        #     lyr = model.getStandardOpaqueMaterialByName(l["id"])
-        #
-        #     if lyr.empty?
-        #         lyr = OpenStudio::Model::StandardOpaqueMaterial.new(model)
-        #         lyr.setName(l[:id])
-        #         lyr.setThickness(l[:d])
-        #         lyr.setRoughness(         l[:mat][:rgh]) if l[:mat].key?(:rgh)
-        #         lyr.setConductivity(      l[:mat][:k  ]) if l[:mat].key?(:k  )
-        #         lyr.setDensity(           l[:mat][:rho]) if l[:mat].key?(:rho)
-        #         lyr.setSpecificHeat(      l[:mat][:cp ]) if l[:mat].key?(:cp )
-        #         lyr.setThermalAbsorptance(l[:mat][:thm]) if l[:mat].key?(:thm)
-        #         lyr.setSolarAbsorptance(  l[:mat][:sol]) if l[:mat].key?(:sol)
-        #         lyr.setVisibleAbsorptance(l[:mat][:vis]) if l[:mat].key?(:vis)
-        #     else:
-        #         lyr = lyr.get
-        #
-        #     layers << lyr
+        for i, l in a.items():
+            if not l: continue
 
+            lyr = model.getStandardOpaqueMaterialByName(l["id"])
 
-    return None
+            if lyr:
+                lyr = lyr.get()
+            else:
+                lyr = openstudio.model.StandardOpaqueMaterial(model)
+                lyr.setName(l["id"])
+                lyr.setThickness(l["d"])
+                if "rgh" in l["mat"]: lyr.setRoughness(l["mat"]["rgh"])
+                if "k"   in l["mat"]: lyr.setConductivity(l["mat"]["k"])
+                if "rho" in l["mat"]: lyr.setDensity(l["mat"]["rho"])
+                if "cp"  in l["mat"]: lyr.setSpecificHeat(l["mat"]["cp" ])
+                if "thm" in l["mat"]: lyr.setThermalAbsorptance(l["mat"]["thm"])
+                if "sol" in l["mat"]: lyr.setSolarAbsorptance(l["mat"]["sol"])
+                if "vis" in l["mat"]: lyr.setVisibleAbsorptance(l["mat"]["vis"])
+
+            layers.append(lyr)
+
+    c  = openstudio.model.Construction(layers)
+    c.setName("id")
+
+    # Adjust insulating layer thickness or conductivity to match requested Uo.
+    if not a["glazing"]:
+        ro = 1 / specs["uo"] - film()[specs["type"]] if specs["uo"] else 0
+
+        if specs["type"] == "door": # 1x layer, adjust conductivity
+            layer = c.getLayer(0).to_StandardOpaqueMaterial()
+
+            if not layer:
+                return oslg.invalid(id + " standard material?", mth, 0)
+
+            layer = layer.get()
+            k     = layer.thickness() / ro
+            layer.setConductivity(k)
+
+        elif ro > 0: # multiple layers, adjust insulating layer thickness
+            lyr = insulatingLayer(c)
+
+            if not lyr["index"] or not lyr["type"] or not lyr["r"]:
+                return oslg.invalid(id + " construction", mth, 0)
+
+            index = lyr["index"]
+            layer = c.getLayer(index).to_StandardOpaqueMaterial()
+
+            if not layer:
+                return oslg.invalid(id + " material %d" % index, mth, 0)
+
+            layer = layer.get()
+            k     = layer.conductivity()
+            d     = (ro - rsi(c) + lyr["r"]) * k
+
+            if d < 0.03:
+                return oslg.invalid(id + " adjusted material thickness", mth, 0)
+
+            nom   = "osut."
+            # nom  += layer.nameString.gsub(/[^a-z]/i, "").gsub("OSut", "")
+            # nom  += "|"
+            # nom  += format("%03d", d*1000)[-3..-1]
+                    # "OSut|concrete|100"
+                    #
+                    # nom   = "OSut|"
+                    # nom  += layer.nameString.gsub(/[^a-z]/i, "").gsub("OSut", "")
+                    # nom  += "|"
+                    # nom  += format("%03d", d*1000)[-3..-1]
+
+            if not model.getStandardOpaqueMaterialByName(nom):
+                layer.setName(nom)
+                layer.setThickness(d)
+
+    return c
