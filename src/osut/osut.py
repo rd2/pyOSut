@@ -421,15 +421,15 @@ def genConstruction(model=None, specs=dict()):
         d  = 0.015
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "partition":
-        if not specs["clad"]:
+        if not specs["clad"] == "none":
             mt = "drywall"
             d  = 0.015
             a["clad"]["mat"] = mats()[mt]
             a["clad"]["d"  ] = d
-            a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
         mt = "concrete"
         d  = 0.015
@@ -440,17 +440,17 @@ def genConstruction(model=None, specs=dict()):
         if u:                          d = 0.100
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"]:
+        if not specs["finish"] == "none":
             mt = "drywall"
             d  = 0.015
             a["finish"]["mat"] = mats()[mt]
             a["finish"]["d"  ] = d
-            a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "wall":
-        if not specs["clad"]:
+        if not specs["clad"] == "none":
             mt = "material"
             d  = 0.100
             if specs["clad"] == "medium": mt = "brick"
@@ -458,7 +458,7 @@ def genConstruction(model=None, specs=dict()):
             if specs["clad"] == "light":   d = 0.015
             a["clad"]["mat"] = mats()[mt]
             a["clad"]["d"  ] = d
-            a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
         mt = "drywall"
         d  = 0.100
@@ -467,7 +467,7 @@ def genConstruction(model=None, specs=dict()):
         if specs["frame"] == "light":   d = 0.015
         a["sheath"]["mat"] = mats()[mt]
         a["sheath"]["d"  ] = d
-        a["sheath"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
         mt = "mineral"
         d  = 0.100
@@ -478,9 +478,9 @@ def genConstruction(model=None, specs=dict()):
         if not u:                       d = 0.015
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"]:
+        if not specs["finish"] == "none":
             mt = "concrete"
             d  = 0.015
             if specs["finish"] == "light":  mt = "drywall"
@@ -488,10 +488,10 @@ def genConstruction(model=None, specs=dict()):
             if specs["finish"] == "heavy":   d = 0.200
             a["finish"]["mat"] = mats()[mt]
             a["finish"]["d"  ] = d
-            a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "roof":
-        if not specs["clad"]:
+        if not specs["clad"] == "none":
             mt = "concrete"
             d  = 0.015
             if specs["clad"] == "light": mt = "material"
@@ -499,7 +499,7 @@ def genConstruction(model=None, specs=dict()):
             if specs["clad"] == "heavy":  d = 0.200 # e.g. parking garage
             a["clad"]["mat"] = mats()[mt]
             a["clad"]["d"  ] = d
-            a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
         mt = "mineral"
         d  = 0.100
@@ -507,11 +507,11 @@ def genConstruction(model=None, specs=dict()):
         if specs["frame"] == "heavy":  mt = "cellulose"
         if not u:                      mt = "material"
         if not u:                       d = 0.015
-        a["compo"][:"mat"] = mats()[mt]
-        a["compo"][:"d"  ] = d
-        a["compo"][:"id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["compo"]["mat"] = mats()[mt]
+        a["compo"]["d"  ] = d
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"]:
+        if not specs["finish"] == "none":
             mt = "concrete"
             d  = 0.015
             if specs["finish"] == "light":  mt = "drywall"
@@ -519,15 +519,15 @@ def genConstruction(model=None, specs=dict()):
             if specs["finish"] == "heavy":   d = 0.200
             a["finish"]["mat"] = mats()[mt]
             a["finish"]["d"  ] = d
-            a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "floor":
-        if not specs["clad"]:
+        if not specs["clad"] == "none":
             mt = "material"
             d  = 0.015
             a["clad"]["mat"] = mats()[mt]
             a["clad"]["d"  ] = d
-            a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
         mt = "mineral"
         d  = 0.100
@@ -537,109 +537,109 @@ def genConstruction(model=None, specs=dict()):
         if not u:                       d = 0.015
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"]:
+        if not specs["finish"] == "none":
             mt = "concrete"
             d  = 0.015
             if specs["finish"] == "light": mt = "material"
             if specs["finish"] == "medium": d = 0.100
             if specs["finish"] == "heavy":  d = 0.200
-            a["finish"][:"mat"] = mats()[mt]
-            a["finish"][:"d"  ] = d
-            a["finish"][:"id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["finish"]["mat"] = mats()[mt]
+            a["finish"]["d"  ] = d
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "slab":
         mt = "sand"
         d  = 0.100
         a["clad"]["mat"] = mats()[mt]
         a["clad"]["d"  ] = d
-        a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["frame"]:
+        if not specs["frame"] == "none":
             mt = "polyiso"
             d  = 0.025
             a["sheath"]["mat"] = mats()[mt]
             a["sheath"]["d"  ] = d
-            a["sheath"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
         mt = "concrete"
         d  = 0.100
         if specs["frame"] == "heavy": d = 0.200
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"]:
+        if not specs["finish"] == "none":
             mt = "material"
             d  = 0.015
             a["finish"]["mat"] = mats()[mt]
             a["finish"]["d"  ] = d
-            a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "basement":
-        if not specs["clad"]:
+        if not specs["clad"] == "none":
             mt = "concrete"
             d  = 0.100
             if specs["clad"] == "light": mt = "material"
             if specs["clad"] == "light":  d = 0.015
-            a["clad"][:"mat"] = mats[mt]
-            a["clad"][:"d"  ] = d
-            a["clad"][:"id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["clad"]["mat"] = mats[mt]
+            a["clad"]["d"  ] = d
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
             mt = "polyiso"
             d  = 0.025
             a["sheath"]["mat"] = mats()[mt]
             a["sheath"]["d"  ] = d
-            a["sheath"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
             mt = "concrete"
             d  = 0.200
             a["compo"]["mat"] = mats()[mt]
             a["compo"]["d"  ] = d
-            a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
         else:
             mt = "concrete"
             d  = 0.200
             a["sheath"]["mat"] = mats()[mt]
             a["sheath"]["d"  ] = d
-            a["sheath"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-            if not specs["finish"]:
+            if not specs["finish"] == "none":
                 mt = "mineral"
                 d  = 0.075
                 a["compo"]["mat"] = mats()[mt]
                 a["compo"]["d"  ] = d
-                a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+                a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
                 mt = "drywall"
                 d  = 0.015
                 a["finish"]["mat"] = mats()[mt]
                 a["finish"]["d"  ] = d
-                a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
+                a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "door":
         mt = "door"
         d  = 0.045
         a["compo"  ]["mat" ] = mats()[mt]
         a["compo"  ]["d"   ] = d
-        a["compo"  ]["id"  ] = "OSut." + mt + "%03d" % int(d * 1000)
+        a["compo"  ]["id"  ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "window":
         a["glazing"]["u"   ]  = specs["uo"]
-        a["glazing"]["id"  ]  = "OSut.window"
-        a["glazing"]["id"  ] += ".U%.1f"  % a["glazing"]["u"]
-        a["glazing"]["id"  ] += ".SHGC%d" % a["glazing"]["shgc"]*100
         a["glazing"]["shgc"]  = 0.450
         if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
+        a["glazing"]["id"  ]  = "OSut.window"
+        a["glazing"]["id"  ] += ".U%.1f"  % a["glazing"]["u"]
+        a["glazing"]["id"  ] += ".SHGC%d" % (a["glazing"]["shgc"]*100)
 
     elif specs["type"] == "skylight":
         a["glazing"]["u"   ]  = specs["uo"]
-        a["glazing"]["id"  ]  = "OSut.skylight"
-        a["glazing"]["id"  ] += ".U%.1f"  % a["glazing"]["u"]
-        a["glazing"]["id"  ] += ".SHGC%d" % a["glazing"]["shgc"]*100
         a["glazing"]["shgc"]  = 0.450
         if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
+        a["glazing"]["id"  ]  = "OSut.skylight"
+        a["glazing"]["id"  ] += ".U%.1f"  % a["glazing"]["u"]
+        a["glazing"]["id"  ] += ".SHGC%d" % (a["glazing"]["shgc"]*100)
 
     if a["glazing"]:
         layers = openstudio.model.FenestrationMaterialVector()
@@ -716,10 +716,9 @@ def genConstruction(model=None, specs=dict()):
             if d < 0.03:
                 return oslg.invalid(id + " adjusted material thickness", mth, 0)
 
-            print(layer.nameString()) # OSut.mineral100
             nom = re.sub(r'[^a-zA-Z]', '', layer.nameString())
             nom = re.sub(r'OSut', '', nom)
-            nom = "osut." + nom + "%03d" % int(d * 1000)
+            nom = "OSut." + nom + ".%03d" % int(d * 1000)
 
             if not model.getStandardOpaqueMaterialByName(nom):
                 layer.setName(nom)
