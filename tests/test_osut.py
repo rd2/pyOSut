@@ -122,17 +122,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(c.layers()), 2)
         l1 = c.layers()[0]
         l2 = c.layers()[1]
-        print(l1)
-        print(l2)
+        self.assertEqual(l1.nameString(), "OSut.drywall015")
+        self.assertEqual(l2.nameString(), "osut.mineral118")
+        r = osut.rsi(c, osut.film()["wall"])
+        u = osut.uo()["wall"]
+        self.assertEqual(round(r, 3), round(1/u, 3))
+        print(osut.rsi(c, osut.film()["wall"]))
         del(model)
-
-        # OS:Construction,
-        #   {118a4bad-fe74-4e7e-a2fa-65fe40af04e1}, !- Handle
-        #   OSut.CON.wall,                          !- Name
-        #   ,                                       !- Surface Rendering Name
-        #   {a654be16-2b34-4a85-9a56-0f4cf98e6045}, !- Layer 1
-        #   {d2b0c635-bacf-41c1-871f-4e5092e83266}; !- Layer 2
-
 
 if __name__ == "__main__":
     unittest.main()
