@@ -89,23 +89,49 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), INF)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
         model = openstudio.model.Model()
+
+        # 1. Unsuccessful try: 2nd argument not a 'dict' (see 'm1').
         self.assertEqual(osut.genConstruction(model, []), None)
+        self.assertEqual(o.status(), DBG)
         self.assertEqual(len(o.logs()),1)
         self.assertEqual(o.logs()[0]["level"], DBG)
         self.assertEqual(o.logs()[0]["message"], m1)
         self.assertTrue(o.clean(), DBG)
         self.assertFalse(o.logs())
+        self.assertEqual(o.status(), 0)
+
+        # 2. Unsuccessful try: 1st argument not a model (see 'm2').
         self.assertEqual(osut.genConstruction("model", dict()), None)
+        self.assertEqual(o.status(), DBG)
         self.assertEqual(len(o.logs()),1)
         self.assertEqual(o.logs()[0]["level"], DBG)
         self.assertTrue(o.logs()[0]["message"], m2)
         self.assertTrue(o.clean(), DBG)
-        self.assertEqual(len(o.logs()),0)
-        c = osut.genConstruction(model, dict())
-        self.assertTrue(isinstance(c, openstudio.model.Construction))
         self.assertFalse(o.logs())
+        self.assertEqual(o.status(), 0)
+
+        # 3. Successful try: defaulted specs (2nd argument).
+        c = osut.genConstruction(model, dict())
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+        self.assertTrue(isinstance(c, openstudio.model.Construction))
+        self.assertEqual(c.nameString(), "OSut.CON.wall")
+        self.assertTrue(c.layers())
+        self.assertEqual(len(c.layers()), 2)
+        l1 = c.layers()[0]
+        l2 = c.layers()[1]
+        print(l1)
+        print(l2)
         del(model)
+
+        # OS:Construction,
+        #   {118a4bad-fe74-4e7e-a2fa-65fe40af04e1}, !- Handle
+        #   OSut.CON.wall,                          !- Name
+        #   ,                                       !- Surface Rendering Name
+        #   {a654be16-2b34-4a85-9a56-0f4cf98e6045}, !- Layer 1
+        #   {d2b0c635-bacf-41c1-871f-4e5092e83266}; !- Layer 2
 
 
 if __name__ == "__main__":

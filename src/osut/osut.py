@@ -27,6 +27,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import re
 import openstudio
 from oslg import oslg
 from dataclasses import dataclass
@@ -304,9 +305,14 @@ def insulatingLayer(lc=None) -> dict:
     cl  = openstudio.model.LayeredConstruction
     res = dict(index=None, type=None, r=0.0)
     i   = 0  # iterator
-    if not hasattr(lc, CN.NS): return oslg.invalid("lc", mth, 1, DBG, res)
-    id  = lc.nameString()
-    if not isinstance(lc, cl): return oslg.mismatch(id, lc, cl, mth, DBG, res)
+
+    if not hasattr(lc, CN.NS):
+        return oslg.invalid("lc", mth, 1, CN.DBG, res)
+
+    id = lc.nameString()
+
+    if not isinstance(lc, cl):
+        return oslg.mismatch(id, lc, cl, mth, CN.DBG, res)
 
     for m in lc.layers():
         if m.to_MasslessOpaqueMaterial():
@@ -337,26 +343,13 @@ def insulatingLayer(lc=None) -> dict:
 
     return res
 
-##
-  # Generates an OpenStudio multilayered construction, + materials if needed.
-  #
-  # @param model [OpenStudio::Model::Model] a model
-  # @param [Hash] specs OpenStudio construction specifications
-  # @option specs [#to_s] :id ("") construction identifier
-  # @option specs [Symbol] :type (:wall), see @@uo
-  # @option specs [Numeric] :uo assembly clear-field Uo, in W/m2•K, see @@uo
-  # @option specs [Symbol] :clad (:light) exterior cladding, see @@mass
-  # @option specs [Symbol] :frame (:light) assembly framing, see @@mass
-  # @option specs [Symbol] :finish (:light) interior finishing, see @@mass
-  #
-  # @return [OpenStudio::Model::Construction] generated construction
-  # @return [nil] if invalid inputs (see logs)
+
 def genConstruction(model=None, specs=dict()):
     """
     Generates an OpenStudio multilayered construction, + materials if needed.
 
     Args:
-        lc: dict
+        specs:
             A dictionary holding multilayered construction parameters:
             - "id": construction identifier
             - "type": surface type - see OSut 'uo()'
@@ -370,14 +363,13 @@ def genConstruction(model=None, specs=dict()):
 
     """
     mth = "osut.genConstruction"
+    cl  = openstudio.model.Model
 
-    if not isinstance(model, openstudio.model.Model):
-        oslg.mismatch("model", model, openstudio.model.Model, mth, CN.DBG)
-        return None
+    if not isinstance(model, cl):
+        return oslg.mismatch("model", model, cl, mth, CN.DBG)
 
     if not isinstance(specs, dict):
-        oslg.mismatch("specs", specs, dict, mth, CN.DBG)
-        return None
+        return oslg.mismatch("specs", specs, dict, mth, CN.DBG)
 
     if "type" not in specs: specs["type"] = "wall"
     if "id"   not in specs: specs["id"  ] = ""
@@ -429,7 +421,7 @@ def genConstruction(model=None, specs=dict()):
         d  = 0.015
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
     elif specs["type"] == "partition":
         if not specs["clad"]:
@@ -437,7 +429,7 @@ def genConstruction(model=None, specs=dict()):
             d  = 0.015
             a["clad"]["mat"] = mats()[mt]
             a["clad"]["d"  ] = d
-            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         mt = "concrete"
         d  = 0.015
@@ -448,14 +440,14 @@ def genConstruction(model=None, specs=dict()):
         if u:                          d = 0.100
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         if not specs["finish"]:
             mt = "drywall"
             d  = 0.015
             a["finish"]["mat"] = mats()[mt]
             a["finish"]["d"  ] = d
-            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
     elif specs["type"] == "wall":
         if not specs["clad"]:
@@ -466,7 +458,7 @@ def genConstruction(model=None, specs=dict()):
             if specs["clad"] == "light":   d = 0.015
             a["clad"]["mat"] = mats()[mt]
             a["clad"]["d"  ] = d
-            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         mt = "drywall"
         d  = 0.100
@@ -475,7 +467,7 @@ def genConstruction(model=None, specs=dict()):
         if specs["frame"] == "light":   d = 0.015
         a["sheath"]["mat"] = mats()[mt]
         a["sheath"]["d"  ] = d
-        a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["sheath"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         mt = "mineral"
         d  = 0.100
@@ -486,7 +478,7 @@ def genConstruction(model=None, specs=dict()):
         if not u:                       d = 0.015
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         if not specs["finish"]:
             mt = "concrete"
@@ -496,7 +488,7 @@ def genConstruction(model=None, specs=dict()):
             if specs["finish"] == "heavy":   d = 0.200
             a["finish"]["mat"] = mats()[mt]
             a["finish"]["d"  ] = d
-            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
     elif specs["type"] == "roof":
         if not specs["clad"]:
@@ -507,7 +499,7 @@ def genConstruction(model=None, specs=dict()):
             if specs["clad"] == "heavy":  d = 0.200 # e.g. parking garage
             a["clad"]["mat"] = mats()[mt]
             a["clad"]["d"  ] = d
-            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         mt = "mineral"
         d  = 0.100
@@ -517,7 +509,7 @@ def genConstruction(model=None, specs=dict()):
         if not u:                       d = 0.015
         a["compo"][:"mat"] = mats()[mt]
         a["compo"][:"d"  ] = d
-        a["compo"][:"id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["compo"][:"id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         if not specs["finish"]:
             mt = "concrete"
@@ -527,7 +519,7 @@ def genConstruction(model=None, specs=dict()):
             if specs["finish"] == "heavy":   d = 0.200
             a["finish"]["mat"] = mats()[mt]
             a["finish"]["d"  ] = d
-            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
     elif specs["type"] == "floor":
         if not specs["clad"]:
@@ -535,7 +527,7 @@ def genConstruction(model=None, specs=dict()):
             d  = 0.015
             a["clad"]["mat"] = mats()[mt]
             a["clad"]["d"  ] = d
-            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         mt = "mineral"
         d  = 0.100
@@ -545,7 +537,7 @@ def genConstruction(model=None, specs=dict()):
         if not u:                       d = 0.015
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         if not specs["finish"]:
             mt = "concrete"
@@ -555,35 +547,35 @@ def genConstruction(model=None, specs=dict()):
             if specs["finish"] == "heavy":  d = 0.200
             a["finish"][:"mat"] = mats()[mt]
             a["finish"][:"d"  ] = d
-            a["finish"][:"id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["finish"][:"id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
     elif specs["type"] == "slab":
         mt = "sand"
         d  = 0.100
         a["clad"]["mat"] = mats()[mt]
         a["clad"]["d"  ] = d
-        a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["clad"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         if not specs["frame"]:
             mt = "polyiso"
             d  = 0.025
             a["sheath"]["mat"] = mats()[mt]
             a["sheath"]["d"  ] = d
-            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["sheath"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         mt = "concrete"
         d  = 0.100
         if specs["frame"] == "heavy": d = 0.200
         a["compo"]["mat"] = mats()[mt]
         a["compo"]["d"  ] = d
-        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
         if not specs["finish"]:
             mt = "material"
             d  = 0.015
             a["finish"]["mat"] = mats()[mt]
             a["finish"]["d"  ] = d
-            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
     elif specs["type"] == "basement":
         if not specs["clad"]:
@@ -593,45 +585,45 @@ def genConstruction(model=None, specs=dict()):
             if specs["clad"] == "light":  d = 0.015
             a["clad"][:"mat"] = mats[mt]
             a["clad"][:"d"  ] = d
-            a["clad"][:"id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["clad"][:"id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
             mt = "polyiso"
             d  = 0.025
             a["sheath"]["mat"] = mats()[mt]
             a["sheath"]["d"  ] = d
-            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["sheath"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
             mt = "concrete"
             d  = 0.200
             a["compo"]["mat"] = mats()[mt]
             a["compo"]["d"  ] = d
-            a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
         else:
             mt = "concrete"
             d  = 0.200
             a["sheath"]["mat"] = mats()[mt]
             a["sheath"]["d"  ] = d
-            a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+            a["sheath"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
             if not specs["finish"]:
                 mt = "mineral"
                 d  = 0.075
                 a["compo"]["mat"] = mats()[mt]
                 a["compo"]["d"  ] = d
-                a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+                a["compo"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
                 mt = "drywall"
                 d  = 0.015
                 a["finish"]["mat"] = mats()[mt]
                 a["finish"]["d"  ] = d
-                a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+                a["finish"]["id" ] = "OSut." + mt + "%03d" % int(d * 1000)
 
     elif specs["type"] == "door":
         mt = "door"
         d  = 0.045
         a["compo"  ]["mat" ] = mats()[mt]
         a["compo"  ]["d"   ] = d
-        a["compo"  ]["id"  ] = "OSut." + mt + ".%03d" % int(d * 1000)
+        a["compo"  ]["id"  ] = "OSut." + mt + "%03d" % int(d * 1000)
 
     elif specs["type"] == "window":
         a["glazing"]["u"   ]  = specs["uo"]
@@ -689,7 +681,7 @@ def genConstruction(model=None, specs=dict()):
             layers.append(lyr)
 
     c  = openstudio.model.Construction(layers)
-    c.setName("id")
+    c.setName(id)
 
     # Adjust insulating layer thickness or conductivity to match requested Uo.
     if not a["glazing"]:
@@ -724,16 +716,10 @@ def genConstruction(model=None, specs=dict()):
             if d < 0.03:
                 return oslg.invalid(id + " adjusted material thickness", mth, 0)
 
-            nom   = "osut."
-            # nom  += layer.nameString.gsub(/[^a-z]/i, "").gsub("OSut", "")
-            # nom  += "|"
-            # nom  += format("%03d", d*1000)[-3..-1]
-                    # "OSut|concrete|100"
-                    #
-                    # nom   = "OSut|"
-                    # nom  += layer.nameString.gsub(/[^a-z]/i, "").gsub("OSut", "")
-                    # nom  += "|"
-                    # nom  += format("%03d", d*1000)[-3..-1]
+            print(layer.nameString()) # OSut.mineral100
+            nom = re.sub(r'[^a-zA-Z]', '', layer.nameString())
+            nom = re.sub(r'OSut', '', nom)
+            nom = "osut." + nom + "%03d" % int(d * 1000)
 
             if not model.getStandardOpaqueMaterialByName(nom):
                 layer.setName(nom)
