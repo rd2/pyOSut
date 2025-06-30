@@ -127,6 +127,34 @@ class TestOSutModuleMethods(unittest.TestCase):
         else:
             self.assertEqual(round(plenum.volume(), 0), 0)
 
+        self.assertTrue(thzone.isVolumeDefaulted())
+        self.assertTrue(thzone.isVolumeAutocalculated())
+        self.assertFalse(thzone.volume())
+
+        for s in plenum.surfaces():
+            if s.outsideBoundaryCondition().lower() == "outdoors": continue
+
+            # If a SEB plenum surface isn't facing outdoors, it's 1 of 4 "floor"
+            # surfaces (each facing a ceiling surface below).
+            adj = s.adjacentSurface()
+            self.assertTrue(adj)
+            adj = adj.get()
+            self.assertEqual(len(adj.vertices()), len(s.vertices()))
+
+            # Same vertex sequence? Should be in reverse order.
+            # for i, vertex in enumerate(adj.vertices()):
+            #     self.assertTrue(mod1.same?(vertex, s.vertices.at(i))).to be true
+            #
+            # expect(adj.surfaceType).to eq("RoofCeiling")
+            # expect(s.surfaceType).to eq("RoofCeiling")
+            # expect(s.setSurfaceType("Floor")).to be true
+            # expect(s.setVertices(s.vertices.reverse)).to be true
+            #
+            # # Vertices now in reverse order.
+            # adj.vertices.reverse.each_with_index do |vertex, i|
+            #     expect(mod1.same?(vertex, s.vertices.at(i))).to be true
+
+
 
     def test06_insulatingLayer(self):
         o = osut.oslg
