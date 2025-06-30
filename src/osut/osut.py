@@ -28,18 +28,22 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import re
+import math
+import collections
 import openstudio
 from oslg import oslg
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class _CN:
-    DBG = oslg.CN.DEBUG
-    INF = oslg.CN.INFO
-    WRN = oslg.CN.WARN
-    ERR = oslg.CN.ERROR
-    FTL = oslg.CN.FATAL
-    NS  = "nameString"
+    DBG  = oslg.CN.DEBUG
+    INF  = oslg.CN.INFO
+    WRN  = oslg.CN.WARN
+    ERR  = oslg.CN.ERROR
+    FTL  = oslg.CN.FATAL
+    NS   = "nameString"
+    TOL  = 0.01      # default distance tolerance (m)
+    TOL2 = TOL * TOL # default area tolerance (m2)
 CN = _CN()
 
 # General surface orientations (see 'facets' method).
@@ -207,15 +211,15 @@ def uo() -> dict:
 
 
 def are_standardOpaqueLayers(lc=None) -> bool:
-    """
-    Validates if every material in a layered construction is standard & opaque.
+    """Validates if every material in a layered construction is standard & opaque.
 
     Args:
-        lc:
+        lc (openstudio.model.LayeredConstruction):
             an OpenStudio layered construction
 
     Returns:
-        Whether all layers are valid. False if invalid inputs (see logs).
+        True: If all layers are valid (standard & opaque).
+        False: If invalid inputs (see logs).
 
     """
     mth = "osut.are_standardOpaqueLayers"
@@ -236,15 +240,15 @@ def are_standardOpaqueLayers(lc=None) -> bool:
 
 
 def thickness(lc=None) -> float:
-    """
-    Returns total (standard opaque) layered construction thickness (m).
+    """Returns total (standard opaque) layered construction thickness (m).
 
     Args:
-        lc:
+        lc (openstudio.model.LayeredConstruction):
             an OpenStudio layered construction
 
     Returns:
-        Construction thickness. 0.0 if invalid inputs (see logs).
+        float: A standard opaque construction thickness.
+        0.0: If invalid inputs (see logs).
 
     """
     mth = "osut.thickness"
@@ -269,22 +273,22 @@ def thickness(lc=None) -> float:
 
 
 def rsi(lc=None, film=0.0, t=0.0) -> float:
-    """
-    Returns a construction's 'standard calc' thermal resistance (m2•K/W), which
-    includes air film resistances. It excludes insulating effects of shades,
-    screens, etc. in the case of fenestrated constructions. Adapted from BTAP's
-    'Material' Module "get_conductance" (P. Lopez).
+    """Returns a construction's 'standard calc' thermal resistance (m2•K/W),
+    which includes air film resistances. It excludes insulating effects of
+    shades, screens, etc. in the case of fenestrated constructions. Adapted
+    from BTAP's 'Material' Module "get_conductance" (P. Lopez).
 
     Args:
-        lc:
+        lc (openstudio.model.LayeredConstruction):
             an OpenStudio layered construction
-        film:
+        film (float):
             thermal resistance of surface air films (m2•K/W)
-        t:
+        t (float):
             gas temperature (°C) (optional)
 
     Returns:
-        Layered construction's thermal resistance (0 if invalid input, see logs).
+        float: A layered construction's thermal resistance.
+        0.0: If invalid input (see logs).
 
     """
     mth = "osut.rsi"
@@ -344,23 +348,21 @@ def rsi(lc=None, film=0.0, t=0.0) -> float:
 
 
 def insulatingLayer(lc=None) -> dict:
-    """
-    Identifies a layered construction's (opaque) insulating layer. Returns an
-    insulating-layer dictionary:
-        "index": insulating layer index [0, n layers) within construction
-        "type" : layer material type ("standard" or "massless")
-        "r"    : material thermal resistance in m2•K/W.
-    If unsuccessful, DEBUG errors are logged. Dictionary is voided as follows:
-        "index": None
-        "type" : None
-        "r"    : 0.0
+    """Identifies a layered construction's (opaque) insulating layer.
 
     Args:
-        lc:
-            [openStudio.model.LayeredConstruction] a layered construction
+        lc (openStudio.model.LayeredConstruction):
+            an OpenStudio layered construction
 
     Returns:
-        Insulating layer dictionary.
+        An insulating-layer dictionary:
+            - "index" (int): construction's insulating layer index [0, n layers)
+            - "type" (str): layer material type ("standard" or "massless")
+            - "r" (float): material thermal resistance in m2•K/W.
+        If unsuccessful, dictionary is voided as follows (see logs):
+            "index": None
+            "type": None
+            "r": 0.0
 
     """
     mth = "osut.insulatingLayer"
@@ -407,21 +409,21 @@ def insulatingLayer(lc=None) -> dict:
 
 
 def genConstruction(model=None, specs=dict()):
-    """
-    Generates an OpenStudio multilayered construction, + materials if needed.
+    """Generates an OpenStudio multilayered construction, + materials if needed.
 
     Args:
         specs:
             A dictionary holding multilayered construction parameters:
-            - "id": construction identifier
-            - "type": surface type - see OSut 'uo()'
-            - "uo": assembly clear-field Uo, in W/m2•K - see OSut 'uo()'
-            - "clad": exterior cladding - see OSut 'mass()'
-            - "frame": assembly framing - see OSut 'mass()'
-            - "finish": interior finish - see OSut 'mass()'
+            - "id" (str): construction identifier
+            - "type" (str): surface type - see OSut 'uo()'
+            - "uo" (float): assembly clear-field Uo, in W/m2•K - see OSut 'uo()'
+            - "clad" (str): exterior cladding - see OSut 'mass()'
+            - "frame" (str): assembly framing - see OSut 'mass()'
+            - "finish" (str): interior finish - see OSut 'mass()'
 
     Returns:
-        Generated construction, or None if invalid inputs (see logs).
+        openstudio.model.Construction: A generated construction.
+        None: If invalid inputs (see logs).
 
     """
     mth = "osut.genConstruction"
@@ -789,9 +791,8 @@ def genConstruction(model=None, specs=dict()):
     return c
 
 
-def genShade(subs=openstudio.model.SubSurfaceVector()) -> bool:
-    """
-    Generates solar shade(s) (e.g. roller, textile) for glazed OpenStudio
+def genShade(subs=[]) -> bool:
+    """Generates solar shade(s) (e.g. roller, textile) for glazed OpenStudio
     SubSurfaces (v321+), controlled to minimize overheating in cooling months
     (May to October in Northern Hemisphere), when outdoor dry bulb temperature
     is above 18°C and impinging solar radiation is above 100 W/m2.
@@ -801,7 +802,8 @@ def genShade(subs=openstudio.model.SubSurfaceVector()) -> bool:
             A list of sub surfaces.
 
     Returns:
-        Whether successfully generated. False if invalid input (see logs).
+        True: If successfully generated shade.
+        False: if invalid input (see logs).
 
     """
     # Filter OpenStudio warnings for ShadingControl:
@@ -888,5 +890,209 @@ def genShade(subs=openstudio.model.SubSurfaceVector()) -> bool:
     ctl.setSetpoint2(100) # W/m2
     ctl.setMultipleSurfaceControlType("Group")
     ctl.setSubSurfaces(subs)
+
+    return True
+
+
+def transforms(group=None) -> dict:
+    """"Returns OpenStudio site/space transformation & rotation angle.
+
+    Args:
+        group:
+            A site or space PlanarSurfaceGroup object.
+
+    Returns:
+        A transformation + rotation dictionary:
+        - t (openstudio.Transformation): site/space transformation.
+          None: if invalid inputs (see logs).
+        - r (float): Site/space rotation angle [0,2PI) radians.
+          None: if invalid inputs (see logs).
+
+    """
+    mth = "osut.transforms"
+    res = dict(t=None, r=None)
+    cl  = openstudio.model.PlanarSurfaceGroup
+
+    if not hasattr(group, CN.NS):
+        return oslg.invalid("group", mth, 0, CN.DBG, res)
+
+    id  = group.nameString()
+    mdl = group.model()
+
+    if isinstance(group, cl):
+        return oslg.mismatch(id, group, cl, mth, CN.DBG, res)
+
+    res["t"] = group.siteTransformation()
+    res["r"] = group.directionofRelativeNorth() + mdl.getBuilding().northAxis()
+
+    return res
+
+
+def trueNormal(s=None, r=0):
+    """Returns the site/true outward normal vector of a surface.
+
+    Args:
+        s (OpenStudio::Model::PlanarSurface):
+            An OpenStudio Planar Surface.
+        r (float):
+            a group/site rotation angle [0,2PI) radians
+
+    Returns:
+        openstudio.Vector3d: A surface's true normal vector.
+        None : If invalid input (see logs).
+
+    """
+    mth = "osut.trueNormal"
+    cl  = openstudio.model.PlanarSurface
+
+    if not isinstance(s, cl):
+        return oslg.mismatch("surface", s, cl, mth)
+
+    try:
+        r = float(r)
+    except ValueError as e:
+        return oslg.mismatch("rotation", r, float, mth)
+
+    r = float(-r) * math.pi / 180.0
+
+    vx = s.outwardNormal().x * math.cos(r) - s.outwardNormal().y * math.sin(r)
+    vy = s.outwardNormal().x * math.sin(r) + s.outwardNormal().y * math.cos(r)
+    vz = s.outwardNormal().z
+
+    return openstudio.Point3d(vx, vy, vz) - openstudio.Point3d(0, 0, 0)
+
+
+def scalar(v=None, m=0) -> openstudio.Vector3d:
+    """Returns scalar product of an OpenStudio Vector3d.
+
+    Args:
+        v (OpenStudio::Vector3d):
+            An OpenStudio vector.
+        m (float):
+            A scalar.
+
+    Returns:
+        (openstudio.Vector3d) scaled points (see logs if (0,0,0)).
+
+    """
+    mth = "osut.scalar"
+    cl  = openstudio.Vector3d
+    v0  = openstudio.Vector3d()
+
+    if not isinstance(v, cl):
+        return oslg.mismatch("vector", v, cl, mth, CN.DBG, v0)
+
+    try:
+        m = float(m)
+    except ValueError as e:
+        return oslg.mismatch("scalar", m, float, mth, CN.DBG, v0)
+
+    v0 = openstudio.Vector3d(m * v.x(), m * v.y(), m * v.z())
+
+    return v0
+
+
+def to_p3Dv(pts=None) -> openstudio.Point3dVector:
+    """Returns OpenStudio 3D points as an OpenStudio point vector, validating
+    points in the process.
+
+    Args:
+        pts (list): OpenStudio 3D points.
+
+    Returns:
+        openstudio.Point3dVector: Vector of 3D points (see logs if empty).
+
+    """
+    mth = "osut.to_p3Dv"
+    cl  = openstudio.Point3d
+    v   = openstudio.Point3dVector()
+
+    if isinstance(pts, cl):
+        v.append(pts)
+        return v
+    elif isinstance(pts, openstudio.Point3dVector):
+        return pts
+    elif isinstance(pts, openstudio.model.PlanarSurface):
+        return pts.vertices()
+
+    try:
+        pts = list(pts)
+    except ValueError as e:
+        return oslg.mismatch("points", pts, list, mth, CN.DBG, v)
+
+    for pt in pts:
+        if not isinstance(pt, cl):
+            return oslg.mismatch("point", pt, cl, mth, CN.DBG, v)
+
+    for pt in pts:
+        v.append(openstudio.Point3d(pt.x(), pt.y(), pt.z()))
+
+    return v
+
+
+def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
+    """Returns True if 2 sets of OpenStudio 3D points are nearly equal.
+
+    Args:
+        s1:
+            1st set of OpenStudio 3D points
+        s2:
+            2nd set of OpenStudio 3D points
+        indexed (bool):
+            whether to attempt to harmonize vertex sequence
+
+    Returns:
+        bool: Whether sets are nearly equal (within TOL).
+        False: If invalid input (see logs).
+
+    """
+    try:
+        s1 = list(s1)
+    except ValueError as e:
+        return False
+
+    try:
+        s2 = list(s2)
+    except ValueError as e:
+        return False
+
+    if len(s1) != len(s2):
+        return False
+
+    if indexed not in [True, False]:
+        indexed = True
+
+    if indexed:
+        xOK = abs(s1[0].x() - s2[0].x()) < CN.TOL
+        yOK = abs(s1[0].y() - s2[0].y()) < CN.TOL
+        zOK = abs(s1[0].z() - s2[0].z()) < CN.TOL
+
+        if xOK and yOK and zOK and len(s1) == 1:
+            return True
+        else:
+            indx = None
+
+            for i, pt in enumerate(s2):
+                if indx: break
+
+                xOK = abs(s1[0].x() - s2[i].x()) < CN.TOL
+                yOK = abs(s1[0].y() - s2[i].y()) < CN.TOL
+                zOK = abs(s1[0].z() - s2[i].z()) < CN.TOL
+
+                if xOK and yOK and zOK: indx = i
+
+            if not indx: return False
+
+            s2 = collections.deque(s2)
+            s2.rotate(indx)
+            s2 = list(s2)
+
+    # openstudio.isAlmostEqual3dPt(p1, p2, TOL) # ... from v350 onwards.
+    for i in range(len(s1)):
+        xOK = abs(s1[i].x() - s2[i].x()) < CN.TOL
+        yOK = abs(s1[i].y() - s2[i].y()) < CN.TOL
+        zOK = abs(s1[i].z() - s2[i].z()) < CN.TOL
+
+        if not xOK or not yOK or not zOK: return False
 
     return True

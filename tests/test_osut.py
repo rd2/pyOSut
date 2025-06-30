@@ -35,12 +35,14 @@ import unittest
 import openstudio
 import osut
 
-DBG = osut.CN.DBG
-INF = osut.CN.INF
-WRN = osut.CN.WRN
-ERR = osut.CN.ERR
-FTL = osut.CN.FTL
-NS  = osut.CN.NS
+DBG  = osut.CN.DBG
+INF  = osut.CN.INF
+WRN  = osut.CN.WRN
+ERR  = osut.CN.ERR
+FTL  = osut.CN.FTL
+NS   = osut.CN.NS
+TOL  = osut.CN.TOL
+TOL2 = osut.CN.TOL2
 
 class TestOSutModuleMethods(unittest.TestCase):
     def test00_oslg_constants(self):
