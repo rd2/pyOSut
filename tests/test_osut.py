@@ -30,8 +30,9 @@
 import sys
 sys.path.append("./src/osut")
 
-import openstudio
+import os
 import unittest
+import openstudio
 import osut
 
 DBG = osut.CN.DBG
@@ -81,12 +82,149 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(round(osut.mats()["sand"    ]["sol" ], 3),    0.700)
         self.assertEqual(round(osut.mats()["sand"    ]["vis" ], 3),    0.700)
 
-    def test05_genConstruction(self):
+    def test05_construction_thickness(self):
+        o = osut.oslg
+        v = int("".join(openstudio.openStudioVersion().split(".")))
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.level(), INF)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        translator = openstudio.osversion.VersionTranslator()
+
+        # The v1.11.5 (2016) seb.osm, shipped with OpenStudio, holds (what
+        # would now be considered as deprecated) a definition of plenum floors
+        # (i.e. ceiling tiles) generating several warnings with more recent
+        # OpenStudio versions.
+        path  = openstudio.path("./tests/files/osms/in/seb.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        # "Shading Surface 4" is overlapping with a plenum exterior wall.
+        sh4 = model.getShadingSurfaceByName("Shading Surface 4")
+        self.assertTrue(sh4)
+        sh4 = sh4.get()
+        sh4.remove()
+
+        plenum = model.getSpaceByName("Level 0 Ceiling Plenum")
+        self.assertTrue(plenum)
+        plenum = plenum.get()
+
+        thzone = plenum.thermalZone()
+        self.assertTrue(thzone)
+        thzone = thzone.get()
+
+        # Before the fix.
+        if v >= 350:
+            self.assertTrue(plenum.isEnclosedVolume())
+            self.assertTrue(plenum.isVolumeDefaulted())
+            self.assertTrue(plenum.isVolumeAutocalculated())
+
+        if 350 < v < 370:
+            self.assertEqual(round(plenum.volume(), 0), 234)
+        else:
+            self.assertEqual(round(plenum.volume(), 0), 0)
+
+
+    def test06_insulatingLayer(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+        # it "checks (opaque) insulating layers within a layered construction" do
+        # translator = OpenStudio::OSVersion::VersionTranslator.new
+        # expect(mod1.clean!).to eq(DBG)
+        #
+        # file  = File.join(__dir__, "files/osms/out/seb2.osm")
+        # path  = OpenStudio::Path.new(file)
+        # model = translator.loadModel(path)
+        # expect(model).to_not be_empty
+        # model = model.get
+        #
+        # m  = "OSut::insulatingLayer"
+        # m1 = "Invalid 'lc' arg #1 (#{m})"
+        #
+        # model.getLayeredConstructions.each do |lc|
+        #   lyr = mod1.insulatingLayer(lc)
+        #   expect(lyr).to be_a(Hash)
+        #   expect(lyr).to have_key(:index)
+        #   expect(lyr).to have_key(:type )
+        #   expect(lyr).to have_key(:r)
+        #
+        #   if lc.isFenestration
+        #     expect(mod1.status).to be_zero
+        #     expect(lyr[:index]).to be_nil
+        #     expect(lyr[:type ]).to be_nil
+        #     expect(lyr[:r    ]).to be_zero
+        #     next
+        #   end
+        #
+        #   unless [:standard, :massless].include?(lyr[:type]) # air wall mat
+        #     expect(mod1.status).to be_zero
+        #     expect(lyr[:index]).to be_nil
+        #     expect(lyr[:type ]).to be_nil
+        #     expect(lyr[:r    ]).to be_zero
+        #     next
+        #   end
+        #
+        #   expect(lyr[:index] < lc.numLayers).to be true
+        #
+        #   case lc.nameString
+        #   when "EXTERIOR-ROOF"
+        #     expect(lyr[:index]).to eq(2)
+        #     expect(lyr[:r    ]).to be_within(TOL).of(5.08)
+        #   when "EXTERIOR-WALL"
+        #     expect(lyr[:index]).to eq(2)
+        #     expect(lyr[:r    ]).to be_within(TOL).of(1.47)
+        #   when "Default interior ceiling"
+        #     expect(lyr[:index]).to be_zero
+        #     expect(lyr[:r    ]).to be_within(TOL).of(0.12)
+        #   when "INTERIOR-WALL"
+        #     expect(lyr[:index]).to eq(1)
+        #     expect(lyr[:r    ]).to be_within(TOL).of(0.24)
+        #   else
+        #     expect(lyr[:index]).to be_zero
+        #     expect(lyr[:r    ]).to be_within(TOL).of(0.29)
+        #   end
+        # end
+        #
+        # lyr = mod1.insulatingLayer(nil)
+        # expect(mod1.debug?).to be true
+        # expect(lyr[:index]).to be_nil
+        # expect(lyr[:type ]).to be_nil
+        # expect(lyr[:r    ]).to be_zero
+        # expect(mod1.debug?).to be true
+        # expect(mod1.logs.size).to eq(1)
+        # expect(mod1.logs.first[:message]).to eq(m1)
+        #
+        # expect(mod1.clean!).to eq(DBG)
+        # lyr = mod1.insulatingLayer("")
+        # expect(mod1.debug?).to be true
+        # expect(lyr[:index]).to be_nil
+        # expect(lyr[:type ]).to be_nil
+        # expect(lyr[:r    ]).to be_zero
+        # expect(mod1.debug?).to be true
+        # expect(mod1.logs.size).to eq(1)
+        # expect(mod1.logs.first[:message]).to eq(m1)
+        #
+        # expect(mod1.clean!).to eq(DBG)
+        # lyr = mod1.insulatingLayer(model)
+        # expect(mod1.debug?).to be true
+        # expect(lyr[:index]).to be_nil
+        # expect(lyr[:type ]).to be_nil
+        # expect(lyr[:r    ]).to be_zero
+        # expect(mod1.debug?).to be true
+        # expect(mod1.logs.size).to eq(1)
+        # expect(mod1.logs.first[:message]).to eq(m1)
+
+    def test07_genConstruction(self):
         m1 = "'specs' list? expecting dict (osut.genConstruction)"
         m2 = "'model' str? expecting Model (osut.genConstruction)"
         o  = osut.oslg
         self.assertEqual(o.status(), 0)
-        self.assertEqual(o.level(), INF)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
@@ -646,6 +784,158 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
+
+    def test08_genShade(self):
+        o  = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        translator = openstudio.osversion.VersionTranslator()
+
+        # file   = File.join(__dir__, "files/osms/out/seb_ext4.osm")
+        # path   = OpenStudio::Path.new(file)
+        # model  = translator.loadModel(path)
+        # expect(model).to_not be_empty
+        # model  = model.get
+        # spaces = model.getSpaces
+        #
+        # slanted   = mod1.facets(spaces, "Outdoors", "RoofCeiling", [:top, :north])
+        # expect(slanted.size).to eq(1)
+        # slanted   = slanted.first
+        # expect(slanted.nameString).to eq("Openarea slanted roof")
+        # skylights = slanted.subSurfaces
+        #
+        # tilted  = mod1.facets(spaces, "Outdoors", "Wall", :bottom)
+        # expect(tilted.size).to eq(1)
+        # tilted  = tilted.first
+        # expect(tilted.nameString).to eq("Openarea tilted wall")
+        # windows = tilted.subSurfaces
+        #
+        # # 2x control groups:
+        # #   - 3x windows as a single control group
+        # #   - 3x skylight as another single control group
+        # skies = OpenStudio::Model::SubSurfaceVector.new
+        # wins  = OpenStudio::Model::SubSurfaceVector.new
+        # skylights.each { |sub| skies << sub }
+        # windows.each   { |sub| wins  << sub }
+        #
+        # if OpenStudio.openStudioVersion.split(".").join.to_i < 321
+        #   expect(mod1.genShade(skies)).to be false
+        #   expect(mod1.status).to be_zero
+        # else
+        #   expect(mod1.genShade(skies)).to be true
+        #   expect(mod1.genShade(wins)).to be true
+        #   expect(mod1.status).to be_zero
+        #   ctls = model.getShadingControls
+        #   expect(ctls.size).to eq(2)
+        #
+        #   ctls.each do |ctl|
+        #     expect(ctl.shadingType).to eq("InteriorShade")
+        #     type = "OnIfHighOutdoorAirTempAndHighSolarOnWindow"
+        #     expect(ctl.shadingControlType).to eq(type)
+        #     expect(ctl.isControlTypeValueNeedingSetpoint1).to be true
+        #     expect(ctl.isControlTypeValueNeedingSetpoint2).to be true
+        #     expect(ctl.isControlTypeValueAllowingSchedule).to be true
+        #     expect(ctl.isControlTypeValueRequiringSchedule).to be false
+        #     spt1 = ctl.setpoint
+        #     spt2 = ctl.setpoint2
+        #     expect(spt1).to_not be_empty
+        #     expect(spt2).to_not be_empty
+        #     spt1 = spt1.get
+        #     spt2 = spt2.get
+        #     expect(spt1).to be_within(TOL).of(18)
+        #     expect(spt2).to be_within(TOL).of(100)
+        #     expect(ctl.multipleSurfaceControlType).to eq("Group")
+        #
+        #     ctl.subSurfaces.each do |sub|
+        #       surface = sub.surface
+        #       expect(surface).to_not be_empty
+        #       surface = surface.get
+        #       expect([slanted, tilted]).to include(surface)
+        #     end
+        #   end
+        # end
+        #
+        # file = File.join(__dir__, "files/osms/out/seb_ext5.osm")
+        # model.save(file, true)
+
+    def test09_internal_mass(self):
+        o  = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        ratios   = dict(entrance=0.1, lobby=0.3, meeting=1.0)
+        model    = openstudio.model.Model()
+        entrance = openstudio.model.Space(model)
+        lobby    = openstudio.model.Space(model)
+        meeting  = openstudio.model.Space(model)
+        offices  = openstudio.model.Space(model)
+
+        entrance.setName("Entrance")
+        lobby.setName("Lobby")
+        meeting.setName("Meeting")
+        offices.setName("Offices")
+
+        for space in model.getSpaces():
+            name  = space.nameString().lower()
+            ratio = None
+
+            if name in ratios:
+                ratio = ratios[name]
+                sps   = openstudio.model.SpaceVector()
+                sps.append(space)
+                # if ratio:
+                #     self.assertTrue(osut.genMass(sps, ratio))
+                # else:
+                #     self.assertTrue(osut.genMass(sps))
+
+        # construction = nil
+        # material     = nil
+        #
+        # model.getInternalMasss.each do |m|
+        #   d = m.internalMassDefinition
+        #   expect(d.designLevelCalculationMethod).to eq("SurfaceArea/Area")
+        #
+        #   ratio = d.surfaceAreaperSpaceFloorArea
+        #   expect(ratio).to_not be_empty
+        #   ratio = ratio.get
+        #
+        #   case ratio
+        #   when 0.1
+        #     expect(d.nameString).to eq("OSut|InternalMassDefinition|0.10")
+        #     expect(m.nameString.downcase).to include("entrance")
+        #   when 0.3
+        #     expect(d.nameString).to eq("OSut|InternalMassDefinition|0.30")
+        #     expect(m.nameString.downcase).to include("lobby")
+        #   when 1.0
+        #     expect(d.nameString).to eq("OSut|InternalMassDefinition|1.00")
+        #     expect(m.nameString.downcase).to include("meeting")
+        #   else
+        #     expect(d.nameString).to eq("OSut|InternalMassDefinition|2.00")
+        #     expect(ratio).to eq(2.0)
+        #   end
+        #
+        #   c = d.construction
+        #   expect(c).to_not be_empty
+        #   c = c.get.to_Construction
+        #   expect(c).to_not be_empty
+        #   c = c.get
+        #
+        #   construction = c if construction.nil?
+        #   expect(construction).to eq(c)
+        #   expect(c.nameString).to eq("OSut|MASS|Construction")
+        #   expect(c.numLayers).to eq(1)
+        #
+        #   m = c.layers.first
+        #
+        #   material = m if material.nil?
+        #   expect(material).to eq(m)
+        del(model)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -206,6 +206,68 @@ def uo() -> dict:
     return _uo
 
 
+def are_standardOpaqueLayers(lc=None) -> bool:
+    """
+    Validates if every material in a layered construction is standard & opaque.
+
+    Args:
+        lc:
+            an OpenStudio layered construction
+
+    Returns:
+        Whether all layers are valid. False if invalid inputs (see logs).
+
+    """
+    mth = "osut.are_standardOpaqueLayers"
+    cl  = openstudio.model.LayeredConstruction
+
+    if not hasattr(lc, CN.NS):
+        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
+
+    id = lc.nameString()
+
+    if not isinstance(lc, cl):
+        return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
+
+    for m in lc.layers():
+        if not m.to_StandardOpaqueMaterial(): return False
+
+    return True
+
+
+def thickness(lc=None) -> float:
+    """
+    Returns total (standard opaque) layered construction thickness (m).
+
+    Args:
+        lc:
+            an OpenStudio layered construction
+
+    Returns:
+        Construction thickness. 0.0 if invalid inputs (see logs).
+
+    """
+    mth = "osut.thickness"
+    cl  = openStudio.model.LayeredConstruction
+    d   = 0.0
+
+    if not hasattr(lc, CN.NS):
+        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
+
+    id = lc.nameString()
+
+    if not isinstance(lc, cl):
+        return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
+
+    if not osut.are_standardOpaqueLayers(lc):
+        log(CN.ERR, "%s holds non-StandardOpaqueMaterial(s) %s" % (id, mth))
+        return d
+
+    for m in lc.layers(): d += m.thickness()
+
+    return d
+
+
 def rsi(lc=None, film=0.0, t=0.0) -> float:
     """
     Returns a construction's 'standard calc' thermal resistance (m2•K/W), which
@@ -307,7 +369,7 @@ def insulatingLayer(lc=None) -> dict:
     i   = 0  # iterator
 
     if not hasattr(lc, CN.NS):
-        return oslg.invalid("lc", mth, 1, CN.DBG, res)
+        return oslg.invalid("layered construction", mth, 1, CN.DBG, res)
 
     id = lc.nameString()
 
@@ -725,3 +787,106 @@ def genConstruction(model=None, specs=dict()):
                 layer.setThickness(d)
 
     return c
+
+
+def genShade(subs=openstudio.model.SubSurfaceVector()) -> bool:
+    """
+    Generates solar shade(s) (e.g. roller, textile) for glazed OpenStudio
+    SubSurfaces (v321+), controlled to minimize overheating in cooling months
+    (May to October in Northern Hemisphere), when outdoor dry bulb temperature
+    is above 18°C and impinging solar radiation is above 100 W/m2.
+
+    Args:
+        subs:
+            A list of sub surfaces.
+
+    Returns:
+        Whether successfully generated. False if invalid input (see logs).
+
+    """
+    # Filter OpenStudio warnings for ShadingControl:
+    #   ref: https://github.com/NREL/OpenStudio/issues/4911
+    # str = ".*(?<!ShadingControl)$"
+    # openstudio.Logger().instance().standardOutLogger().setChannelRegex(str)
+
+    mth = "osut.genShade"
+    v = int("".join(openstudio.openStudioVersion().split(".")))
+    cl = openstudio.model.SubSurfaceVector
+
+    if v < 321: return False
+
+    if not isinstance(subs, cl):
+        return oslg.mismatch("subs", subs, cl, mth, CN.DBG, False)
+
+    if not subs:
+        return oslg.empty("subs", mth, CN.WRN, False)
+
+    # Shading availability period.
+    model = subs[0].model()
+    id    = "onoff"
+    onoff = model.getScheduleTypeLimitsByName(id)
+
+    if onoff:
+        onoff = onoff.get()
+    else:
+      onoff = openstudio.model.ScheduleTypeLimits(model)
+      onoff.setName(id)
+      onoff.setLowerLimitValue(0)
+      onoff.setUpperLimitValue(1)
+      onoff.setNumericType("Discrete")
+      onoff.setUnitType("Availability")
+
+    # Shading schedule.
+    id  = "OSut.SHADE.Ruleset"
+    sch = model.getScheduleRulesetByName(id)
+
+    if sch:
+        sch = sch.get()
+    else:
+      sch = openstudio.model.ScheduleRuleset(model, 0)
+      sch.setName(id)
+      sch.setScheduleTypeLimits(onoff)
+      sch.defaultDaySchedule.setName("OSut.SHADE.Ruleset.Default")
+
+    # Summer cooling rule.
+    id   = "OSut.SHADE.ScheduleRule"
+    rule = model.getScheduleRuleByName(id)
+
+    if rule:
+        rule = rule.get()
+    else:
+      may     = openstudio.MonthOfYear("May")
+      october = openstudio.MonthOfYear("Oct")
+      start   = openstudio.Date(may, 1)
+      finish  = openstudio.Date(october, 31)
+
+      rule = openstudio.model.ScheduleRule(sch)
+      rule.setName(id)
+      rule.setStartDate(start)
+      rule.setEndDate(finish)
+      rule.setApplyAllDays(true)
+      rule.daySchedule.setName("OSut.SHADE.Rule.Default")
+      rule.daySchedule.addValue(openstudio.Time(0,24,0,0), 1)
+
+    # Shade object.
+    id  = "OSut.SHADE"
+    shd = mdl.getShadeByName(id)
+
+    if shd:
+        shd = shd.get()
+    else:
+      shd = openstudio.model.Shade(mdl)
+      shd.setName(id)
+
+    # Shading control (unique to each call).
+    id  = "OSut.ShadingControl"
+    ctl = openstudio.model.ShadingControl(shd)
+    ctl.setName(id)
+    ctl.setSchedule(sch)
+    ctl.setShadingControlType("OnIfHighOutdoorAirTempAndHighSolarOnWindow")
+    ctl.setSetpoint(18)   # °C
+    ctl.setSetpoint2(100) # W/m2
+    ctl.setMultipleSurfaceControlType("Group")
+    ctl.setSubSurfaces(subs)
+
+    return True
