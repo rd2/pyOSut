@@ -86,13 +86,13 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     def test05_construction_thickness(self):
         o = osut.oslg
-        v = int("".join(openstudio.openStudioVersion().split(".")))
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.level(), INF)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
+        version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
         # The v1.11.5 (2016) seb.osm, shipped with OpenStudio, holds (what
@@ -119,12 +119,12 @@ class TestOSutModuleMethods(unittest.TestCase):
         thzone = thzone.get()
 
         # Before the fix.
-        if v >= 350:
+        if version >= 350:
             self.assertTrue(plenum.isEnclosedVolume())
             self.assertTrue(plenum.isVolumeDefaulted())
             self.assertTrue(plenum.isVolumeAutocalculated())
 
-        if 350 < v < 370:
+        if 350 < version < 370:
             self.assertEqual(round(plenum.volume(), 0), 234)
         else:
             self.assertEqual(round(plenum.volume(), 0), 0)
@@ -144,18 +144,28 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertEqual(len(adj.vertices()), len(s.vertices()))
 
             # Same vertex sequence? Should be in reverse order.
-            # for i, vertex in enumerate(adj.vertices()):
-            #     self.assertTrue(mod1.same?(vertex, s.vertices.at(i))).to be true
-            #
-            # expect(adj.surfaceType).to eq("RoofCeiling")
-            # expect(s.surfaceType).to eq("RoofCeiling")
-            # expect(s.setSurfaceType("Floor")).to be true
-            # expect(s.setVertices(s.vertices.reverse)).to be true
-            #
-            # # Vertices now in reverse order.
-            # adj.vertices.reverse.each_with_index do |vertex, i|
-            #     expect(mod1.same?(vertex, s.vertices.at(i))).to be true
+            for i, vtx in enumerate(adj.vertices()):
+                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
 
+            self.assertEqual(adj.surfaceType(), "RoofCeiling")
+            self.assertEqual(s.surfaceType(), "RoofCeiling")
+            self.assertTrue(s.setSurfaceType("Floor"))
+            vtx = list(s.vertices())
+            vtx.reverse()
+            self.assertTrue(s.setVertices(vtx))
+
+            # Vertices now in reverse order.
+            rvtx = list(adj.vertices())
+            rvtx.reverse()
+
+            for i, vtx in enumerate(rvtx):
+                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
+
+        # After the fix.
+        if version >= 350:
+            self.assertTrue(plenum.isEnclosedVolume())
+            self.assertTrue(plenum.isVolumeDefaulted())
+            self.assertTrue(plenum.isVolumeAutocalculated())
 
 
     def test06_insulatingLayer(self):

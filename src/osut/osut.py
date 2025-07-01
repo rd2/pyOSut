@@ -1046,21 +1046,12 @@ def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
         False: If invalid input (see logs).
 
     """
-    try:
-        s1 = list(s1)
-    except ValueError as e:
-        return False
-
-    try:
-        s2 = list(s2)
-    except ValueError as e:
-        return False
-
-    if len(s1) != len(s2):
-        return False
-
-    if indexed not in [True, False]:
-        indexed = True
+    s1  = list(to_p3Dv(s1))
+    s2  = list(to_p3Dv(s2))
+    if not s1: return False
+    if not s2: return False
+    if len(s1) != len(s2): return False
+    if indexed not in [True, False]: indexed = True
 
     if indexed:
         xOK = abs(s1[0].x() - s2[0].x()) < CN.TOL
