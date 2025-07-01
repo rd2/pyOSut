@@ -167,6 +167,53 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(plenum.isVolumeDefaulted())
             self.assertTrue(plenum.isVolumeAutocalculated())
 
+        self.assertEqual(round(plenum.volume(), 0), 50) # right answer
+        self.assertTrue(thzone.isVolumeDefaulted())
+        self.assertTrue(thzone.isVolumeAutocalculated())
+        self.assertFalse(thzone.volume())
+
+        model.save("./tests/files/osms/out/seb2.osm", True)
+        # End of cleanup.
+
+        for c in model.getConstructions():
+            if not c.to_LayeredConstruction(): continue
+
+            c  = c.to_LayeredConstruction().get()
+            id = c.nameString()
+
+            # OSut 'thickness' method can only process layered constructions
+            # built up with standard opaque layers, which exclude:
+            #
+            #   - "Air Wall"-based construction
+            #   - "Double pane"-based construction
+            #
+            # The method returns '0' in such cases, logging ERROR messages.
+            th = osut.thickness(c)
+
+            if "Air Wall" in id or "Double pane" in id:
+                self.assertEqual(round(th, 0), 0)
+                continue
+
+            self.assertTrue(th > 0)
+
+        self.assertTrue(o.is_error())
+        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+
+        for c in model.getConstructions():
+            if c.to_LayeredConstruction(): continue
+
+            c  = c.to_LayeredConstruction().get()
+            id = c.nameString()
+            if "Air Wall" in id or "Double pane" in id: continue
+
+            th = osut.thickness(c)
+            self.assertTrue(th > 0)
+
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+
 
     def test06_insulatingLayer(self):
         o = osut.oslg
@@ -176,12 +223,12 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         # it "checks (opaque) insulating layers within a layered construction" do
         # translator = OpenStudio::OSVersion::VersionTranslator.new
-        # expect(mod1.clean!).to eq(DBG)
+        # self.assertTrue(mod1.clean!).to eq(DBG)
         #
         # file  = File.join(__dir__, "files/osms/out/seb2.osm")
         # path  = OpenStudio::Path.new(file)
         # model = translator.loadModel(path)
-        # expect(model).to_not be_empty
+        # self.assertTrue(model).to_not be_empty
         # model = model.get
         #
         # m  = "OSut::insulatingLayer"
@@ -189,76 +236,76 @@ class TestOSutModuleMethods(unittest.TestCase):
         #
         # model.getLayeredConstructions.each do |lc|
         #   lyr = mod1.insulatingLayer(lc)
-        #   expect(lyr).to be_a(Hash)
-        #   expect(lyr).to have_key(:index)
-        #   expect(lyr).to have_key(:type )
-        #   expect(lyr).to have_key(:r)
+        #   self.assertTrue(lyr).to be_a(Hash)
+        #   self.assertTrue(lyr).to have_key(:index)
+        #   self.assertTrue(lyr).to have_key(:type )
+        #   self.assertTrue(lyr).to have_key(:r)
         #
         #   if lc.isFenestration
-        #     expect(mod1.status).to be_zero
-        #     expect(lyr[:index]).to be_nil
-        #     expect(lyr[:type ]).to be_nil
-        #     expect(lyr[:r    ]).to be_zero
+        #     self.assertTrue(mod1.status).to be_zero
+        #     self.assertTrue(lyr[:index]).to be_nil
+        #     self.assertTrue(lyr[:type ]).to be_nil
+        #     self.assertTrue(lyr[:r    ]).to be_zero
         #     next
         #   end
         #
         #   unless [:standard, :massless].include?(lyr[:type]) # air wall mat
-        #     expect(mod1.status).to be_zero
-        #     expect(lyr[:index]).to be_nil
-        #     expect(lyr[:type ]).to be_nil
-        #     expect(lyr[:r    ]).to be_zero
+        #     self.assertTrue(mod1.status).to be_zero
+        #     self.assertTrue(lyr[:index]).to be_nil
+        #     self.assertTrue(lyr[:type ]).to be_nil
+        #     self.assertTrue(lyr[:r    ]).to be_zero
         #     next
         #   end
         #
-        #   expect(lyr[:index] < lc.numLayers).to be true
+        #   self.assertTrue(lyr[:index] < lc.numLayers).to be true
         #
         #   case lc.nameString
         #   when "EXTERIOR-ROOF"
-        #     expect(lyr[:index]).to eq(2)
-        #     expect(lyr[:r    ]).to be_within(TOL).of(5.08)
+        #     self.assertTrue(lyr[:index]).to eq(2)
+        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(5.08)
         #   when "EXTERIOR-WALL"
-        #     expect(lyr[:index]).to eq(2)
-        #     expect(lyr[:r    ]).to be_within(TOL).of(1.47)
+        #     self.assertTrue(lyr[:index]).to eq(2)
+        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(1.47)
         #   when "Default interior ceiling"
-        #     expect(lyr[:index]).to be_zero
-        #     expect(lyr[:r    ]).to be_within(TOL).of(0.12)
+        #     self.assertTrue(lyr[:index]).to be_zero
+        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(0.12)
         #   when "INTERIOR-WALL"
-        #     expect(lyr[:index]).to eq(1)
-        #     expect(lyr[:r    ]).to be_within(TOL).of(0.24)
+        #     self.assertTrue(lyr[:index]).to eq(1)
+        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(0.24)
         #   else
-        #     expect(lyr[:index]).to be_zero
-        #     expect(lyr[:r    ]).to be_within(TOL).of(0.29)
+        #     self.assertTrue(lyr[:index]).to be_zero
+        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(0.29)
         #   end
         # end
         #
         # lyr = mod1.insulatingLayer(nil)
-        # expect(mod1.debug?).to be true
-        # expect(lyr[:index]).to be_nil
-        # expect(lyr[:type ]).to be_nil
-        # expect(lyr[:r    ]).to be_zero
-        # expect(mod1.debug?).to be true
-        # expect(mod1.logs.size).to eq(1)
-        # expect(mod1.logs.first[:message]).to eq(m1)
+        # self.assertTrue(mod1.debug?).to be true
+        # self.assertTrue(lyr[:index]).to be_nil
+        # self.assertTrue(lyr[:type ]).to be_nil
+        # self.assertTrue(lyr[:r    ]).to be_zero
+        # self.assertTrue(mod1.debug?).to be true
+        # self.assertTrue(mod1.logs.size).to eq(1)
+        # self.assertTrue(mod1.logs.first[:message]).to eq(m1)
         #
-        # expect(mod1.clean!).to eq(DBG)
+        # self.assertTrue(mod1.clean!).to eq(DBG)
         # lyr = mod1.insulatingLayer("")
-        # expect(mod1.debug?).to be true
-        # expect(lyr[:index]).to be_nil
-        # expect(lyr[:type ]).to be_nil
-        # expect(lyr[:r    ]).to be_zero
-        # expect(mod1.debug?).to be true
-        # expect(mod1.logs.size).to eq(1)
-        # expect(mod1.logs.first[:message]).to eq(m1)
+        # self.assertTrue(mod1.debug?).to be true
+        # self.assertTrue(lyr[:index]).to be_nil
+        # self.assertTrue(lyr[:type ]).to be_nil
+        # self.assertTrue(lyr[:r    ]).to be_zero
+        # self.assertTrue(mod1.debug?).to be true
+        # self.assertTrue(mod1.logs.size).to eq(1)
+        # self.assertTrue(mod1.logs.first[:message]).to eq(m1)
         #
-        # expect(mod1.clean!).to eq(DBG)
+        # self.assertTrue(mod1.clean!).to eq(DBG)
         # lyr = mod1.insulatingLayer(model)
-        # expect(mod1.debug?).to be true
-        # expect(lyr[:index]).to be_nil
-        # expect(lyr[:type ]).to be_nil
-        # expect(lyr[:r    ]).to be_zero
-        # expect(mod1.debug?).to be true
-        # expect(mod1.logs.size).to eq(1)
-        # expect(mod1.logs.first[:message]).to eq(m1)
+        # self.assertTrue(mod1.debug?).to be true
+        # self.assertTrue(lyr[:index]).to be_nil
+        # self.assertTrue(lyr[:type ]).to be_nil
+        # self.assertTrue(lyr[:r    ]).to be_zero
+        # self.assertTrue(mod1.debug?).to be true
+        # self.assertTrue(mod1.logs.size).to eq(1)
+        # self.assertTrue(mod1.logs.first[:message]).to eq(m1)
 
     def test07_genConstruction(self):
         m1 = "'specs' list? expecting dict (osut.genConstruction)"
@@ -837,20 +884,20 @@ class TestOSutModuleMethods(unittest.TestCase):
         # file   = File.join(__dir__, "files/osms/out/seb_ext4.osm")
         # path   = OpenStudio::Path.new(file)
         # model  = translator.loadModel(path)
-        # expect(model).to_not be_empty
+        # self.assertTrue(model).to_not be_empty
         # model  = model.get
         # spaces = model.getSpaces
         #
         # slanted   = mod1.facets(spaces, "Outdoors", "RoofCeiling", [:top, :north])
-        # expect(slanted.size).to eq(1)
+        # self.assertTrue(slanted.size).to eq(1)
         # slanted   = slanted.first
-        # expect(slanted.nameString).to eq("Openarea slanted roof")
+        # self.assertTrue(slanted.nameString).to eq("Openarea slanted roof")
         # skylights = slanted.subSurfaces
         #
         # tilted  = mod1.facets(spaces, "Outdoors", "Wall", :bottom)
-        # expect(tilted.size).to eq(1)
+        # self.assertTrue(tilted.size).to eq(1)
         # tilted  = tilted.first
-        # expect(tilted.nameString).to eq("Openarea tilted wall")
+        # self.assertTrue(tilted.nameString).to eq("Openarea tilted wall")
         # windows = tilted.subSurfaces
         #
         # # 2x control groups:
@@ -862,38 +909,38 @@ class TestOSutModuleMethods(unittest.TestCase):
         # windows.each   { |sub| wins  << sub }
         #
         # if OpenStudio.openStudioVersion.split(".").join.to_i < 321
-        #   expect(mod1.genShade(skies)).to be false
-        #   expect(mod1.status).to be_zero
+        #   self.assertTrue(mod1.genShade(skies)).to be false
+        #   self.assertTrue(mod1.status).to be_zero
         # else
-        #   expect(mod1.genShade(skies)).to be true
-        #   expect(mod1.genShade(wins)).to be true
-        #   expect(mod1.status).to be_zero
+        #   self.assertTrue(mod1.genShade(skies)).to be true
+        #   self.assertTrue(mod1.genShade(wins)).to be true
+        #   self.assertTrue(mod1.status).to be_zero
         #   ctls = model.getShadingControls
-        #   expect(ctls.size).to eq(2)
+        #   self.assertTrue(ctls.size).to eq(2)
         #
         #   ctls.each do |ctl|
-        #     expect(ctl.shadingType).to eq("InteriorShade")
+        #     self.assertTrue(ctl.shadingType).to eq("InteriorShade")
         #     type = "OnIfHighOutdoorAirTempAndHighSolarOnWindow"
-        #     expect(ctl.shadingControlType).to eq(type)
-        #     expect(ctl.isControlTypeValueNeedingSetpoint1).to be true
-        #     expect(ctl.isControlTypeValueNeedingSetpoint2).to be true
-        #     expect(ctl.isControlTypeValueAllowingSchedule).to be true
-        #     expect(ctl.isControlTypeValueRequiringSchedule).to be false
+        #     self.assertTrue(ctl.shadingControlType).to eq(type)
+        #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint1).to be true
+        #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint2).to be true
+        #     self.assertTrue(ctl.isControlTypeValueAllowingSchedule).to be true
+        #     self.assertTrue(ctl.isControlTypeValueRequiringSchedule).to be false
         #     spt1 = ctl.setpoint
         #     spt2 = ctl.setpoint2
-        #     expect(spt1).to_not be_empty
-        #     expect(spt2).to_not be_empty
+        #     self.assertTrue(spt1).to_not be_empty
+        #     self.assertTrue(spt2).to_not be_empty
         #     spt1 = spt1.get
         #     spt2 = spt2.get
-        #     expect(spt1).to be_within(TOL).of(18)
-        #     expect(spt2).to be_within(TOL).of(100)
-        #     expect(ctl.multipleSurfaceControlType).to eq("Group")
+        #     self.assertTrue(spt1).to be_within(TOL).of(18)
+        #     self.assertTrue(spt2).to be_within(TOL).of(100)
+        #     self.assertTrue(ctl.multipleSurfaceControlType).to eq("Group")
         #
         #     ctl.subSurfaces.each do |sub|
         #       surface = sub.surface
-        #       expect(surface).to_not be_empty
+        #       self.assertTrue(surface).to_not be_empty
         #       surface = surface.get
-        #       expect([slanted, tilted]).to include(surface)
+        #       self.assertTrue([slanted, tilted]).to include(surface)
         #     end
         #   end
         # end
@@ -903,6 +950,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     def test09_internal_mass(self):
         o  = osut.oslg
+        print(o.logs())
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
@@ -938,42 +986,42 @@ class TestOSutModuleMethods(unittest.TestCase):
         #
         # model.getInternalMasss.each do |m|
         #   d = m.internalMassDefinition
-        #   expect(d.designLevelCalculationMethod).to eq("SurfaceArea/Area")
+        #   self.assertTrue(d.designLevelCalculationMethod).to eq("SurfaceArea/Area")
         #
         #   ratio = d.surfaceAreaperSpaceFloorArea
-        #   expect(ratio).to_not be_empty
+        #   self.assertTrue(ratio).to_not be_empty
         #   ratio = ratio.get
         #
         #   case ratio
         #   when 0.1
-        #     expect(d.nameString).to eq("OSut|InternalMassDefinition|0.10")
-        #     expect(m.nameString.downcase).to include("entrance")
+        #     self.assertTrue(d.nameString).to eq("OSut|InternalMassDefinition|0.10")
+        #     self.assertTrue(m.nameString.downcase).to include("entrance")
         #   when 0.3
-        #     expect(d.nameString).to eq("OSut|InternalMassDefinition|0.30")
-        #     expect(m.nameString.downcase).to include("lobby")
+        #     self.assertTrue(d.nameString).to eq("OSut|InternalMassDefinition|0.30")
+        #     self.assertTrue(m.nameString.downcase).to include("lobby")
         #   when 1.0
-        #     expect(d.nameString).to eq("OSut|InternalMassDefinition|1.00")
-        #     expect(m.nameString.downcase).to include("meeting")
+        #     self.assertTrue(d.nameString).to eq("OSut|InternalMassDefinition|1.00")
+        #     self.assertTrue(m.nameString.downcase).to include("meeting")
         #   else
-        #     expect(d.nameString).to eq("OSut|InternalMassDefinition|2.00")
-        #     expect(ratio).to eq(2.0)
+        #     self.assertTrue(d.nameString).to eq("OSut|InternalMassDefinition|2.00")
+        #     self.assertTrue(ratio).to eq(2.0)
         #   end
         #
         #   c = d.construction
-        #   expect(c).to_not be_empty
+        #   self.assertTrue(c).to_not be_empty
         #   c = c.get.to_Construction
-        #   expect(c).to_not be_empty
+        #   self.assertTrue(c).to_not be_empty
         #   c = c.get
         #
         #   construction = c if construction.nil?
-        #   expect(construction).to eq(c)
-        #   expect(c.nameString).to eq("OSut|MASS|Construction")
-        #   expect(c.numLayers).to eq(1)
+        #   self.assertTrue(construction).to eq(c)
+        #   self.assertTrue(c.nameString).to eq("OSut|MASS|Construction")
+        #   self.assertTrue(c.numLayers).to eq(1)
         #
         #   m = c.layers.first
         #
         #   material = m if material.nil?
-        #   expect(material).to eq(m)
+        #   self.assertTrue(material).to eq(m)
         del(model)
 
 

@@ -228,7 +228,7 @@ def are_standardOpaqueLayers(lc=None) -> bool:
     if not hasattr(lc, CN.NS):
         return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
 
-    id = lc.nameString()
+    id = oslg.trim(lc.nameString())
 
     if not isinstance(lc, cl):
         return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
@@ -252,19 +252,19 @@ def thickness(lc=None) -> float:
 
     """
     mth = "osut.thickness"
-    cl  = openStudio.model.LayeredConstruction
+    cl  = openstudio.model.LayeredConstruction
     d   = 0.0
 
     if not hasattr(lc, CN.NS):
         return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
 
-    id = lc.nameString()
+    id = oslg.trim(lc.nameString())
 
     if not isinstance(lc, cl):
         return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
 
-    if not osut.are_standardOpaqueLayers(lc):
-        log(CN.ERR, "%s holds non-StandardOpaqueMaterial(s) %s" % (id, mth))
+    if not are_standardOpaqueLayers(lc):
+        oslg.log(CN.ERR, "%s holds non-StandardOpaqueMaterial(s) %s" % (id, mth))
         return d
 
     for m in lc.layers(): d += m.thickness()
