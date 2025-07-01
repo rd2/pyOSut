@@ -979,6 +979,80 @@ def genMass(sps=None, ratio=2.0) -> bool:
     return True
 
 
+def holdsConstruction(set=None, bse=None, gr=False, ex=False, tp=""):
+    """Validates whether a default construction set holds an opaque base
+    construction.
+
+    Args:
+        set (openstudio.model.DefaultConstructionSet):
+            A default construction set.
+        bse (openstudio.model.ConstructionBase):
+            A construction base.
+        gr (bool):
+            Whether ground-facing surface.
+        ex (bool):
+            Whether exterior-facing surface.
+        tp:
+            A surface type ("Wall", "Floor", "RoofCeiling").
+
+    Returns:
+        bool: Whether default set holds construction.
+        False: If invalid input (see logs).
+
+    """
+    mth = "osut.holdsConstruction"
+    cl1 = openstudio.model.DefaultConstructionSet
+    cl2 = openstudio.model.ConstructionBase
+
+    if not isinstance(set, cl1):
+        return oslg.invalid("set" , mth, 1, CN.DBG, False)
+    if not isinstance(bse, cl2):
+        return oslg.invalid("base", mth, 2, CN.DBG, False)
+    if gr not in [True, False]:
+        return oslg.invalid("ground", mth, 3, CN.DBG, False)
+    if ex not in [True, False]:
+        return oslg.invalid("exterior", mth, 4, CN.DBG, False)
+
+    try:
+        tp = str(tp)
+    except ValueError as e:
+        return oslg.mismatch("surface type", tp, str, mth, CN.DBG, False)
+
+    type = tp.lower()
+
+    if tp not in ["floor", "wall", "roofceiling"]:
+        return oslg.invalid("surface type", mth, 5, CN.DBG, False)
+
+    constructions = None
+
+    if gr:
+        if set.defaultGroundContactSurfaceConstructions():
+            constructions = set.defaultGroundContactSurfaceConstructions().get()
+    elif ex:
+        if set.defaultExteriorSurfaceConstructions():
+            constructions = set.defaultExteriorSurfaceConstructions().get()
+    else:
+        if set.defaultInteriorSurfaceConstructions():
+            constructions = set.defaultInteriorSurfaceConstructions().get()
+
+    if not constructions: return False
+
+    if type == "roofceiling":
+        if constructions.roofCeilingConstruction():
+            construction = constructions.roofCeilingConstruction().get()
+            if construction == bse: return True
+    elif type == "floor":
+        if constructions.floorConstruction():
+            construction = constructions.floorConstruction().get()
+            if construction == bse: return True
+    else:
+        if constructions.wallConstruction():
+            construction = constructions.wallConstruction().get()
+            if construction == bse: return True
+
+    return False
+
+
 def transforms(group=None) -> dict:
     """"Returns OpenStudio site/space transformation & rotation angle.
 

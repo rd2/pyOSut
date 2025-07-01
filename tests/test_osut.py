@@ -866,7 +866,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         del(model)
 
     def test08_genShade(self):
-        o  = osut.oslg
+        o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
@@ -950,7 +950,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         # model.save(file, true)
 
     def test09_internal_mass(self):
-        o  = osut.oslg
+        o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
@@ -1027,6 +1027,81 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         del(model)
 
+    def test10_holds_constructions(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/in/5ZoneNoHVAC.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+        mdl   = openstudio.model.Model()
+
+        t1  = "roofceiling"
+        t2  = "wall"
+        cl1 = openstudio.model.DefaultConstructionSet
+        cl2 = openstudio.model.LayeredConstruction
+        id1 = cl1.__name__
+        id2 = cl2.__name__
+        n1  = "CBECS Before-1980 ClimateZone 8 (smoff) ConstSet"
+        n2  = "CBECS Before-1980 ExtRoof IEAD ClimateZone 8"
+        m5  = "Invalid 'surface type' arg #5 (osut.holdsConstruction)"
+        m6  = "Invalid 'set' arg #1 (osut.holdsConstruction)"
+        set = model.getDefaultConstructionSetByName(n1)
+        c   = model.getLayeredConstructionByName(n2)
+        self.assertTrue(set)
+        self.assertTrue(c)
+        set = set.get()
+        c   = c.get()
+
+        # TRUE case: 'set' holds 'c' (exterior roofceiling construction).
+        self.assertTrue(osut.holdsConstruction(set, c, False, True, t1))
+        self.assertEqual(o.status(), 0)
+
+        # FALSE case: not ground construction.
+        self.assertFalse(osut.holdsConstruction(set, c, True, True, t1))
+        self.assertEqual(o.status(), 0)
+
+        # INVALID case: arg #5 : None (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(set, c, True, True, None))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.clean(), DBG)
+
+        # INVALID case: arg #5 : empty surface type string.
+        self.assertFalse(osut.holdsConstruction(set, c, True, True, ""))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.clean(), DBG)
+
+        # INVALID case: arg #5 : c construction (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(set, c, True, True, c))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.clean(), DBG)
+
+        # INVALID case: arg #1 : c construction (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(c, c, True, True, c))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m6)
+        self.assertEqual(o.clean(), DBG)
+
+        # INVALID case: arg #1 : model (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(mdl, c, True, True, t1))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m6)
+        self.assertEqual(o.clean(), DBG)
 
 if __name__ == "__main__":
     unittest.main()
