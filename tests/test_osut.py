@@ -872,7 +872,14 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
+        version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
+
+        path   = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model  = translator.loadModel(path)
+        self.assertTrue(model)
+        model  = model.get()
+        spaces = model.getSpaces()
 
         # file   = File.join(__dir__, "files/osms/out/seb_ext4.osm")
         # path   = OpenStudio::Path.new(file)
@@ -880,9 +887,10 @@ class TestOSutModuleMethods(unittest.TestCase):
         # self.assertTrue(model).to_not be_empty
         # model  = model.get
         # spaces = model.getSpaces
-        #
-        # slanted   = mod1.facets(spaces, "Outdoors", "RoofCeiling", [:top, :north])
-        # self.assertTrue(slanted.size).to eq(1)
+
+        # slanted = osut.facets(spaces, "Outdoors", "RoofCeiling", ["top", "north"])
+        # self.assertEqual(len(slanted), 1)
+
         # slanted   = slanted.first
         # self.assertTrue(slanted.nameString).to eq("Openarea slanted roof")
         # skylights = slanted.subSurfaces
@@ -960,60 +968,63 @@ class TestOSutModuleMethods(unittest.TestCase):
         meeting.setName("Meeting")
         offices.setName("Offices")
 
+        m1 = "OSut.InternalMassDefinition.0.10"
+        m2 = "OSut.InternalMassDefinition.0.30"
+        m3 = "OSut.InternalMassDefinition.1.00"
+        m4 = "OSut.InternalMassDefinition.2.00"
+
         for space in model.getSpaces():
             name  = space.nameString().lower()
-            ratio = None
+            ratio = ratios[name] if name in ratios else None
+            sps   = openstudio.model.SpaceVector()
+            sps.append(space)
 
-            if name in ratios:
-                ratio = ratios[name]
-                sps   = openstudio.model.SpaceVector()
-                sps.append(space)
-                # if ratio:
-                #     self.assertTrue(osut.genMass(sps, ratio))
-                # else:
-                #     self.assertTrue(osut.genMass(sps))
+            if ratio:
+                self.assertTrue(osut.genMass(sps, ratio))
+            else:
+                self.assertTrue(osut.genMass(sps))
 
-        # construction = nil
-        # material     = nil
-        #
-        # model.getInternalMasss.each do |m|
-        #   d = m.internalMassDefinition
-        #   self.assertTrue(d.designLevelCalculationMethod).to eq("SurfaceArea/Area")
-        #
-        #   ratio = d.surfaceAreaperSpaceFloorArea
-        #   self.assertTrue(ratio).to_not be_empty
-        #   ratio = ratio.get
-        #
-        #   case ratio
-        #   when 0.1
-        #     self.assertTrue(d.nameString).to eq("OSut|InternalMassDefinition|0.10")
-        #     self.assertTrue(m.nameString.downcase).to include("entrance")
-        #   when 0.3
-        #     self.assertTrue(d.nameString).to eq("OSut|InternalMassDefinition|0.30")
-        #     self.assertTrue(m.nameString.downcase).to include("lobby")
-        #   when 1.0
-        #     self.assertTrue(d.nameString).to eq("OSut|InternalMassDefinition|1.00")
-        #     self.assertTrue(m.nameString.downcase).to include("meeting")
-        #   else
-        #     self.assertTrue(d.nameString).to eq("OSut|InternalMassDefinition|2.00")
-        #     self.assertTrue(ratio).to eq(2.0)
-        #   end
-        #
-        #   c = d.construction
-        #   self.assertTrue(c).to_not be_empty
-        #   c = c.get.to_Construction
-        #   self.assertTrue(c).to_not be_empty
-        #   c = c.get
-        #
-        #   construction = c if construction.nil?
-        #   self.assertTrue(construction).to eq(c)
-        #   self.assertTrue(c.nameString).to eq("OSut|MASS|Construction")
-        #   self.assertTrue(c.numLayers).to eq(1)
-        #
-        #   m = c.layers.first
-        #
-        #   material = m if material.nil?
-        #   self.assertTrue(material).to eq(m)
+            self.assertEqual(o.status(), 0)
+
+        construction = None
+        material     = None
+
+        for m in model.getInternalMasss():
+            d = m.internalMassDefinition()
+            self.assertTrue(d.designLevelCalculationMethod(), "SurfaceArea/Area")
+
+            ratio = d.surfaceAreaperSpaceFloorArea()
+            self.assertTrue(ratio)
+            ratio = ratio.get()
+
+            if round(ratio, 1) == 0.1:
+                self.assertEqual(d.nameString(), m1)
+                self.assertTrue("entrance" in m.nameString().lower())
+            elif round(ratio, 1) == 0.3:
+                self.assertEqual(d.nameString(), m2)
+                self.assertTrue("lobby" in m.nameString().lower())
+            elif round(ratio, 1) == 1.0:
+                self.assertEqual(d.nameString(), m3)
+                self.assertTrue("meeting" in m.nameString().lower())
+            else:
+                self.assertEqual(d.nameString(), m4)
+                self.assertEqual(round(ratio, 1), 2.00)
+
+            c = d.construction()
+            self.assertTrue(c)
+            c = c.get().to_Construction()
+            self.assertTrue(c)
+            c = c.get()
+
+            if not construction: construction = c
+            self.assertEqual(construction, c)
+            self.assertTrue("OSut.MASS.Construction" in c.nameString())
+            self.assertEqual(c.numLayers(), 1)
+            m = c.layers()[0]
+
+            if not material: material = m
+            self.assertEqual(material, m)
+
         del(model)
 
 

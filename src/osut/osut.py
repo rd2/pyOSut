@@ -791,7 +791,7 @@ def genConstruction(model=None, specs=dict()):
     return c
 
 
-def genShade(subs=[]) -> bool:
+def genShade(subs=None) -> bool:
     """Generates solar shade(s) (e.g. roller, textile) for glazed OpenStudio
     SubSurfaces (v321+), controlled to minimize overheating in cooling months
     (May to October in Northern Hemisphere), when outdoor dry bulb temperature
@@ -890,6 +890,91 @@ def genShade(subs=[]) -> bool:
     ctl.setSetpoint2(100) # W/m2
     ctl.setMultipleSurfaceControlType("Group")
     ctl.setSubSurfaces(subs)
+
+    return True
+
+
+def genMass(sps=None, ratio=2.0) -> bool:
+    """ Generates an internal mass definition and instances for target spaces.
+    This is largely adapted from OpenStudio-Standards:
+        https://github.com/NREL/openstudio-standards/blob/
+        eac3805a65be060b39ecaf7901c908f8ed2c051b/lib/openstudio-standards/
+        prototypes/common/objects/Prototype.Model.rb#L572
+
+    Args:
+        sps (OpenStudio::Model::SpaceVector):
+            Target spaces.
+        ratio (float):
+            Ratio of internal mass surface area to floor surface area.
+
+    Returns:
+        bool: Whether successfully generated.
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.genMass"
+    cl = openstudio.model.SpaceVector
+
+    if not isinstance(sps, cl):
+        return oslg.mismatch("spaces", sps, cl, mth, CN.DBG, False)
+
+    try:
+        ratio = float(ratio)
+    except ValueError as e:
+        return oslg.mismatch("ratio", ratio, float, mth, CN.DBG, False)
+
+    if not sps:
+        return oslg.empty("spaces", mth, CN.DBG, False)
+    if ratio < 0:
+        return oslg.negative("ratio", mth, CN.ERR, False)
+
+    # A single material.
+    mdl = sps[0].model()
+    id  = "OSut.MASS.Material"
+    mat = mdl.getOpaqueMaterialByName(id)
+
+    if mat:
+        mat = mat.get()
+    else:
+        mat = openstudio.model.StandardOpaqueMaterial(mdl)
+        mat.setName(id)
+        mat.setRoughness("MediumRough")
+        mat.setThickness(0.15)
+        mat.setConductivity(1.12)
+        mat.setDensity(540)
+        mat.setSpecificHeat(1210)
+        mat.setThermalAbsorptance(0.9)
+        mat.setSolarAbsorptance(0.7)
+        mat.setVisibleAbsorptance(0.17)
+
+    # A single, 1x layered construction.
+    id  = "OSut.MASS.Construction"
+    con = mdl.getConstructionByName(id)
+
+    if con:
+        con = con.get()
+    else:
+        con = openstudio.model.Construction(mdl)
+        con.setName(id)
+        layers = openstudio.model.MaterialVector()
+        layers.append(mat)
+        con.setLayers(layers)
+
+    id = "OSut.InternalMassDefinition.%.2f" % ratio
+    df = mdl.getInternalMassDefinitionByName(id)
+
+    if df:
+        df = df.get
+    else:
+        df = openstudio.model.InternalMassDefinition(mdl)
+        df.setName(id)
+        df.setConstruction(con)
+        df.setSurfaceAreaperSpaceFloorArea(ratio)
+
+    for sp in sps:
+        mass = openstudio.model.InternalMass(df)
+        mass.setName("OSut.InternalMass.%s" % sp.nameString())
+        mass.setSpace(sp)
 
     return True
 
