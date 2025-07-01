@@ -210,204 +210,6 @@ def uo() -> dict:
     return _uo
 
 
-def are_standardOpaqueLayers(lc=None) -> bool:
-    """Validates if every material in a layered construction is standard & opaque.
-
-    Args:
-        lc (openstudio.model.LayeredConstruction):
-            an OpenStudio layered construction
-
-    Returns:
-        True: If all layers are valid (standard & opaque).
-        False: If invalid inputs (see logs).
-
-    """
-    mth = "osut.are_standardOpaqueLayers"
-    cl  = openstudio.model.LayeredConstruction
-
-    if not hasattr(lc, CN.NS):
-        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
-
-    id = oslg.trim(lc.nameString())
-
-    if not isinstance(lc, cl):
-        return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
-
-    for m in lc.layers():
-        if not m.to_StandardOpaqueMaterial(): return False
-
-    return True
-
-
-def thickness(lc=None) -> float:
-    """Returns total (standard opaque) layered construction thickness (m).
-
-    Args:
-        lc (openstudio.model.LayeredConstruction):
-            an OpenStudio layered construction
-
-    Returns:
-        float: A standard opaque construction thickness.
-        0.0: If invalid inputs (see logs).
-
-    """
-    mth = "osut.thickness"
-    cl  = openstudio.model.LayeredConstruction
-    d   = 0.0
-
-    if not hasattr(lc, CN.NS):
-        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
-
-    id = oslg.trim(lc.nameString())
-
-    if not isinstance(lc, cl):
-        return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
-
-    if not are_standardOpaqueLayers(lc):
-        oslg.log(CN.ERR, "%s holds non-StandardOpaqueMaterial(s) %s" % (id, mth))
-        return d
-
-    for m in lc.layers(): d += m.thickness()
-
-    return d
-
-
-def rsi(lc=None, film=0.0, t=0.0) -> float:
-    """Returns a construction's 'standard calc' thermal resistance (m2•K/W),
-    which includes air film resistances. It excludes insulating effects of
-    shades, screens, etc. in the case of fenestrated constructions. Adapted
-    from BTAP's 'Material' Module "get_conductance" (P. Lopez).
-
-    Args:
-        lc (openstudio.model.LayeredConstruction):
-            an OpenStudio layered construction
-        film (float):
-            thermal resistance of surface air films (m2•K/W)
-        t (float):
-            gas temperature (°C) (optional)
-
-    Returns:
-        float: A layered construction's thermal resistance.
-        0.0: If invalid input (see logs).
-
-    """
-    mth = "osut.rsi"
-    cl1 = openstudio.model.LayeredConstruction
-
-    if not hasattr(lc, CN.NS):
-        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
-
-    id = lc.nameString()
-
-    if not isinstance(lc, cl1):
-        return oslg.mismatch(id, lc, cl1, mth, CN.DBG, 0.0)
-
-    try:
-        film = float(film)
-    except ValueError as e:
-        return oslg.mismatch(id + " film", film, float, mth, CN.DBG, 0.0)
-
-    try:
-        t = float(t)
-    except ValueError as e:
-        return oslg.mismatch(id + " temp K", t, float, mth, CN.DBG, 0.0)
-
-    t += 273.0 # °C to K
-
-    if t < 0:
-        return oslg.negative(id + " temp K", mth, CN.ERR, 0.0)
-
-    if film < 0:
-        return oslg.negative(id + " film", mth, ERR, 0.0)
-
-    rsi = film
-
-    for m in lc.layers():
-        if m.to_SimpleGlazing():
-            return 1 / m.to_SimpleGlazing().get().uFactor()
-        elif m.to_StandardGlazing():
-            rsi += m.to_StandardGlazing().get().thermalResistance()
-        elif m.to_RefractionExtinctionGlazing():
-            rsi += m.to_RefractionExtinctionGlazing().get().thermalResistance()
-        elif m.to_Gas():
-            rsi += m.to_Gas().get().getThermalResistance(t)
-        elif m.to_GasMixture():
-            rsi += m.to_GasMixture().get().getThermalResistance(t)
-
-        # Opaque materials next.
-        if m.to_StandardOpaqueMaterial():
-            rsi += m.to_StandardOpaqueMaterial().get().thermalResistance()
-        elif m.to_MasslessOpaqueMaterial():
-            rsi += m.to_MasslessOpaqueMaterial()
-        elif m.to_RoofVegetation():
-            rsi += m.to_RoofVegetation().get().thermalResistance()
-        elif m.to_AirGap():
-            rsi += m.to_AirGap().get().thermalResistance()
-
-    return rsi
-
-
-def insulatingLayer(lc=None) -> dict:
-    """Identifies a layered construction's (opaque) insulating layer.
-
-    Args:
-        lc (openStudio.model.LayeredConstruction):
-            an OpenStudio layered construction
-
-    Returns:
-        An insulating-layer dictionary:
-            - "index" (int): construction's insulating layer index [0, n layers)
-            - "type" (str): layer material type ("standard" or "massless")
-            - "r" (float): material thermal resistance in m2•K/W.
-        If unsuccessful, dictionary is voided as follows (see logs):
-            "index": None
-            "type": None
-            "r": 0.0
-
-    """
-    mth = "osut.insulatingLayer"
-    cl  = openstudio.model.LayeredConstruction
-    res = dict(index=None, type=None, r=0.0)
-    i   = 0  # iterator
-
-    if not hasattr(lc, CN.NS):
-        return oslg.invalid("lc", mth, 1, CN.DBG, res)
-
-    id = lc.nameString()
-
-    if not isinstance(lc, cl):
-        return oslg.mismatch(id, lc, cl, mth, CN.DBG, res)
-
-    for m in lc.layers():
-        if m.to_MasslessOpaqueMaterial():
-            m = m.to_MasslessOpaqueMaterial().get()
-
-            if m.thermalResistance() < 0.001 or m.thermalResistance() < res["r"]:
-                i += 1
-                continue
-            else:
-                res["r"    ] = m.thermalResistance()
-                res["index"] = i
-                res["type" ] = "massless"
-
-        if m.to_StandardOpaqueMaterial():
-            m = m.to_StandardOpaqueMaterial().get()
-            k = m.thermalConductivity()
-            d = m.thickness()
-
-            if (d < 0.003) or (k > 3.0) or (d / k < res["r"]):
-                i += 1
-                continue
-            else:
-                res["r"    ] = d / k
-                res["index"] = i
-                res["type" ] = "standard"
-
-        i += 1
-
-    return res
-
-
 def genConstruction(model=None, specs=dict()):
     """Generates an OpenStudio multilayered construction, + materials if needed.
 
@@ -1051,6 +853,309 @@ def holdsConstruction(set=None, bse=None, gr=False, ex=False, tp=""):
             if construction == bse: return True
 
     return False
+
+
+def defaultConstructionSet(s=None):
+    """Returns a surface's default construction set.
+
+    Args:
+        s (openstudio.model.Surface):
+            A surface.
+
+    Returns:
+        openstudio.model.DefaultConstructionSet: A default construction set.
+        None: If invalid inputs (see logs).
+
+    """
+    mth = "osut.defaultConstructionSet"
+
+
+def are_standardOpaqueLayers(lc=None) -> bool:
+    """Validates if every material in a layered construction is standard & opaque.
+
+    Args:
+        lc (openstudio.model.LayeredConstruction):
+            an OpenStudio layered construction
+
+    Returns:
+        True: If all layers are valid (standard & opaque).
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.are_standardOpaqueLayers"
+    cl  = openstudio.model.LayeredConstruction
+
+    if not hasattr(lc, CN.NS):
+        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
+
+    id = oslg.trim(lc.nameString())
+
+    if not isinstance(lc, cl):
+        return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
+
+    for m in lc.layers():
+        if not m.to_StandardOpaqueMaterial(): return False
+
+    return True
+
+
+def thickness(lc=None) -> float:
+    """Returns total (standard opaque) layered construction thickness (m).
+
+    Args:
+        lc (openstudio.model.LayeredConstruction):
+            an OpenStudio layered construction
+
+    Returns:
+        float: A standard opaque construction thickness.
+        0.0: If invalid inputs (see logs).
+
+    """
+    mth = "osut.thickness"
+    cl  = openstudio.model.LayeredConstruction
+    d   = 0.0
+
+    if not hasattr(lc, CN.NS):
+        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
+
+    id = oslg.trim(lc.nameString())
+
+    if not isinstance(lc, cl):
+        return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
+
+    if not are_standardOpaqueLayers(lc):
+        oslg.log(CN.ERR, "%s holds non-StandardOpaqueMaterial(s) %s" % (id, mth))
+        return d
+
+    for m in lc.layers(): d += m.thickness()
+
+    return d
+
+
+def glazingAirFilmRSi(usi=5.85):
+    """Returns total air film resistance of a fenestrated construction (m2•K/W).
+
+    Args:
+        usi (float):
+            A fenestrated construction's U-factor (W/m2•K).
+
+    Returns:
+        float: Total air film resistances.
+        0.1216: If invalid input (see logs).
+
+    """
+    # The sum of thermal resistances of calculated exterior and interior film
+    # coefficients under standard winter conditions are taken from:
+    #
+    #   https://bigladdersoftware.com/epx/docs/9-6/engineering-reference/
+    #   window-calculation-module.html#simple-window-model
+    #
+    # These remain acceptable approximations for flat windows, yet likely
+    # unsuitable for subsurfaces with curved or projecting shapes like domed
+    # skylights. The solution here is considered an adequate fix for reporting,
+    # awaiting eventual OpenStudio (and EnergyPlus) upgrades to report NFRC 100
+    # (or ISO) air film resistances under standard winter conditions.
+    #
+    # For U-factors above 8.0 W/m2•K (or invalid input), the function returns
+    # 0.1216 m2•K/W, which corresponds to a construction with a single glass
+    # layer thickness of 2mm & k = ~0.6 W/m.K.
+    #
+    # The EnergyPlus Engineering calculations were designed for vertical
+    # windows, not for horizontal, slanted or domed surfaces - use with caution.
+    mth = "osut.glazingAirFilmRSi"
+    val = 0.1216
+
+    try:
+        usi = float(usi)
+    except ValueError as e:
+        return oslg.mismatch("usi", usi, float, mth, CN.DBG, val)
+
+    if usi > 8.0:
+        return invalid("usi", mth, 1, DB.WRN, val)
+    elif usi < 0:
+        return negative("usi", mth, CN.WRN, val)
+    elif abs(usi) < CN.TOL:
+        return zero("usi", mth, CN.WRN, val)
+
+    rsi = 1 / (0.025342 * usi + 29.163853) # exterior film, next interior film
+
+    if usi < 5.85:
+        return rsi + 1 / (0.359073 * math.log(usi) + 6.949915)
+
+    return rsi + 1 / (1.788041 * usi - 2.886625)
+
+
+def rsi(lc=None, film=0.0, t=0.0) -> float:
+    """Returns a construction's 'standard calc' thermal resistance (m2•K/W),
+    which includes air film resistances. It excludes insulating effects of
+    shades, screens, etc. in the case of fenestrated constructions. Adapted
+    from BTAP's 'Material' Module "get_conductance" (P. Lopez).
+
+    Args:
+        lc (openstudio.model.LayeredConstruction):
+            an OpenStudio layered construction
+        film (float):
+            thermal resistance of surface air films (m2•K/W)
+        t (float):
+            gas temperature (°C) (optional)
+
+    Returns:
+        float: A layered construction's thermal resistance.
+        0.0: If invalid input (see logs).
+
+    """
+    mth = "osut.rsi"
+    cl1 = openstudio.model.LayeredConstruction
+
+    if not hasattr(lc, CN.NS):
+        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
+
+    id = lc.nameString()
+
+    if not isinstance(lc, cl1):
+        return oslg.mismatch(id, lc, cl1, mth, CN.DBG, 0.0)
+
+    try:
+        film = float(film)
+    except ValueError as e:
+        return oslg.mismatch(id + " film", film, float, mth, CN.DBG, 0.0)
+
+    try:
+        t = float(t)
+    except ValueError as e:
+        return oslg.mismatch(id + " temp K", t, float, mth, CN.DBG, 0.0)
+
+    t += 273.0 # °C to K
+
+    if t < 0:
+        return oslg.negative(id + " temp K", mth, CN.ERR, 0.0)
+
+    if film < 0:
+        return oslg.negative(id + " film", mth, ERR, 0.0)
+
+    rsi = film
+
+    for m in lc.layers():
+        if m.to_SimpleGlazing():
+            return 1 / m.to_SimpleGlazing().get().uFactor()
+        elif m.to_StandardGlazing():
+            rsi += m.to_StandardGlazing().get().thermalResistance()
+        elif m.to_RefractionExtinctionGlazing():
+            rsi += m.to_RefractionExtinctionGlazing().get().thermalResistance()
+        elif m.to_Gas():
+            rsi += m.to_Gas().get().getThermalResistance(t)
+        elif m.to_GasMixture():
+            rsi += m.to_GasMixture().get().getThermalResistance(t)
+
+        # Opaque materials next.
+        if m.to_StandardOpaqueMaterial():
+            rsi += m.to_StandardOpaqueMaterial().get().thermalResistance()
+        elif m.to_MasslessOpaqueMaterial():
+            rsi += m.to_MasslessOpaqueMaterial()
+        elif m.to_RoofVegetation():
+            rsi += m.to_RoofVegetation().get().thermalResistance()
+        elif m.to_AirGap():
+            rsi += m.to_AirGap().get().thermalResistance()
+
+    return rsi
+
+
+def insulatingLayer(lc=None) -> dict:
+    """Identifies a layered construction's (opaque) insulating layer.
+
+    Args:
+        lc (openStudio.model.LayeredConstruction):
+            an OpenStudio layered construction
+
+    Returns:
+        An insulating-layer dictionary:
+            - "index" (int): construction's insulating layer index [0, n layers)
+            - "type" (str): layer material type ("standard" or "massless")
+            - "r" (float): material thermal resistance in m2•K/W.
+        If unsuccessful, dictionary is voided as follows (see logs):
+            "index": None
+            "type": None
+            "r": 0.0
+
+    """
+    mth = "osut.insulatingLayer"
+    cl  = openstudio.model.LayeredConstruction
+    res = dict(index=None, type=None, r=0.0)
+    i   = 0  # iterator
+
+    if not hasattr(lc, CN.NS):
+        return oslg.invalid("lc", mth, 1, CN.DBG, res)
+
+    id = lc.nameString()
+
+    if not isinstance(lc, cl):
+        return oslg.mismatch(id, lc, cl, mth, CN.DBG, res)
+
+    for m in lc.layers():
+        if m.to_MasslessOpaqueMaterial():
+            m = m.to_MasslessOpaqueMaterial().get()
+
+            if m.thermalResistance() < 0.001 or m.thermalResistance() < res["r"]:
+                i += 1
+                continue
+            else:
+                res["r"    ] = m.thermalResistance()
+                res["index"] = i
+                res["type" ] = "massless"
+
+        if m.to_StandardOpaqueMaterial():
+            m = m.to_StandardOpaqueMaterial().get()
+            k = m.thermalConductivity()
+            d = m.thickness()
+
+            if (d < 0.003) or (k > 3.0) or (d / k < res["r"]):
+                i += 1
+                continue
+            else:
+                res["r"    ] = d / k
+                res["index"] = i
+                res["type" ] = "standard"
+
+        i += 1
+
+    return res
+
+
+def is_spandrel(s=None):
+    """Validates whether opaque surface can be considered as a curtain wall
+    (or similar technology) spandrel, regardless of construction layers, by
+    looking up AdditionalProperties or its identifier.
+
+    Args:
+        s (openstudio.model.Surface):
+            An opaque surface.
+
+    Returns:
+        bool: Whether surface can be considered 'spandrel'.
+        False: If invalid input (see logs).
+    """
+    mth = "osut.is_spandrel"
+    cl  = openstudio.model.Surface
+
+    if not isinstance(s, cl):
+        return oslg.mismatch("surface", s, cl, mth, CN.DBG)
+
+    # Prioritize AdditionalProperties route.
+    if s.additionalProperties().hasFeature("spandrel"):
+        val = s.additionalProperties().getFeatureAsBoolean("spandrel")
+
+        if not val:
+            return oslg.invalid("spandrel", mth, 1, CN.ERR, False)
+
+            val = val.get()
+
+            if val not in [True, False]:
+                return invalid("spandrel bool", mth, 1, CN.ERR, False)
+            else:
+                return val
+
+    # Fallback: check for 'spandrel' in surface name.
+    return "spandrel" in s.nameString().lower()
 
 
 def transforms(group=None) -> dict:
