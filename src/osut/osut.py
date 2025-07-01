@@ -371,7 +371,7 @@ def insulatingLayer(lc=None) -> dict:
     i   = 0  # iterator
 
     if not hasattr(lc, CN.NS):
-        return oslg.invalid("layered construction", mth, 1, CN.DBG, res)
+        return oslg.invalid("lc", mth, 1, CN.DBG, res)
 
     id = lc.nameString()
 

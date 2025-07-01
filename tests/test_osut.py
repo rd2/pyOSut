@@ -214,98 +214,91 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertFalse(o.logs())
 
-
     def test06_insulatingLayer(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
-        # it "checks (opaque) insulating layers within a layered construction" do
-        # translator = OpenStudio::OSVersion::VersionTranslator.new
-        # self.assertTrue(mod1.clean!).to eq(DBG)
-        #
-        # file  = File.join(__dir__, "files/osms/out/seb2.osm")
-        # path  = OpenStudio::Path.new(file)
-        # model = translator.loadModel(path)
-        # self.assertTrue(model).to_not be_empty
-        # model = model.get
-        #
-        # m  = "OSut::insulatingLayer"
-        # m1 = "Invalid 'lc' arg #1 (#{m})"
-        #
-        # model.getLayeredConstructions.each do |lc|
-        #   lyr = mod1.insulatingLayer(lc)
-        #   self.assertTrue(lyr).to be_a(Hash)
-        #   self.assertTrue(lyr).to have_key(:index)
-        #   self.assertTrue(lyr).to have_key(:type )
-        #   self.assertTrue(lyr).to have_key(:r)
-        #
-        #   if lc.isFenestration
-        #     self.assertTrue(mod1.status).to be_zero
-        #     self.assertTrue(lyr[:index]).to be_nil
-        #     self.assertTrue(lyr[:type ]).to be_nil
-        #     self.assertTrue(lyr[:r    ]).to be_zero
-        #     next
-        #   end
-        #
-        #   unless [:standard, :massless].include?(lyr[:type]) # air wall mat
-        #     self.assertTrue(mod1.status).to be_zero
-        #     self.assertTrue(lyr[:index]).to be_nil
-        #     self.assertTrue(lyr[:type ]).to be_nil
-        #     self.assertTrue(lyr[:r    ]).to be_zero
-        #     next
-        #   end
-        #
-        #   self.assertTrue(lyr[:index] < lc.numLayers).to be true
-        #
-        #   case lc.nameString
-        #   when "EXTERIOR-ROOF"
-        #     self.assertTrue(lyr[:index]).to eq(2)
-        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(5.08)
-        #   when "EXTERIOR-WALL"
-        #     self.assertTrue(lyr[:index]).to eq(2)
-        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(1.47)
-        #   when "Default interior ceiling"
-        #     self.assertTrue(lyr[:index]).to be_zero
-        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(0.12)
-        #   when "INTERIOR-WALL"
-        #     self.assertTrue(lyr[:index]).to eq(1)
-        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(0.24)
-        #   else
-        #     self.assertTrue(lyr[:index]).to be_zero
-        #     self.assertTrue(lyr[:r    ]).to be_within(TOL).of(0.29)
-        #   end
-        # end
-        #
-        # lyr = mod1.insulatingLayer(nil)
-        # self.assertTrue(mod1.debug?).to be true
-        # self.assertTrue(lyr[:index]).to be_nil
-        # self.assertTrue(lyr[:type ]).to be_nil
-        # self.assertTrue(lyr[:r    ]).to be_zero
-        # self.assertTrue(mod1.debug?).to be true
-        # self.assertTrue(mod1.logs.size).to eq(1)
-        # self.assertTrue(mod1.logs.first[:message]).to eq(m1)
-        #
-        # self.assertTrue(mod1.clean!).to eq(DBG)
-        # lyr = mod1.insulatingLayer("")
-        # self.assertTrue(mod1.debug?).to be true
-        # self.assertTrue(lyr[:index]).to be_nil
-        # self.assertTrue(lyr[:type ]).to be_nil
-        # self.assertTrue(lyr[:r    ]).to be_zero
-        # self.assertTrue(mod1.debug?).to be true
-        # self.assertTrue(mod1.logs.size).to eq(1)
-        # self.assertTrue(mod1.logs.first[:message]).to eq(m1)
-        #
-        # self.assertTrue(mod1.clean!).to eq(DBG)
-        # lyr = mod1.insulatingLayer(model)
-        # self.assertTrue(mod1.debug?).to be true
-        # self.assertTrue(lyr[:index]).to be_nil
-        # self.assertTrue(lyr[:type ]).to be_nil
-        # self.assertTrue(lyr[:r    ]).to be_zero
-        # self.assertTrue(mod1.debug?).to be true
-        # self.assertTrue(mod1.logs.size).to eq(1)
-        # self.assertTrue(mod1.logs.first[:message]).to eq(m1)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        m0 = "Invalid 'lc' arg #1 (osut.insulatingLayer)"
+
+        for lc in model.getLayeredConstructions():
+            id = lc.nameString()
+            lyr = osut.insulatingLayer(lc)
+
+            self.assertTrue(isinstance(lyr, dict))
+            self.assertTrue("index" in lyr)
+            self.assertTrue("type" in lyr)
+            self.assertTrue("r" in lyr)
+
+            if lc.isFenestration():
+                self.assertEqual(o.status(), 0)
+                self.assertFalse(lyr["index"])
+                self.assertFalse(lyr["type"])
+                self.assertEqual(lyr["r"], 0)
+                continue
+
+            if lyr["type"] not in ["standard", "massless"]: # air wall material
+                self.assertEqual(o.status(), 0)
+                self.assertFalse(lyr["index"])
+                self.assertFalse(lyr["type"])
+                self.assertEqual(lyr["r"], 0)
+                continue
+
+            self.assertTrue(lyr["index"] < lc.numLayers())
+
+            if id == "EXTERIOR-ROOF":
+                self.assertEqual(lyr["index"], 2)
+                self.assertEqual(round(lyr["r"], 2), 5.08)
+            elif id == "EXTERIOR-WALL":
+                self.assertEqual(lyr["index"], 2)
+                self.assertEqual(round(lyr["r"], 2), 1.47)
+            elif id == "Default interior ceiling":
+                self.assertEqual(lyr["index"], 0)
+                self.assertEqual(round(lyr["r"], 2), 0.12)
+            elif id == "INTERIOR-WALL":
+                self.assertEqual(lyr["index"], 1)
+                self.assertEqual(round(lyr["r"], 2), 0.24)
+            else:
+                self.assertEqual(lyr["index"], 0)
+                self.assertEqual(round(lyr["r"], 2), 0.29)
+
+        # Final stress tests.
+        lyr = osut.insulatingLayer(None)
+        self.assertTrue(o.is_debug())
+        self.assertFalse(lyr["index"])
+        self.assertFalse(lyr["type"])
+        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
+
+        lyr = osut.insulatingLayer("")
+        self.assertTrue(o.is_debug())
+        self.assertFalse(lyr["index"])
+        self.assertFalse(lyr["type"])
+        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertTrue(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
+
+        lyr = osut.insulatingLayer(model)
+        self.assertTrue(o.is_debug())
+        self.assertFalse(lyr["index"])
+        self.assertFalse(lyr["type"])
+        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertTrue(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
 
     def test07_genConstruction(self):
         m1 = "'specs' list? expecting dict (osut.genConstruction)"
@@ -950,7 +943,6 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     def test09_internal_mass(self):
         o  = osut.oslg
-        print(o.logs())
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
