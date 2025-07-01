@@ -1138,7 +1138,7 @@ def is_spandrel(s=None):
     cl  = openstudio.model.Surface
 
     if not isinstance(s, cl):
-        return oslg.mismatch("surface", s, cl, mth, CN.DBG)
+        return oslg.mismatch("surface", s, cl, mth, CN.DBG, False)
 
     # Prioritize AdditionalProperties route.
     if s.additionalProperties().hasFeature("spandrel"):
@@ -1156,6 +1156,38 @@ def is_spandrel(s=None):
 
     # Fallback: check for 'spandrel' in surface name.
     return "spandrel" in s.nameString().lower()
+
+
+def is_fenestration(s=None):
+    """Validates whether a sub surface is fenestrated.
+
+    Args:
+        s (openstudio.model.SubSurface):
+            An OpenStudio sub surface.
+
+    Returns:
+        bool: Whether subsurface can be considered 'fenestrated'.
+        False: If invalid input (see logs).
+
+    """
+    mth = "osut.is_fenestration"
+    cl  = openstudio.model.SubSurface
+
+    if not isinstance(s, cl):
+        return oslg.mismatch("subsurface", s, cl, mth, CN.DBG, False)
+
+    # OpenStudio::Model::SubSurface.validSubSurfaceTypeValues
+    #   "FixedWindow"              : fenestration
+    #   "OperableWindow"           : fenestration
+    #   "Door"
+    #   "GlassDoor"                : fenestration
+    #   "OverheadDoor"
+    #   "Skylight"                 : fenestration
+    #   "TubularDaylightDome"      : fenestration
+    #   "TubularDaylightDiffuser"  : fenestration
+    if s.subSurfaceType().lower() in ["door", "overheaddoor"]: return False
+
+    return True
 
 
 def transforms(group=None) -> dict:
