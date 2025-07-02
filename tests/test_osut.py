@@ -1071,15 +1071,97 @@ class TestOSutModuleMethods(unittest.TestCase):
             #   https://github.com/NREL/OpenStudio/blob/
             #   1c6fe48c49987c16e95e90ee3bd088ad0649ab9c/src/model/
             #   PlanarSurface.cpp#L878
-            
+
         del(model)
 
-    # def test11_rsi(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+    def test11_rsi(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        m0  = "osut.rsi"
+        m1 = "'lc' str? expecting LayeredConstruction (%s)" % m0
+        m2 = "'lc' NoneType? expecting LayeredConstruction (%s)" % m0
+        m3 = "Negative 'film' (%s)" % m0
+        m4 = "'film' NoneType? expecting float (%s)" % m0
+        m5 = "Negative 'temp K' (%s)" % m0
+        m6 = "'temp K' NoneType? expecting float (%s)" % m0
+
+        for s in model.getSurfaces():
+            if not s.isPartOfEnvelope(): continue
+
+            lc = s.construction()
+            self.assertTrue(lc)
+            lc = lc.get().to_LayeredConstruction()
+            self.assertTrue(lc)
+            lc = lc.get()
+
+            if s.isGroundSurface(): # 4x slabs on grade in SEB model
+                self.assertAlmostEqual(s.filmResistance(), 0.160, places=3)
+                self.assertAlmostEqual(osut.rsi(lc, s.filmResistance()), 0.448, places=3)
+                self.assertEqual(o.status(), 0)
+            else:
+                if s.surfaceType() == "Wall":
+                    self.assertAlmostEqual(s.filmResistance(), 0.150, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, s.filmResistance()), 2.616, places=3)
+                    self.assertEqual(o.status(), 0)
+                else: # RoofCeiling
+                    self.assertAlmostEqual(s.filmResistance(), 0.136, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, s.filmResistance()), 5.631, places=3)
+                    self.assertEqual(o.status(), 0)
+
+        # Stress tests.
+        self.assertAlmostEqual(osut.rsi("", 0.150), 0, places=2)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        self.assertAlmostEqual(osut.rsi(None, 0.150), 0, places=2)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m2)
+        self.assertEqual(o.clean(), DBG)
+
+        lc = model.getLayeredConstructionByName("SLAB-ON-GRADE-FLOOR")
+        self.assertTrue(lc)
+        lc = lc.get()
+
+        self.assertAlmostEqual(osut.rsi(lc, -1), 0, places=0)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m3)
+        self.assertEqual(o.clean(), DBG)
+
+        self.assertAlmostEqual(osut.rsi(lc, None), 0, places=0)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m4)
+        self.assertEqual(o.clean(), DBG)
+
+        self.assertAlmostEqual(osut.rsi(lc, 0.150, -300), 0, places=0)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.clean(), DBG)
+
+        self.assertAlmostEqual(osut.rsi(lc, 0.150, None), 0, places=0)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m6)
+        self.assertEqual(o.clean(), DBG)
+
+        del(model)
 
     def test12_insulating_layer(self):
         o = osut.oslg

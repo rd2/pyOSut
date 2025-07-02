@@ -1065,7 +1065,7 @@ def rsi(lc=None, film=0.0, t=0.0) -> float:
     if t < 0:
         return oslg.negative("temp K", mth, CN.ERR, 0.0)
     if film < 0:
-        return oslg.negative("film", mth, ERR, 0.0)
+        return oslg.negative("film", mth, CN.ERR, 0.0)
 
     rsi = film
 
