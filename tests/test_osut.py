@@ -83,223 +83,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(round(osut.mats()["sand"    ]["sol" ], 3),    0.700)
         self.assertEqual(round(osut.mats()["sand"    ]["vis" ], 3),    0.700)
 
-    def test05_construction_thickness(self):
-        o = osut.oslg
-        self.assertEqual(o.status(), 0)
-        self.assertEqual(o.level(), INF)
-        self.assertEqual(o.reset(DBG), DBG)
-        self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
-
-        version = int("".join(openstudio.openStudioVersion().split(".")))
-        translator = openstudio.osversion.VersionTranslator()
-
-        # The v1.11.5 (2016) seb.osm, shipped with OpenStudio, holds (what
-        # would now be considered as deprecated) a definition of plenum floors
-        # (i.e. ceiling tiles) generating several warnings with more recent
-        # OpenStudio versions.
-        path  = openstudio.path("./tests/files/osms/in/seb.osm")
-        model = translator.loadModel(path)
-        self.assertTrue(model)
-        model = model.get()
-
-        # "Shading Surface 4" is overlapping with a plenum exterior wall.
-        sh4 = model.getShadingSurfaceByName("Shading Surface 4")
-        self.assertTrue(sh4)
-        sh4 = sh4.get()
-        sh4.remove()
-
-        plenum = model.getSpaceByName("Level 0 Ceiling Plenum")
-        self.assertTrue(plenum)
-        plenum = plenum.get()
-
-        thzone = plenum.thermalZone()
-        self.assertTrue(thzone)
-        thzone = thzone.get()
-
-        # Before the fix.
-        if version >= 350:
-            self.assertTrue(plenum.isEnclosedVolume())
-            self.assertTrue(plenum.isVolumeDefaulted())
-            self.assertTrue(plenum.isVolumeAutocalculated())
-
-        if 350 < version < 370:
-            self.assertEqual(round(plenum.volume(), 0), 234)
-        else:
-            self.assertEqual(round(plenum.volume(), 0), 0)
-
-        self.assertTrue(thzone.isVolumeDefaulted())
-        self.assertTrue(thzone.isVolumeAutocalculated())
-        self.assertFalse(thzone.volume())
-
-        for s in plenum.surfaces():
-            if s.outsideBoundaryCondition().lower() == "outdoors": continue
-
-            # If a SEB plenum surface isn't facing outdoors, it's 1 of 4 "floor"
-            # surfaces (each facing a ceiling surface below).
-            adj = s.adjacentSurface()
-            self.assertTrue(adj)
-            adj = adj.get()
-            self.assertEqual(len(adj.vertices()), len(s.vertices()))
-
-            # Same vertex sequence? Should be in reverse order.
-            for i, vtx in enumerate(adj.vertices()):
-                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
-
-            self.assertEqual(adj.surfaceType(), "RoofCeiling")
-            self.assertEqual(s.surfaceType(), "RoofCeiling")
-            self.assertTrue(s.setSurfaceType("Floor"))
-            vtx = list(s.vertices())
-            vtx.reverse()
-            self.assertTrue(s.setVertices(vtx))
-
-            # Vertices now in reverse order.
-            rvtx = list(adj.vertices())
-            rvtx.reverse()
-
-            for i, vtx in enumerate(rvtx):
-                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
-
-        # After the fix.
-        if version >= 350:
-            self.assertTrue(plenum.isEnclosedVolume())
-            self.assertTrue(plenum.isVolumeDefaulted())
-            self.assertTrue(plenum.isVolumeAutocalculated())
-
-        self.assertEqual(round(plenum.volume(), 0), 50) # right answer
-        self.assertTrue(thzone.isVolumeDefaulted())
-        self.assertTrue(thzone.isVolumeAutocalculated())
-        self.assertFalse(thzone.volume())
-
-        model.save("./tests/files/osms/out/seb2.osm", True)
-        # End of cleanup.
-
-        for c in model.getConstructions():
-            if not c.to_LayeredConstruction(): continue
-
-            c  = c.to_LayeredConstruction().get()
-            id = c.nameString()
-
-            # OSut 'thickness' method can only process layered constructions
-            # built up with standard opaque layers, which exclude:
-            #
-            #   - "Air Wall"-based construction
-            #   - "Double pane"-based construction
-            #
-            # The method returns '0' in such cases, logging ERROR messages.
-            th = osut.thickness(c)
-
-            if "Air Wall" in id or "Double pane" in id:
-                self.assertEqual(round(th, 0), 0)
-                continue
-
-            self.assertTrue(th > 0)
-
-        self.assertTrue(o.is_error())
-        self.assertTrue(o.clean(), DBG)
-        self.assertEqual(o.status(), 0)
-        self.assertFalse(o.logs())
-
-        for c in model.getConstructions():
-            if c.to_LayeredConstruction(): continue
-
-            c  = c.to_LayeredConstruction().get()
-            id = c.nameString()
-            if "Air Wall" in id or "Double pane" in id: continue
-
-            th = osut.thickness(c)
-            self.assertTrue(th > 0)
-
-        self.assertEqual(o.status(), 0)
-        self.assertFalse(o.logs())
-
-    def test06_insulatingLayer(self):
-        o = osut.oslg
-        self.assertEqual(o.status(), 0)
-        self.assertEqual(o.reset(DBG), DBG)
-        self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
-
-        version = int("".join(openstudio.openStudioVersion().split(".")))
-        translator = openstudio.osversion.VersionTranslator()
-
-        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
-        model = translator.loadModel(path)
-        self.assertTrue(model)
-        model = model.get()
-
-        m0 = " expecting LayeredConstruction (osut.insulatingLayer)"
-
-        for lc in model.getLayeredConstructions():
-            id = lc.nameString()
-            lyr = osut.insulatingLayer(lc)
-
-            self.assertTrue(isinstance(lyr, dict))
-            self.assertTrue("index" in lyr)
-            self.assertTrue("type" in lyr)
-            self.assertTrue("r" in lyr)
-
-            if lc.isFenestration():
-                self.assertEqual(o.status(), 0)
-                self.assertFalse(lyr["index"])
-                self.assertFalse(lyr["type"])
-                self.assertEqual(lyr["r"], 0)
-                continue
-
-            if lyr["type"] not in ["standard", "massless"]: # air wall material
-                self.assertEqual(o.status(), 0)
-                self.assertFalse(lyr["index"])
-                self.assertFalse(lyr["type"])
-                self.assertEqual(lyr["r"], 0)
-                continue
-
-            self.assertTrue(lyr["index"] < lc.numLayers())
-
-            if id == "EXTERIOR-ROOF":
-                self.assertEqual(lyr["index"], 2)
-                self.assertEqual(round(lyr["r"], 2), 5.08)
-            elif id == "EXTERIOR-WALL":
-                self.assertEqual(lyr["index"], 2)
-                self.assertEqual(round(lyr["r"], 2), 1.47)
-            elif id == "Default interior ceiling":
-                self.assertEqual(lyr["index"], 0)
-                self.assertEqual(round(lyr["r"], 2), 0.12)
-            elif id == "INTERIOR-WALL":
-                self.assertEqual(lyr["index"], 1)
-                self.assertEqual(round(lyr["r"], 2), 0.24)
-            else:
-                self.assertEqual(lyr["index"], 0)
-                self.assertEqual(round(lyr["r"], 2), 0.29)
-
-        # Final stress tests.
-        lyr = osut.insulatingLayer(None)
-        self.assertTrue(o.is_debug())
-        self.assertFalse(lyr["index"])
-        self.assertFalse(lyr["type"])
-        self.assertEqual(round(lyr["r"], 2), 0.00)
-        self.assertEqual(len(o.logs()), 1)
-        self.assertTrue(m0 in o.logs()[0]["message"])
-        self.assertEqual(o.clean(), DBG)
-
-        lyr = osut.insulatingLayer("")
-        self.assertTrue(o.is_debug())
-        self.assertFalse(lyr["index"])
-        self.assertFalse(lyr["type"])
-        self.assertEqual(round(lyr["r"], 2), 0.00)
-        self.assertTrue(len(o.logs()), 1)
-        self.assertTrue(m0 in o.logs()[0]["message"])
-        self.assertEqual(o.clean(), DBG)
-
-        lyr = osut.insulatingLayer(model)
-        self.assertTrue(o.is_debug())
-        self.assertFalse(lyr["index"])
-        self.assertFalse(lyr["type"])
-        self.assertEqual(round(lyr["r"], 2), 0.00)
-        self.assertTrue(len(o.logs()), 1)
-        self.assertTrue(m0 in o.logs()[0]["message"])
-        self.assertEqual(o.clean(), DBG)
-
-    def test07_genConstruction(self):
+    def test05_construction_generation(self):
         m1 = "'specs' list? expecting dict (osut.genConstruction)"
         m2 = "'model' str? expecting Model (osut.genConstruction)"
         o  = osut.oslg
@@ -864,7 +648,557 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         del(model)
 
-    def test08_genShade(self):
+    def test06_internal_mass(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        ratios   = dict(entrance=0.1, lobby=0.3, meeting=1.0)
+        model    = openstudio.model.Model()
+        entrance = openstudio.model.Space(model)
+        lobby    = openstudio.model.Space(model)
+        meeting  = openstudio.model.Space(model)
+        offices  = openstudio.model.Space(model)
+
+        entrance.setName("Entrance")
+        lobby.setName("Lobby")
+        meeting.setName("Meeting")
+        offices.setName("Offices")
+
+        m1 = "OSut.InternalMassDefinition.0.10"
+        m2 = "OSut.InternalMassDefinition.0.30"
+        m3 = "OSut.InternalMassDefinition.1.00"
+        m4 = "OSut.InternalMassDefinition.2.00"
+
+        for space in model.getSpaces():
+            name  = space.nameString().lower()
+            ratio = ratios[name] if name in ratios else None
+            sps   = openstudio.model.SpaceVector()
+            sps.append(space)
+
+            if ratio:
+                self.assertTrue(osut.genMass(sps, ratio))
+            else:
+                self.assertTrue(osut.genMass(sps))
+
+            self.assertEqual(o.status(), 0)
+
+        construction = None
+        material     = None
+
+        for m in model.getInternalMasss():
+            d = m.internalMassDefinition()
+            self.assertTrue(d.designLevelCalculationMethod(), "SurfaceArea/Area")
+
+            ratio = d.surfaceAreaperSpaceFloorArea()
+            self.assertTrue(ratio)
+            ratio = ratio.get()
+
+            if round(ratio, 1) == 0.1:
+                self.assertEqual(d.nameString(), m1)
+                self.assertTrue("entrance" in m.nameString().lower())
+            elif round(ratio, 1) == 0.3:
+                self.assertEqual(d.nameString(), m2)
+                self.assertTrue("lobby" in m.nameString().lower())
+            elif round(ratio, 1) == 1.0:
+                self.assertEqual(d.nameString(), m3)
+                self.assertTrue("meeting" in m.nameString().lower())
+            else:
+                self.assertEqual(d.nameString(), m4)
+                self.assertEqual(round(ratio, 1), 2.00)
+
+            c = d.construction()
+            self.assertTrue(c)
+            c = c.get().to_Construction()
+            self.assertTrue(c)
+            c = c.get()
+
+            if not construction: construction = c
+            self.assertEqual(construction, c)
+            self.assertTrue("OSut.MASS.Construction" in c.nameString())
+            self.assertEqual(c.numLayers(), 1)
+            m = c.layers()[0]
+
+            if not material: material = m
+            self.assertEqual(material, m)
+
+        del(model)
+
+    def test07_construction_thickness(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        # The v1.11.5 (2016) seb.osm, shipped with OpenStudio, holds (what
+        # would now be considered as deprecated) a definition of plenum floors
+        # (i.e. ceiling tiles) generating several warnings with more recent
+        # OpenStudio versions.
+        path  = openstudio.path("./tests/files/osms/in/seb.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        # "Shading Surface 4" is overlapping with a plenum exterior wall.
+        sh4 = model.getShadingSurfaceByName("Shading Surface 4")
+        self.assertTrue(sh4)
+        sh4 = sh4.get()
+        sh4.remove()
+
+        plenum = model.getSpaceByName("Level 0 Ceiling Plenum")
+        self.assertTrue(plenum)
+        plenum = plenum.get()
+
+        thzone = plenum.thermalZone()
+        self.assertTrue(thzone)
+        thzone = thzone.get()
+
+        # Before the fix.
+        if version >= 350:
+            self.assertTrue(plenum.isEnclosedVolume())
+            self.assertTrue(plenum.isVolumeDefaulted())
+            self.assertTrue(plenum.isVolumeAutocalculated())
+
+        if 350 < version < 370:
+            self.assertEqual(round(plenum.volume(), 0), 234)
+        else:
+            self.assertEqual(round(plenum.volume(), 0), 0)
+
+        self.assertTrue(thzone.isVolumeDefaulted())
+        self.assertTrue(thzone.isVolumeAutocalculated())
+        self.assertFalse(thzone.volume())
+
+        for s in plenum.surfaces():
+            if s.outsideBoundaryCondition().lower() == "outdoors": continue
+
+            # If a SEB plenum surface isn't facing outdoors, it's 1 of 4 "floor"
+            # surfaces (each facing a ceiling surface below).
+            adj = s.adjacentSurface()
+            self.assertTrue(adj)
+            adj = adj.get()
+            self.assertEqual(len(adj.vertices()), len(s.vertices()))
+
+            # Same vertex sequence? Should be in reverse order.
+            for i, vtx in enumerate(adj.vertices()):
+                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
+
+            self.assertEqual(adj.surfaceType(), "RoofCeiling")
+            self.assertEqual(s.surfaceType(), "RoofCeiling")
+            self.assertTrue(s.setSurfaceType("Floor"))
+            vtx = list(s.vertices())
+            vtx.reverse()
+            self.assertTrue(s.setVertices(vtx))
+
+            # Vertices now in reverse order.
+            rvtx = list(adj.vertices())
+            rvtx.reverse()
+
+            for i, vtx in enumerate(rvtx):
+                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
+
+        # After the fix.
+        if version >= 350:
+            self.assertTrue(plenum.isEnclosedVolume())
+            self.assertTrue(plenum.isVolumeDefaulted())
+            self.assertTrue(plenum.isVolumeAutocalculated())
+
+        self.assertEqual(round(plenum.volume(), 0), 50) # right answer
+        self.assertTrue(thzone.isVolumeDefaulted())
+        self.assertTrue(thzone.isVolumeAutocalculated())
+        self.assertFalse(thzone.volume())
+
+        model.save("./tests/files/osms/out/seb2.osm", True)
+        # End of cleanup.
+
+        for c in model.getConstructions():
+            if not c.to_LayeredConstruction(): continue
+
+            c  = c.to_LayeredConstruction().get()
+            id = c.nameString()
+
+            # OSut 'thickness' method can only process layered constructions
+            # built up with standard opaque layers, which exclude:
+            #
+            #   - "Air Wall"-based construction
+            #   - "Double pane"-based construction
+            #
+            # The method returns '0' in such cases, logging ERROR messages.
+            th = osut.thickness(c)
+
+            if "Air Wall" in id or "Double pane" in id:
+                self.assertEqual(round(th, 0), 0)
+                continue
+
+            self.assertTrue(th > 0)
+
+        self.assertTrue(o.is_error())
+        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+
+        for c in model.getConstructions():
+            if c.to_LayeredConstruction(): continue
+
+            c  = c.to_LayeredConstruction().get()
+            id = c.nameString()
+            if "Air Wall" in id or "Double pane" in id: continue
+
+            th = osut.thickness(c)
+            self.assertTrue(th > 0)
+
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+
+    def test08_holds_constructions(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/in/5ZoneNoHVAC.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+        mdl   = openstudio.model.Model()
+
+        t1  = "roofceiling"
+        t2  = "wall"
+        cl1 = openstudio.model.DefaultConstructionSet
+        cl2 = openstudio.model.LayeredConstruction
+        id1 = cl1.__name__
+        id2 = cl2.__name__
+        n1  = "CBECS Before-1980 ClimateZone 8 (smoff) ConstSet"
+        n2  = "CBECS Before-1980 ExtRoof IEAD ClimateZone 8"
+        m5  = "Invalid 'surface type' arg #5 (osut.holdsConstruction)"
+        m6  = "Invalid 'set' arg #1 (osut.holdsConstruction)"
+        set = model.getDefaultConstructionSetByName(n1)
+        c   = model.getLayeredConstructionByName(n2)
+        self.assertTrue(set)
+        self.assertTrue(c)
+        set = set.get()
+        c   = c.get()
+
+        # TRUE case: 'set' holds 'c' (exterior roofceiling construction).
+        self.assertTrue(osut.holdsConstruction(set, c, False, True, t1))
+        self.assertEqual(o.status(), 0)
+
+        # FALSE case: not ground construction.
+        self.assertFalse(osut.holdsConstruction(set, c, True, True, t1))
+        self.assertEqual(o.status(), 0)
+
+        # INVALID case: arg #5 : None (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(set, c, True, True, None))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.clean(), DBG)
+
+        # INVALID case: arg #5 : empty surface type string.
+        self.assertFalse(osut.holdsConstruction(set, c, True, True, ""))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.clean(), DBG)
+
+        # INVALID case: arg #5 : c construction (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(set, c, True, True, c))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.clean(), DBG)
+
+        # INVALID case: arg #1 : c construction (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(c, c, True, True, c))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m6)
+        self.assertEqual(o.clean(), DBG)
+
+        # INVALID case: arg #1 : model (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(mdl, c, True, True, t1))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m6)
+        self.assertEqual(o.clean(), DBG)
+
+    # def test09_construction_set(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test10_glazing_airfilms(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test11_rsi(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    def test12_insulating_layer(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        m0 = " expecting LayeredConstruction (osut.insulatingLayer)"
+
+        for lc in model.getLayeredConstructions():
+            id = lc.nameString()
+            lyr = osut.insulatingLayer(lc)
+
+            self.assertTrue(isinstance(lyr, dict))
+            self.assertTrue("index" in lyr)
+            self.assertTrue("type" in lyr)
+            self.assertTrue("r" in lyr)
+
+            if lc.isFenestration():
+                self.assertEqual(o.status(), 0)
+                self.assertFalse(lyr["index"])
+                self.assertFalse(lyr["type"])
+                self.assertEqual(lyr["r"], 0)
+                continue
+
+            if lyr["type"] not in ["standard", "massless"]: # air wall material
+                self.assertEqual(o.status(), 0)
+                self.assertFalse(lyr["index"])
+                self.assertFalse(lyr["type"])
+                self.assertEqual(lyr["r"], 0)
+                continue
+
+            self.assertTrue(lyr["index"] < lc.numLayers())
+
+            if id == "EXTERIOR-ROOF":
+                self.assertEqual(lyr["index"], 2)
+                self.assertEqual(round(lyr["r"], 2), 5.08)
+            elif id == "EXTERIOR-WALL":
+                self.assertEqual(lyr["index"], 2)
+                self.assertEqual(round(lyr["r"], 2), 1.47)
+            elif id == "Default interior ceiling":
+                self.assertEqual(lyr["index"], 0)
+                self.assertEqual(round(lyr["r"], 2), 0.12)
+            elif id == "INTERIOR-WALL":
+                self.assertEqual(lyr["index"], 1)
+                self.assertEqual(round(lyr["r"], 2), 0.24)
+            else:
+                self.assertEqual(lyr["index"], 0)
+                self.assertEqual(round(lyr["r"], 2), 0.29)
+
+        # Final stress tests.
+        lyr = osut.insulatingLayer(None)
+        self.assertTrue(o.is_debug())
+        self.assertFalse(lyr["index"])
+        self.assertFalse(lyr["type"])
+        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertEqual(len(o.logs()), 1)
+        self.assertTrue(m0 in o.logs()[0]["message"])
+        self.assertEqual(o.clean(), DBG)
+
+        lyr = osut.insulatingLayer("")
+        self.assertTrue(o.is_debug())
+        self.assertFalse(lyr["index"])
+        self.assertFalse(lyr["type"])
+        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertTrue(len(o.logs()), 1)
+        self.assertTrue(m0 in o.logs()[0]["message"])
+        self.assertEqual(o.clean(), DBG)
+
+        lyr = osut.insulatingLayer(model)
+        self.assertTrue(o.is_debug())
+        self.assertFalse(lyr["index"])
+        self.assertFalse(lyr["type"])
+        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertTrue(len(o.logs()), 1)
+        self.assertTrue(m0 in o.logs()[0]["message"])
+        self.assertEqual(o.clean(), DBG)
+
+    # def test13_spandrels(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test14_schedule_ruleset_minmax(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test15_schedule_constant_minmax(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test16_schedule_comapct_minmax(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test17_minmax_heatcool_setpoints(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test18_hvac_airloops(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test19_vestibules(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test20_setpoints_plenums_attics(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test21_availability_schedules(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test22_model_transformation(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test23_fits_overlaps(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test24_triangulation(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test25_segments_triads_orientation(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test26_ulc_blc(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test27_polygon_attributes(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test28_subsurface_insertions(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test29_surface_width_height(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test30_wwr_insertions(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test31_convexity(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test32_outdoor_roofs(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test33_leader_line_anchors_inserts(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test34_generated_skylight_wells(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    # def test35_facet_retrieval(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+
+    def test36_roller_shades(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
@@ -948,159 +1282,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         # file = File.join(__dir__, "files/osms/out/seb_ext5.osm")
         # model.save(file, true)
 
-    def test09_internal_mass(self):
-        o = osut.oslg
-        self.assertEqual(o.status(), 0)
-        self.assertEqual(o.reset(DBG), DBG)
-        self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
-        ratios   = dict(entrance=0.1, lobby=0.3, meeting=1.0)
-        model    = openstudio.model.Model()
-        entrance = openstudio.model.Space(model)
-        lobby    = openstudio.model.Space(model)
-        meeting  = openstudio.model.Space(model)
-        offices  = openstudio.model.Space(model)
 
-        entrance.setName("Entrance")
-        lobby.setName("Lobby")
-        meeting.setName("Meeting")
-        offices.setName("Offices")
 
-        m1 = "OSut.InternalMassDefinition.0.10"
-        m2 = "OSut.InternalMassDefinition.0.30"
-        m3 = "OSut.InternalMassDefinition.1.00"
-        m4 = "OSut.InternalMassDefinition.2.00"
-
-        for space in model.getSpaces():
-            name  = space.nameString().lower()
-            ratio = ratios[name] if name in ratios else None
-            sps   = openstudio.model.SpaceVector()
-            sps.append(space)
-
-            if ratio:
-                self.assertTrue(osut.genMass(sps, ratio))
-            else:
-                self.assertTrue(osut.genMass(sps))
-
-            self.assertEqual(o.status(), 0)
-
-        construction = None
-        material     = None
-
-        for m in model.getInternalMasss():
-            d = m.internalMassDefinition()
-            self.assertTrue(d.designLevelCalculationMethod(), "SurfaceArea/Area")
-
-            ratio = d.surfaceAreaperSpaceFloorArea()
-            self.assertTrue(ratio)
-            ratio = ratio.get()
-
-            if round(ratio, 1) == 0.1:
-                self.assertEqual(d.nameString(), m1)
-                self.assertTrue("entrance" in m.nameString().lower())
-            elif round(ratio, 1) == 0.3:
-                self.assertEqual(d.nameString(), m2)
-                self.assertTrue("lobby" in m.nameString().lower())
-            elif round(ratio, 1) == 1.0:
-                self.assertEqual(d.nameString(), m3)
-                self.assertTrue("meeting" in m.nameString().lower())
-            else:
-                self.assertEqual(d.nameString(), m4)
-                self.assertEqual(round(ratio, 1), 2.00)
-
-            c = d.construction()
-            self.assertTrue(c)
-            c = c.get().to_Construction()
-            self.assertTrue(c)
-            c = c.get()
-
-            if not construction: construction = c
-            self.assertEqual(construction, c)
-            self.assertTrue("OSut.MASS.Construction" in c.nameString())
-            self.assertEqual(c.numLayers(), 1)
-            m = c.layers()[0]
-
-            if not material: material = m
-            self.assertEqual(material, m)
-
-        del(model)
-
-    def test10_holds_constructions(self):
-        o = osut.oslg
-        self.assertEqual(o.status(), 0)
-        self.assertEqual(o.reset(DBG), DBG)
-        self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
-
-        version = int("".join(openstudio.openStudioVersion().split(".")))
-        translator = openstudio.osversion.VersionTranslator()
-
-        path  = openstudio.path("./tests/files/osms/in/5ZoneNoHVAC.osm")
-        model = translator.loadModel(path)
-        self.assertTrue(model)
-        model = model.get()
-        mdl   = openstudio.model.Model()
-
-        t1  = "roofceiling"
-        t2  = "wall"
-        cl1 = openstudio.model.DefaultConstructionSet
-        cl2 = openstudio.model.LayeredConstruction
-        id1 = cl1.__name__
-        id2 = cl2.__name__
-        n1  = "CBECS Before-1980 ClimateZone 8 (smoff) ConstSet"
-        n2  = "CBECS Before-1980 ExtRoof IEAD ClimateZone 8"
-        m5  = "Invalid 'surface type' arg #5 (osut.holdsConstruction)"
-        m6  = "Invalid 'set' arg #1 (osut.holdsConstruction)"
-        set = model.getDefaultConstructionSetByName(n1)
-        c   = model.getLayeredConstructionByName(n2)
-        self.assertTrue(set)
-        self.assertTrue(c)
-        set = set.get()
-        c   = c.get()
-
-        # TRUE case: 'set' holds 'c' (exterior roofceiling construction).
-        self.assertTrue(osut.holdsConstruction(set, c, False, True, t1))
-        self.assertEqual(o.status(), 0)
-
-        # FALSE case: not ground construction.
-        self.assertFalse(osut.holdsConstruction(set, c, True, True, t1))
-        self.assertEqual(o.status(), 0)
-
-        # INVALID case: arg #5 : None (instead of surface type string).
-        self.assertFalse(osut.holdsConstruction(set, c, True, True, None))
-        self.assertTrue(o.is_debug())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m5)
-        self.assertEqual(o.clean(), DBG)
-
-        # INVALID case: arg #5 : empty surface type string.
-        self.assertFalse(osut.holdsConstruction(set, c, True, True, ""))
-        self.assertTrue(o.is_debug())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m5)
-        self.assertEqual(o.clean(), DBG)
-
-        # INVALID case: arg #5 : c construction (instead of surface type string).
-        self.assertFalse(osut.holdsConstruction(set, c, True, True, c))
-        self.assertTrue(o.is_debug())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m5)
-        self.assertEqual(o.clean(), DBG)
-
-        # INVALID case: arg #1 : c construction (instead of surface type string).
-        self.assertFalse(osut.holdsConstruction(c, c, True, True, c))
-        self.assertTrue(o.is_debug())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m6)
-        self.assertEqual(o.clean(), DBG)
-
-        # INVALID case: arg #1 : model (instead of surface type string).
-        self.assertFalse(osut.holdsConstruction(mdl, c, True, True, t1))
-        self.assertTrue(o.is_debug())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m6)
-        self.assertEqual(o.clean(), DBG)
 
 if __name__ == "__main__":
     unittest.main()
