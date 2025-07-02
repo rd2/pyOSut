@@ -1251,12 +1251,59 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         del(model)
 
-    # def test13_spandrels(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+    def test13_spandrels(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        office_walls = []
+        # Smalloffice 1 Wall 1
+        # Smalloffice 1 Wall 2
+        # Smalloffice 1 Wall 6
+        plenum_walls = []
+        # Level0 Small office 1 Ceiling Plenum AbvClgPlnmWall 6
+        # Level0 Small office 1 Ceiling Plenum AbvClgPlnmWall 2
+        # Level0 Small office 1 Ceiling Plenum AbvClgPlnmWall 1
+
+        for s in model.getSurfaces():
+            if not s.outsideBoundaryCondition().lower() == "outdoors": continue
+            if not s.surfaceType().lower() == "wall": continue
+
+            self.assertFalse(osut.is_spandrel(s))
+
+            if "smalloffice 1" in s.nameString().lower():
+                office_walls.append(s)
+            elif "small office 1 ceiling plenum" in s.nameString().lower():
+                plenum_walls.append(s)
+
+        self.assertEqual(len(office_walls), 3)
+        self.assertEqual(len(plenum_walls), 3)
+        self.assertEqual(o.status(), 0)
+
+        # Tag Small Office walls (& plenum walls) in SEB as 'spandrels'.
+        tag = "spandrel"
+
+        for wall in (office_walls + plenum_walls):
+            self.assertTrue(wall.additionalProperties().setFeature(tag, True))
+            self.assertTrue(wall.additionalProperties().hasFeature(tag))
+            prop = wall.additionalProperties().getFeatureAsBoolean(tag)
+            self.assertTrue(prop)
+            self.assertTrue(prop.get())
+            self.assertTrue(osut.is_spandrel(wall))
+            
+        self.assertEqual(o.status(), 0)
+
+        del(model)
 
     # def test14_schedule_ruleset_minmax(self):
     #     o = osut.oslg

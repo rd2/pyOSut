@@ -1176,12 +1176,12 @@ def is_spandrel(s=None):
         if not val:
             return oslg.invalid("spandrel", mth, 1, CN.ERR, False)
 
-            val = val.get()
+        val = val.get()
 
-            if val not in [True, False]:
-                return invalid("spandrel bool", mth, 1, CN.ERR, False)
-            else:
-                return val
+        if val not in [True, False]:
+            return invalid("spandrel bool", mth, 1, CN.ERR, False)
+
+        return val
 
     # Fallback: check for 'spandrel' in surface name.
     return "spandrel" in s.nameString().lower()
