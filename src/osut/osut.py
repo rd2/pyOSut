@@ -778,20 +778,20 @@ def genMass(sps=None, ratio=2.0) -> bool:
     return True
 
 
-def holdsConstruction(set=None, bse=None, gr=False, ex=False, tp=""):
+def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
     """Validates whether a default construction set holds an opaque base
     construction.
 
     Args:
         set (openstudio.model.DefaultConstructionSet):
             A default construction set.
-        bse (openstudio.model.ConstructionBase):
+        base (openstudio.model.ConstructionBase):
             A construction base.
         gr (bool):
             Whether ground-facing surface.
         ex (bool):
             Whether exterior-facing surface.
-        tp:
+        type:
             A surface type ("Wall", "Floor", "RoofCeiling").
 
     Returns:
@@ -805,7 +805,7 @@ def holdsConstruction(set=None, bse=None, gr=False, ex=False, tp=""):
 
     if not isinstance(set, cl1):
         return oslg.invalid("set" , mth, 1, CN.DBG, False)
-    if not isinstance(bse, cl2):
+    if not isinstance(base, cl2):
         return oslg.invalid("base", mth, 2, CN.DBG, False)
     if gr not in [True, False]:
         return oslg.invalid("ground", mth, 3, CN.DBG, False)
@@ -813,13 +813,13 @@ def holdsConstruction(set=None, bse=None, gr=False, ex=False, tp=""):
         return oslg.invalid("exterior", mth, 4, CN.DBG, False)
 
     try:
-        tp = str(tp)
+        type = str(type)
     except ValueError as e:
-        return oslg.mismatch("surface type", tp, str, mth, CN.DBG, False)
+        return oslg.mismatch("surface type", type, str, mth, CN.DBG, False)
 
-    type = tp.lower()
+    type = type.lower()
 
-    if tp not in ["floor", "wall", "roofceiling"]:
+    if type not in ["floor", "wall", "roofceiling"]:
         return oslg.invalid("surface type", mth, 5, CN.DBG, False)
 
     constructions = None
@@ -839,15 +839,15 @@ def holdsConstruction(set=None, bse=None, gr=False, ex=False, tp=""):
     if type == "roofceiling":
         if constructions.roofCeilingConstruction():
             construction = constructions.roofCeilingConstruction().get()
-            if construction == bse: return True
+            if construction == base: return True
     elif type == "floor":
         if constructions.floorConstruction():
             construction = constructions.floorConstruction().get()
-            if construction == bse: return True
+            if construction == base: return True
     else:
         if constructions.wallConstruction():
             construction = constructions.wallConstruction().get()
-            if construction == bse: return True
+            if construction == base: return True
 
     return False
 
@@ -872,7 +872,7 @@ def defaultConstructionSet(s=None):
     if not s.isConstructionDefaulted():
         oslg.log(CN.WRN, "construction not defaulted (%s)" % mth)
         return None
-    if s.construction():
+    if not s.construction():
         return oslg.empty("construction", mth, CN.WRN)
     if not s.space():
         return oslg.empty("space", mth, CN.WRN)
@@ -881,7 +881,7 @@ def defaultConstructionSet(s=None):
     base  = s.construction().get()
     space = s.space().get()
     type  = s.surfaceType()
-    bnd   = s.outsideBoundaryCondition().downcase()
+    bnd   = s.outsideBoundaryCondition().lower()
 
     ground   = True if s.isGroundSurface() else False
     exterior = True if bnd == "outdoors"   else False

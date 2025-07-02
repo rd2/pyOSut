@@ -854,6 +854,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertFalse(o.logs())
 
+        del(model)
+
     def test08_holds_constructions(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
@@ -930,12 +932,50 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.logs()[0]["message"], m6)
         self.assertEqual(o.clean(), DBG)
 
-    # def test09_construction_set(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+        del(model)
+        del(mdl)
+
+    def test09_construction_set(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        m = "construction not defaulted (osut.defaultConstructionSet)"
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path  = openstudio.path("./tests/files/osms/in/5ZoneNoHVAC.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        for s in model.getSurfaces():
+            set = osut.defaultConstructionSet(s)
+            self.assertTrue(set)
+            self.assertEqual(o.status(), 0)
+
+        del(model)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        for s in model.getSurfaces():
+            set = osut.defaultConstructionSet(s)
+            self.assertFalse(set)
+            self.assertTrue(o.is_warn())
+
+            for l in o.logs(): self.assertEqual(l["message"], m)
+
+        self.assertEqual(o.clean(), DBG)
+
+        del(model)
 
     # def test10_glazing_airfilms(self):
     #     o = osut.oslg
@@ -1036,6 +1076,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(len(o.logs()), 1)
         self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
+        del(model)
 
     # def test13_spandrels(self):
     #     o = osut.oslg
@@ -1281,10 +1322,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         #
         # file = File.join(__dir__, "files/osms/out/seb_ext5.osm")
         # model.save(file, true)
-
-
-
-
+        del(model)
 
 if __name__ == "__main__":
     unittest.main()
