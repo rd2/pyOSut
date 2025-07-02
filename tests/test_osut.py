@@ -68,20 +68,22 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(osut.film().keys(), osut.uo().keys())
 
     def test04_materials(self):
-        self.assertTrue("rgh" in osut.mats()["material"])
-        self.assertTrue("k"   in osut.mats()["material"])
-        self.assertTrue("rho" in osut.mats()["material"])
-        self.assertTrue("cp"  in osut.mats()["material"])
-        self.assertTrue("thm" in osut.mats()["sand"])
-        self.assertTrue("sol" in osut.mats()["sand"])
-        self.assertTrue("vis" in osut.mats()["sand"])
-        self.assertEqual(osut.mats()["material"]["rgh"], "MediumSmooth")
-        self.assertEqual(round(osut.mats()["material"]["k"   ], 3),    0.115)
-        self.assertEqual(round(osut.mats()["material"]["rho" ], 3),  540.000)
-        self.assertEqual(round(osut.mats()["material"]["cp"  ], 3), 1200.000)
-        self.assertEqual(round(osut.mats()["sand"    ]["thm" ], 3),    0.900)
-        self.assertEqual(round(osut.mats()["sand"    ]["sol" ], 3),    0.700)
-        self.assertEqual(round(osut.mats()["sand"    ]["vis" ], 3),    0.700)
+        material = osut.mats()["material"]
+        sand     = osut.mats()["sand"]
+        self.assertTrue("rgh" in material)
+        self.assertTrue("k"   in material)
+        self.assertTrue("rho" in material)
+        self.assertTrue("cp"  in material)
+        self.assertTrue("thm" in sand)
+        self.assertTrue("sol" in sand)
+        self.assertTrue("vis" in sand)
+        self.assertEqual(material["rgh"], "MediumSmooth")
+        self.assertAlmostEqual(material["k"  ],    0.115, places=3)
+        self.assertAlmostEqual(material["rho"],  540.000, places=3)
+        self.assertAlmostEqual(material["cp" ], 1200.000, places=3)
+        self.assertAlmostEqual(   sand["thm" ],    0.900, places=3)
+        self.assertAlmostEqual(   sand["sol" ],    0.700, places=3)
+        self.assertAlmostEqual(   sand["vis" ],    0.700, places=3)
 
     def test05_construction_generation(self):
         m1 = "'specs' list? expecting dict (osut.genConstruction)"
@@ -133,7 +135,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[3].nameString(), "OSut.drywall.015")
         r = osut.rsi(c, osut.film()["wall"])
         u = osut.uo()["wall"]
-        self.assertEqual(round(r, 3), round(1/u, 3))
+        self.assertAlmostEqual(r, 1/u, places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -194,9 +196,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.216")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=2)
         r = osut.rsi(c, osut.film()["partition"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -216,9 +218,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.216")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["wall"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -239,9 +241,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[2].nameString(), "OSut.mineral.210")
         self.assertEqual(c.layers()[3].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["wall"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -260,9 +262,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.drywall.015")
         self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.221")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["wall"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -362,9 +364,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.215")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=2)
         r = osut.rsi(c, osut.film()["roof"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -384,9 +386,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.polyiso.108")
         self.assertEqual(c.layers()[2].nameString(), "OSut.concrete.100")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["roof"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -405,9 +407,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.concrete.200")
         self.assertEqual(c.layers()[1].nameString(), "OSut.polyiso.110")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["roof"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -442,9 +444,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
         self.assertEqual(c.layers()[1].nameString(), "OSut.cellulose.217")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["floor"])
-        self.assertEqual(round(r, 3), round(1/0.214, 3))
+        self.assertAlmostEqual(r, 1/0.214, places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -464,9 +466,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.211")
         self.assertEqual(c.layers()[2].nameString(), "OSut.material.015")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["floor"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -486,9 +488,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.214")
         self.assertEqual(c.layers()[2].nameString(), "OSut.concrete.100")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["floor"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -525,9 +527,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.polyiso.109")
         self.assertEqual(c.layers()[2].nameString(), "OSut.concrete.100")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.214)
+        self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["slab"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -563,9 +565,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.100")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.428)
+        self.assertAlmostEqual(specs["uo"], 0.428, places=3)
         r = osut.rsi(c, osut.film()["basement"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -583,9 +585,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(c.layers()), 1)
         self.assertEqual(c.layers()[0].nameString(), "OSut.door.045")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), osut.uo()["door"])
+        self.assertAlmostEqual(specs["uo"], osut.uo()["door"], places=3)
         r = osut.rsi(c, osut.film()["door"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -603,9 +605,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(c.layers()), 1)
         self.assertEqual(c.layers()[0].nameString(), "OSut.door.045")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.900)
+        self.assertAlmostEqual(specs["uo"], 0.900, places=3)
         r = osut.rsi(c, osut.film()["door"])
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -622,9 +624,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(c.layers()), 1)
         self.assertEqual(c.layers()[0].nameString(), "OSut.window.U0.9.SHGC35")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.900)
+        self.assertAlmostEqual(specs["uo"], 0.900, places=3)
         r = osut.rsi(c) # not necessary to specify film
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -641,9 +643,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(c.layers()), 1)
         self.assertEqual(c.layers()[0].nameString(), "OSut.skylight.U0.9.SHGC45")
         self.assertTrue("uo" in specs)
-        self.assertEqual(round(specs["uo"], 3), 0.900)
+        self.assertAlmostEqual(specs["uo"], 0.900, places=3)
         r = osut.rsi(c) # not necessary to specify film
-        self.assertEqual(round(r, 3), round(1/specs["uo"], 3))
+        self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -655,7 +657,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        ratios   = dict(entrance=0.1, lobby=0.3, meeting=1.0)
+        ratios   = dict(entrance=0.10, lobby=0.30, meeting=1.00)
         model    = openstudio.model.Model()
         entrance = openstudio.model.Space(model)
         lobby    = openstudio.model.Space(model)
@@ -696,18 +698,18 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(ratio)
             ratio = ratio.get()
 
-            if round(ratio, 1) == 0.1:
+            if round(ratio, 2) == 0.10:
                 self.assertEqual(d.nameString(), m1)
                 self.assertTrue("entrance" in m.nameString().lower())
-            elif round(ratio, 1) == 0.3:
+            elif round(ratio, 2) == 0.30:
                 self.assertEqual(d.nameString(), m2)
                 self.assertTrue("lobby" in m.nameString().lower())
-            elif round(ratio, 1) == 1.0:
+            elif round(ratio, 2) == 1.00:
                 self.assertEqual(d.nameString(), m3)
                 self.assertTrue("meeting" in m.nameString().lower())
             else:
                 self.assertEqual(d.nameString(), m4)
-                self.assertEqual(round(ratio, 1), 2.00)
+                self.assertAlmostEqual(ratio, 2.00, places=2)
 
             c = d.construction()
             self.assertTrue(c)
@@ -765,9 +767,9 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(plenum.isVolumeAutocalculated())
 
         if 350 < version < 370:
-            self.assertEqual(round(plenum.volume(), 0), 234)
+            self.assertAlmostEqual(plenum.volume(), 234, places=0)
         else:
-            self.assertEqual(round(plenum.volume(), 0), 0)
+            self.assertAlmostEqual(plenum.volume(), 0, places=0)
 
         self.assertTrue(thzone.isVolumeDefaulted())
         self.assertTrue(thzone.isVolumeAutocalculated())
@@ -807,7 +809,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(plenum.isVolumeDefaulted())
             self.assertTrue(plenum.isVolumeAutocalculated())
 
-        self.assertEqual(round(plenum.volume(), 0), 50) # right answer
+        self.assertAlmostEqual(plenum.volume(), 50, places=0) # right answer
         self.assertTrue(thzone.isVolumeDefaulted())
         self.assertTrue(thzone.isVolumeAutocalculated())
         self.assertFalse(thzone.volume())
@@ -831,7 +833,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             th = osut.thickness(c)
 
             if "Air Wall" in id or "Double pane" in id:
-                self.assertEqual(round(th, 0), 0)
+                self.assertAlmostEqual(th, 0.00, places=2)
                 continue
 
             self.assertTrue(th > 0)
@@ -977,12 +979,57 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         del(model)
 
-    # def test10_glazing_airfilms(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+    def test10_glazing_airfilms(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        m0 = "osut.glazingAirFilmRSi"
+        m1 = "Invalid 'usi' arg #1 (%s)" % m0
+        m2 = "'usi' str? expecting float (%s)" % m0
+        m3 = "'usi' NoneType? expecting float (%s)" % m0
+
+        for c in model.getConstructions():
+            if not c.isFenestration(): continue
+
+            uo = c.uFactor()
+            self.assertTrue(uo)
+            uo = uo.get()
+            self.assertTrue(isinstance(uo, float))
+            self.assertAlmostEqual(osut.glazingAirFilmRSi(uo), 0.17, places=2)
+            self.assertEqual(o.status(), 0)
+
+        # Stress tests.
+        self.assertAlmostEqual(osut.glazingAirFilmRSi(9.0), 0.1216, places=4)
+        self.assertTrue(o.is_warn())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        self.assertAlmostEqual(osut.glazingAirFilmRSi(""), 0.1216, places=4)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m2)
+        self.assertEqual(o.clean(), DBG)
+
+        self.assertEqual(o.clean(), DBG)
+        self.assertAlmostEqual(osut.glazingAirFilmRSi(None), 0.1216, places=4)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m3)
+        self.assertEqual(o.clean(), DBG)
+
+        del(model)
 
     # def test11_rsi(self):
     #     o = osut.oslg
@@ -1035,26 +1082,26 @@ class TestOSutModuleMethods(unittest.TestCase):
 
             if id == "EXTERIOR-ROOF":
                 self.assertEqual(lyr["index"], 2)
-                self.assertEqual(round(lyr["r"], 2), 5.08)
+                self.assertAlmostEqual(lyr["r"], 5.08, places=2)
             elif id == "EXTERIOR-WALL":
                 self.assertEqual(lyr["index"], 2)
-                self.assertEqual(round(lyr["r"], 2), 1.47)
+                self.assertAlmostEqual(lyr["r"], 1.47, places=2)
             elif id == "Default interior ceiling":
                 self.assertEqual(lyr["index"], 0)
-                self.assertEqual(round(lyr["r"], 2), 0.12)
+                self.assertAlmostEqual(lyr["r"], 0.12, places=2)
             elif id == "INTERIOR-WALL":
                 self.assertEqual(lyr["index"], 1)
-                self.assertEqual(round(lyr["r"], 2), 0.24)
+                self.assertAlmostEqual(lyr["r"], 0.24, places=2)
             else:
                 self.assertEqual(lyr["index"], 0)
-                self.assertEqual(round(lyr["r"], 2), 0.29)
+                self.assertAlmostEqual(lyr["r"], 0.29, places=2)
 
         # Final stress tests.
         lyr = osut.insulatingLayer(None)
         self.assertTrue(o.is_debug())
         self.assertFalse(lyr["index"])
         self.assertFalse(lyr["type"])
-        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertAlmostEqual(lyr["r"], 0.00)
         self.assertEqual(len(o.logs()), 1)
         self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
@@ -1063,7 +1110,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(o.is_debug())
         self.assertFalse(lyr["index"])
         self.assertFalse(lyr["type"])
-        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertAlmostEqual(lyr["r"], 0.00)
         self.assertTrue(len(o.logs()), 1)
         self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
@@ -1072,10 +1119,11 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(o.is_debug())
         self.assertFalse(lyr["index"])
         self.assertFalse(lyr["type"])
-        self.assertEqual(round(lyr["r"], 2), 0.00)
+        self.assertAlmostEqual(lyr["r"], 0.00)
         self.assertTrue(len(o.logs()), 1)
         self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
+        
         del(model)
 
     # def test13_spandrels(self):

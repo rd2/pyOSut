@@ -252,7 +252,7 @@ def genConstruction(model=None, specs=dict()):
     if u:
         try:
             u = float(u)
-        except ValueError as e:
+        except:
             return oslg.mismatch(id + " Uo", u, float, mth, CN.ERR)
 
         if u < 0:
@@ -719,7 +719,7 @@ def genMass(sps=None, ratio=2.0) -> bool:
 
     try:
         ratio = float(ratio)
-    except ValueError as e:
+    except:
         return oslg.mismatch("ratio", ratio, float, mth, CN.DBG, False)
 
     if not sps:
@@ -814,7 +814,7 @@ def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
 
     try:
         type = str(type)
-    except ValueError as e:
+    except:
         return oslg.mismatch("surface type", type, str, mth, CN.DBG, False)
 
     type = type.lower()
@@ -1007,15 +1007,15 @@ def glazingAirFilmRSi(usi=5.85):
 
     try:
         usi = float(usi)
-    except ValueError as e:
+    except:
         return oslg.mismatch("usi", usi, float, mth, CN.DBG, val)
 
     if usi > 8.0:
-        return invalid("usi", mth, 1, DB.WRN, val)
+        return oslg.invalid("usi", mth, 1, CN.WRN, val)
     elif usi < 0:
-        return negative("usi", mth, CN.WRN, val)
+        return oslg.negative("usi", mth, CN.WRN, val)
     elif abs(usi) < CN.TOL:
-        return zero("usi", mth, CN.WRN, val)
+        return oslg.zero("usi", mth, CN.WRN, val)
 
     rsi = 1 / (0.025342 * usi + 29.163853) # exterior film, next interior film
 
@@ -1052,12 +1052,12 @@ def rsi(lc=None, film=0.0, t=0.0) -> float:
 
     try:
         film = float(film)
-    except ValueError as e:
+    except:
         return oslg.mismatch("film", film, float, mth, CN.DBG, 0.0)
 
     try:
         t = float(t)
-    except ValueError as e:
+    except:
         return oslg.mismatch("temp K", t, float, mth, CN.DBG, 0.0)
 
     t += 273.0 # °C to K
@@ -1271,7 +1271,7 @@ def trueNormal(s=None, r=0):
 
     try:
         r = float(r)
-    except ValueError as e:
+    except:
         return oslg.mismatch("rotation", r, float, mth)
 
     r = float(-r) * math.pi / 180.0
@@ -1305,7 +1305,7 @@ def scalar(v=None, m=0) -> openstudio.Vector3d:
 
     try:
         m = float(m)
-    except ValueError as e:
+    except:
         return oslg.mismatch("scalar", m, float, mth, CN.DBG, v0)
 
     v0 = openstudio.Vector3d(m * v.x(), m * v.y(), m * v.z())
@@ -1338,7 +1338,7 @@ def to_p3Dv(pts=None) -> openstudio.Point3dVector:
 
     try:
         pts = list(pts)
-    except ValueError as e:
+    except:
         return oslg.mismatch("points", pts, list, mth, CN.DBG, v)
 
     for pt in pts:
