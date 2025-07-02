@@ -41,7 +41,6 @@ class _CN:
     WRN  = oslg.CN.WARN
     ERR  = oslg.CN.ERROR
     FTL  = oslg.CN.FATAL
-    NS   = "nameString"
     TOL  = 0.01      # default distance tolerance (m)
     TOL2 = TOL * TOL # default area tolerance (m2)
 CN = _CN()
@@ -233,7 +232,6 @@ def genConstruction(model=None, specs=dict()):
 
     if not isinstance(model, cl):
         return oslg.mismatch("model", model, cl, mth, CN.DBG)
-
     if not isinstance(specs, dict):
         return oslg.mismatch("specs", specs, dict, mth, CN.DBG)
 
@@ -242,12 +240,12 @@ def genConstruction(model=None, specs=dict()):
 
     id = oslg.trim(specs["id"])
 
-    if not id: id = "OSut.CON." + specs["type"]
-
+    if not id:
+        id = "OSut.CON." + specs["type"]
     if specs["type"] not in uo():
         return oslg.invalid("surface type", mth, 2, CN.ERR)
-
-    if "uo" not in specs: specs["uo"] = uo()[ specs["type"] ]
+    if "uo" not in specs:
+        specs["uo"] = uo()[ specs["type"] ]
 
     u = specs["uo"]
 
@@ -617,11 +615,10 @@ def genShade(subs=None) -> bool:
     v = int("".join(openstudio.openStudioVersion().split(".")))
     cl = openstudio.model.SubSurfaceVector
 
-    if v < 321: return False
-
+    if v < 321:
+        return False
     if not isinstance(subs, cl):
         return oslg.mismatch("subs", subs, cl, mth, CN.DBG, False)
-
     if not subs:
         return oslg.empty("subs", mth, CN.WRN, False)
 
@@ -868,6 +865,60 @@ def defaultConstructionSet(s=None):
 
     """
     mth = "osut.defaultConstructionSet"
+    cl  = openstudio.model.Surface
+
+    if not isinstance(s, cl):
+        return oslg.mismatch("surface", s, cl, mth)
+    if not s.isConstructionDefaulted():
+        oslg.log(CN.WRN, "construction not defaulted (%s)" % mth)
+        return None
+    if s.construction():
+        return oslg.empty("construction", mth, CN.WRN)
+    if not s.space():
+        return oslg.empty("space", mth, CN.WRN)
+
+    mdl   = s.model()
+    base  = s.construction().get()
+    space = s.space().get()
+    type  = s.surfaceType()
+    bnd   = s.outsideBoundaryCondition().downcase()
+
+    ground   = True if s.isGroundSurface() else False
+    exterior = True if bnd == "outdoors"   else False
+
+    if space.defaultConstructionSet():
+        set = space.defaultConstructionSet().get()
+
+        if holdsConstruction(set, base, ground, exterior, type): return set
+
+    if space.spaceType():
+        spacetype = space.spaceType().get()
+
+        if spacetype.defaultConstructionSet():
+            set = spacetype.defaultConstructionSet().get()
+
+            if holdsConstruction(set, base, ground, exterior, type):
+                return set
+
+    if space.buildingStory():
+        story = space.buildingStory().get()
+
+        if story.defaultConstructionSet():
+            set = story.defaultConstructionSet().get()
+
+            if holdsConstruction(set, base, ground, exterior, type):
+                return set
+
+
+    building = mdl.getBuilding()
+
+    if building.defaultConstructionSet():
+        set = building.defaultConstructionSet().get()
+
+        if holdsConstruction(set, base, ground, exterior, type):
+            return set
+
+    return None
 
 
 def are_standardOpaqueLayers(lc=None) -> bool:
@@ -885,13 +936,8 @@ def are_standardOpaqueLayers(lc=None) -> bool:
     mth = "osut.are_standardOpaqueLayers"
     cl  = openstudio.model.LayeredConstruction
 
-    if not hasattr(lc, CN.NS):
-        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
-
-    id = oslg.trim(lc.nameString())
-
     if not isinstance(lc, cl):
-        return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
+        return oslg.mismatch("lc", lc, cl, mth, CN.DBG, 0.0)
 
     for m in lc.layers():
         if not m.to_StandardOpaqueMaterial(): return False
@@ -915,16 +961,10 @@ def thickness(lc=None) -> float:
     cl  = openstudio.model.LayeredConstruction
     d   = 0.0
 
-    if not hasattr(lc, CN.NS):
-        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
-
-    id = oslg.trim(lc.nameString())
-
     if not isinstance(lc, cl):
-        return oslg.mismatch(id, lc, cl, mth, CN.DBG, 0.0)
-
+        return oslg.mismatch("lc", lc, cl, mth, CN.DBG, 0.0)
     if not are_standardOpaqueLayers(lc):
-        oslg.log(CN.ERR, "%s holds non-StandardOpaqueMaterial(s) %s" % (id, mth))
+        oslg.log(CN.ERR, "holding non-StandardOpaqueMaterial(s) %s" % mth)
         return d
 
     for m in lc.layers(): d += m.thickness()
@@ -1005,33 +1045,27 @@ def rsi(lc=None, film=0.0, t=0.0) -> float:
 
     """
     mth = "osut.rsi"
-    cl1 = openstudio.model.LayeredConstruction
+    cl  = openstudio.model.LayeredConstruction
 
-    if not hasattr(lc, CN.NS):
-        return oslg.invalid("layered construction", mth, 1, DBG, 0.0)
-
-    id = lc.nameString()
-
-    if not isinstance(lc, cl1):
-        return oslg.mismatch(id, lc, cl1, mth, CN.DBG, 0.0)
+    if not isinstance(lc, cl):
+        return oslg.mismatch("lc", lc, cl, mth, CN.DBG, 0.0)
 
     try:
         film = float(film)
     except ValueError as e:
-        return oslg.mismatch(id + " film", film, float, mth, CN.DBG, 0.0)
+        return oslg.mismatch("film", film, float, mth, CN.DBG, 0.0)
 
     try:
         t = float(t)
     except ValueError as e:
-        return oslg.mismatch(id + " temp K", t, float, mth, CN.DBG, 0.0)
+        return oslg.mismatch("temp K", t, float, mth, CN.DBG, 0.0)
 
     t += 273.0 # °C to K
 
     if t < 0:
-        return oslg.negative(id + " temp K", mth, CN.ERR, 0.0)
-
+        return oslg.negative("temp K", mth, CN.ERR, 0.0)
     if film < 0:
-        return oslg.negative(id + " film", mth, ERR, 0.0)
+        return oslg.negative("film", mth, ERR, 0.0)
 
     rsi = film
 
@@ -1083,13 +1117,8 @@ def insulatingLayer(lc=None) -> dict:
     res = dict(index=None, type=None, r=0.0)
     i   = 0  # iterator
 
-    if not hasattr(lc, CN.NS):
-        return oslg.invalid("lc", mth, 1, CN.DBG, res)
-
-    id = lc.nameString()
-
     if not isinstance(lc, cl):
-        return oslg.mismatch(id, lc, cl, mth, CN.DBG, res)
+        return oslg.mismatch("lc", lc, cl, mth, CN.DBG, res)
 
     for m in lc.layers():
         if m.to_MasslessOpaqueMaterial():
@@ -1209,14 +1238,10 @@ def transforms(group=None) -> dict:
     res = dict(t=None, r=None)
     cl  = openstudio.model.PlanarSurfaceGroup
 
-    if not hasattr(group, CN.NS):
-        return oslg.invalid("group", mth, 0, CN.DBG, res)
-
-    id  = group.nameString()
-    mdl = group.model()
-
     if isinstance(group, cl):
-        return oslg.mismatch(id, group, cl, mth, CN.DBG, res)
+        return oslg.mismatch("group", group, cl, mth, CN.DBG, res)
+
+    mdl = group.model()
 
     res["t"] = group.siteTransformation()
     res["r"] = group.directionofRelativeNorth() + mdl.getBuilding().northAxis()
@@ -1342,8 +1367,8 @@ def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
         False: If invalid input (see logs).
 
     """
-    s1  = list(to_p3Dv(s1))
-    s2  = list(to_p3Dv(s2))
+    s1 = list(to_p3Dv(s1))
+    s2 = list(to_p3Dv(s2))
     if not s1: return False
     if not s2: return False
     if len(s1) != len(s2): return False
@@ -1360,7 +1385,7 @@ def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
             indx = None
 
             for i, pt in enumerate(s2):
-                if indx: break
+                if indx: continue
 
                 xOK = abs(s1[0].x() - s2[i].x()) < CN.TOL
                 yOK = abs(s1[0].y() - s2[i].y()) < CN.TOL

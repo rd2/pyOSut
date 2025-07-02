@@ -40,7 +40,6 @@ INF  = osut.CN.INF
 WRN  = osut.CN.WRN
 ERR  = osut.CN.ERR
 FTL  = osut.CN.FTL
-NS   = osut.CN.NS
 TOL  = osut.CN.TOL
 TOL2 = osut.CN.TOL2
 
@@ -229,7 +228,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(model)
         model = model.get()
 
-        m0 = "Invalid 'lc' arg #1 (osut.insulatingLayer)"
+        m0 = " expecting LayeredConstruction (osut.insulatingLayer)"
 
         for lc in model.getLayeredConstructions():
             id = lc.nameString()
@@ -279,7 +278,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(lyr["type"])
         self.assertEqual(round(lyr["r"], 2), 0.00)
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
         lyr = osut.insulatingLayer("")
@@ -288,7 +287,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(lyr["type"])
         self.assertEqual(round(lyr["r"], 2), 0.00)
         self.assertTrue(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
         lyr = osut.insulatingLayer(model)
@@ -297,7 +296,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(lyr["type"])
         self.assertEqual(round(lyr["r"], 2), 0.00)
         self.assertTrue(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
     def test07_genConstruction(self):
