@@ -31,6 +31,7 @@ import sys
 sys.path.append("./src/osut")
 
 import os
+import math
 import unittest
 import openstudio
 import osut
@@ -1029,6 +1030,48 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.logs()[0]["message"], m3)
         self.assertEqual(o.clean(), DBG)
 
+        # PlanarSurface class method 'filmResistance' reports standard interior
+        # or exterior air film resistances (ref: ASHRAE Fundamentals), e.g.:
+        types = dict(
+            StillAir_HorizontalSurface_HeatFlowsUpward=0.107,
+            StillAir_45DegreeSurface_HeatFlowsUpward=0.109,
+            StillAir_VerticalSurface=0.120,
+            StillAir_45DegreeSurface_HeatFlowsDownward=0.134,
+            StillAir_HorizontalSurface_HeatFlowsDownward=0.162,
+            MovingAir_15mph=0.030,
+            MovingAir_7p5mph=0.044)
+            #   https://github.com/NREL/OpenStudio/blob/
+            #   1c6fe48c49987c16e95e90ee3bd088ad0649ab9c/src/model/
+            #   PlanarSurface.cpp#L854
+
+        for i in openstudio.model.FilmResistanceType().getValues():
+            t1 = openstudio.model.FilmResistanceType(i)
+            self.assertTrue(t1.valueDescription() in types)
+            r  = openstudio.model.PlanarSurface.filmResistance(t1)
+            self.assertAlmostEqual(r, types[t1.valueDescription()], places=3)
+            if i > 4: continue
+
+            # PlanarSurface class method 'stillAirFilmResistance' offers a
+            # tilt-dependent interior air film resistance, e.g.:
+            deg = i * 45
+            rad = deg * math.pi/180
+            rsi = openstudio.model.PlanarSurface.stillAirFilmResistance(rad)
+            # print("%i: %i: %.3f: %.3f" % (i, deg, r, rsi))
+            #   0:   0: 0.107: 0.106
+            #   1:  45: 0.109: 0.109 # ... OK
+            #   2:  90: 0.120: 0.120 # ... OK
+            #   3: 135: 0.134: 0.137
+            #   4: 180: 0.162: 0.160
+            if deg < 45 or deg > 90: continue
+
+            self.assertAlmostEqual(rsi, r, places=2)
+            # The method is used for (opaque) Surfaces. The correlation/
+            # regression isn't perfect, yet appears fairly reliable for
+            # intermediate angles between ~0° and 90°.
+            #   https://github.com/NREL/OpenStudio/blob/
+            #   1c6fe48c49987c16e95e90ee3bd088ad0649ab9c/src/model/
+            #   PlanarSurface.cpp#L878
+            
         del(model)
 
     # def test11_rsi(self):
@@ -1123,7 +1166,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(len(o.logs()), 1)
         self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
-        
+
         del(model)
 
     # def test13_spandrels(self):
