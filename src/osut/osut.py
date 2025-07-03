@@ -1408,3 +1408,107 @@ def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
         if not xOK or not yOK or not zOK: return False
 
     return True
+
+
+def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
+    """Returns an array of OpenStudio space surfaces or subsurfaces that match
+    criteria, e.g. exterior, north-east facing walls in hotel "lobby". Note
+    that the 'sides' list relies on space coordinates (not building or site
+    coordinates). Also, the 'sides' list is exclusive (not inclusive), e.g.
+    walls strictly facing north or east would not be returned if 'sides' holds
+    ["north", "east"]. No outside boundary condition filters if 'boundary'
+    argument == "all". No surface type filters if 'type' argument == "all".
+
+    Args:
+        spaces (list of openstudio.model.Space):
+            Target spaces.
+        boundary (str):
+            OpenStudio outside boundary condition.
+        type (str):
+            OpenStudio surface (or subsurface) type.
+        sides (list):
+            Direction keys, e.g. "north" (see osut.sidz())
+
+    Returns:
+        list of openstudio.model.Surface: Surfaces (may be empty, no logs).
+        list of openstudio.model.SubSurface: SubSurfaces (may be empty, no logs).
+    """
+    mth = "osut.facets"
+
+    spaces = [spaces] if isinstance(spaces, openstudio.model.Space) else spaces
+
+    try:
+        spaces = list(spaces)
+    except:
+        return []
+
+    sides = [sides] if isinstance(sides, str) else sides
+
+    try:
+        sides = list(sides)
+    except:
+        return []
+
+    faces    = []
+    boundary = oslg.trim(boundary).lower()
+    type     = oslg.trim(type).lower()
+    if not boundary: return []
+    if not type:     return []
+
+    # Filter sides. If 'sides' is initially empty, return all surfaces of
+    # matching type and outside boundary condition.
+    if sides:
+        sides = [side for side in sides if side in sidz()]
+
+        if not sides: return []
+
+    for space in spaces:
+        if not isinstance(space, openstudio.model.Space): return []
+
+        for s in space.surfaces():
+            if boundary != "all":
+                if s.outsideBoundaryCondition().lower() != boundary: continue
+
+            if type != "all":
+                if s.surfaceType().lower() != type: continue
+
+            if sides:
+                aims = []
+
+                if s.outwardNormal().z() >  CN.TOL: aims.append("top")
+                if s.outwardNormal().z() < -CN.TOL: aims.append("bottom")
+                if s.outwardNormal().y() >  CN.TOL: aims.append("north")
+                if s.outwardNormal().x() >  CN.TOL: aims.append("east")
+                if s.outwardNormal().y() < -CN.TOL: aims.append("south")
+                if s.outwardNormal().x() < -CN.TOL: aims.append("west")
+
+                if all([side in aims for side in sides]):
+                      faces.append(s)
+            else:
+                faces.append(s)
+
+    for space in spaces:
+        for s in space.surfaces():
+            if boundary != "all":
+                if s.outsideBoundaryCondition().lower() != boundary: continue
+
+            for sub in s.subSurfaces():
+                if type != "all":
+                    if sub.subSurfaceType().lower() != type: continue
+
+                if sides:
+                    aims = []
+
+                    if sub.outwardNormal().z() >  CN.TOL: aims.append("top")
+                    if sub.outwardNormal().z() < -CN.TOL: aims.append("bottom")
+                    if sub.outwardNormal().y() >  CN.TOL: aims.append("north")
+                    if sub.outwardNormal().x() >  CN.TOL: aims.append("east")
+                    if sub.outwardNormal().y() < -CN.TOL: aims.append("south")
+                    if sub.outwardNormal().x() < -CN.TOL: aims.append("west")
+
+                    if all([side in aims for side in sides]):
+                          faces.append(sub)
+                else:
+                    faces.append(sub)
+
+    return faces

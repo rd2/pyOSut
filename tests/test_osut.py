@@ -1300,7 +1300,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(prop)
             self.assertTrue(prop.get())
             self.assertTrue(osut.is_spandrel(wall))
-            
+
         self.assertEqual(o.status(), 0)
 
         del(model)
@@ -1452,12 +1452,78 @@ class TestOSutModuleMethods(unittest.TestCase):
     #     self.assertEqual(o.level(), DBG)
     #     self.assertEqual(o.status(), 0)
 
-    # def test35_facet_retrieval(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+    def test35_facet_retrieval(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path   = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model  = translator.loadModel(path)
+        self.assertTrue(model)
+        model  = model.get()
+        spaces = model.getSpaces()
+        surfs  = model.getSurfaces()
+        subs   = model.getSubSurfaces()
+        self.assertEqual(len(surfs), 56)
+        self.assertEqual(len(subs), 8)
+
+        # The solution is similar to:
+        #   OpenStudio::Model::Space::findSurfaces(minDegreesFromNorth,
+        #                                          maxDegreesFromNorth,
+        #                                          minDegreesTilt,
+        #                                          maxDegreesTilt,
+        #                                          tol)
+        #   https://s3.amazonaws.com/openstudio-sdk-documentation/cpp/
+        #   OpenStudio-3.6.1-doc/model/html/classopenstudio_1_1model_1_1_space.html
+        #   #a0cf3c265ac314c1c846ee4962e852a3e
+        #
+        # ... yet it offers filters, e.g. surface type and boundary conditions.
+        windows    = osut.facets(spaces, "Outdoors", "FixedWindow")
+        skylights  = osut.facets(spaces, "Outdoors", "Skylight")
+        walls      = osut.facets(spaces, "Outdoors", "Wall")
+        northsouth = osut.facets(spaces, "Outdoors", "Wall", ["north", "south"])
+        northeast  = osut.facets(spaces, "Outdoors", "Wall", ["north", "east"])
+        north      = osut.facets(spaces, "Outdoors", "Wall", "north")
+        floors1a   = osut.facets(spaces, "Ground", "Floor", "bottom")
+        floors1b   = osut.facets(spaces, "Surface", "Floor") # plenum
+        roofs1     = osut.facets(spaces, "Outdoors", "RoofCeiling", "top")
+        roofs2     = osut.facets(spaces, "Outdoors", "RoofCeiling", "foo")
+
+        self.assertEqual(len(windows), 8)
+        self.assertEqual(len(skylights), 0)
+        self.assertEqual(len(walls), 26)
+        self.assertFalse(northsouth)
+        self.assertEqual(len(northeast), 8)
+        self.assertEqual(len(north), 14)
+        self.assertEqual(len(floors1a), 4)
+        self.assertEqual(len(floors1b), 4)
+        self.assertEqual(len(roofs1), 4)
+        self.assertFalse(roofs2)
+
+        # Concise variants, same output. In the SEB model, floors face "Ground".
+        floors2 = osut.facets(spaces, "Ground", "Floor")
+        floors3 = osut.facets(spaces, "Ground")
+        roofs3  = osut.facets(spaces, "Outdoors", "RoofCeiling")
+        self.assertEqual(floors2, floors1a)
+        self.assertEqual(floors3, floors1a)
+        self.assertEqual(roofs3, roofs1)
+
+        # Dropping filters, 'envelope' includes all above-grade envelope.
+        nb       = len(walls) + len(roofs3) + len(windows) + len(skylights)
+        floors4  = osut.facets(spaces, "ALL", "Floor")
+        envelope = osut.facets(spaces, "Outdoors", "ALL")
+
+        for fl in floors1a: self.assertTrue(fl in floors4)
+        for fl in floors1b: self.assertTrue(fl in floors4)
+        self.assertEqual(len(envelope), nb)
+
+        # Without arguments, the method returns ALL surfaces and subsurfaces.
+        self.assertEqual(len(osut.facets(spaces)), len(surfs) + len(subs))
 
     def test36_roller_shades(self):
         o = osut.oslg
@@ -1542,6 +1608,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         #
         # file = File.join(__dir__, "files/osms/out/seb_ext5.osm")
         # model.save(file, true)
+        self.assertEqual(o.clean(), DBG)
         del(model)
 
 if __name__ == "__main__":
