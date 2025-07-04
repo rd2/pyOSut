@@ -1219,6 +1219,51 @@ def is_fenestration(s=None):
     return True
 
 
+def scheduleRulesetMinMax(sched=None):
+    """Returns MIN/MAX values of a schedule (ruleset).
+
+    Args:
+        sched (openstudio.model.ScheduleRuleset):
+            A schedule.
+
+    Returns:
+        dict:
+        - "min" (float): min temperature. (None if invalid inputs - see logs).
+        - "max" (float): max temperature. (None if invalid inputs - see logs).
+    """
+    # Largely inspired from David Goldwasser's
+    # "schedule_ruleset_annual_min_max_value":
+    #
+    #   github.com/NREL/openstudio-standards/blob/
+    #   99cf713750661fe7d2082739f251269c2dfd9140/lib/openstudio-standards/
+    #   standards/Standards.ScheduleRuleset.rb#L124
+    mth = "osut.scheduleRulesetMinMax"
+    cl  = openstudio.model.ScheduleRuleset
+    res = dict(min=None, max=None)
+
+    if not isinstance(sched, cl):
+        return oslg.invalid("sched", mth, 0, CN.DBG, res)
+
+    values = list(sched.defaultDaySchedule().values())
+
+    for rule in sched.scheduleRules(): values += rule.daySchedule().values()
+
+    res["min"] = min(values)
+    res["max"] = max(values)
+
+    try:
+        res["min"] = float(res["min"])
+    except:
+        res["min"] = None
+
+    try:
+        res["max"] = float(res["max"])
+    except:
+        res["max"] = None
+
+    return res
+
+
 def transforms(group=None) -> dict:
     """"Returns OpenStudio site/space transformation & rotation angle.
 

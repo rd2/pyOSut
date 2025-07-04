@@ -1305,12 +1305,84 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         del(model)
 
-    # def test14_schedule_ruleset_minmax(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+    def test14_schedule_ruleset_minmax(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        cl1 = openstudio.model.ScheduleRuleset
+        cl2 = openstudio.model.ScheduleConstant
+        sc1 = "Space Thermostat Cooling Setpoint"
+        sc2 = "Schedule Constant 1"
+        m1  = "Invalid 'sched' (osut.scheduleRulesetMinMax)"
+
+        sched = model.getScheduleRulesetByName(sc1)
+        self.assertTrue(sched)
+        sched = sched.get()
+        self.assertTrue(isinstance(sched, cl1))
+
+        sch = model.getScheduleConstantByName(sc2)
+        self.assertTrue(sch)
+        sch = sch.get()
+        self.assertTrue(isinstance(sch, cl2))
+
+        # Valid case.
+        minmax = osut.scheduleRulesetMinMax(sched)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertAlmostEqual(minmax["min"], 23.89, places=2)
+        self.assertAlmostEqual(minmax["max"], 23.89, places=2)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+
+        # Invalid parameter.
+        minmax = osut.scheduleRulesetMinMax(None)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        # Invalid parameter.
+        minmax = osut.scheduleRulesetMinMax(model)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        # Invalid parameter (wrong schedule type).
+        minmax = osut.scheduleRulesetMinMax(sch)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        del(model)
 
     # def test15_schedule_constant_minmax(self):
     #     o = osut.oslg
