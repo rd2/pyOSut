@@ -884,7 +884,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         n1  = "CBECS Before-1980 ClimateZone 8 (smoff) ConstSet"
         n2  = "CBECS Before-1980 ExtRoof IEAD ClimateZone 8"
         m5  = "Invalid 'surface type' arg #5 (osut.holdsConstruction)"
-        m6  = "Invalid 'set' arg #1 (osut.holdsConstruction)"
+        m6  = "'set' LayeredConstruction? expecting DefaultConstructionSet"
+        m7  = "'set' Model? expecting DefaultConstructionSet"
         set = model.getDefaultConstructionSetByName(n1)
         c   = model.getLayeredConstructionByName(n2)
         self.assertTrue(set)
@@ -893,6 +894,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         c   = c.get()
 
         # TRUE case: 'set' holds 'c' (exterior roofceiling construction).
+        answer = osut.holdsConstruction(set, c, False, True, t1)
         self.assertTrue(osut.holdsConstruction(set, c, False, True, t1))
         self.assertEqual(o.status(), 0)
 
@@ -925,14 +927,14 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(osut.holdsConstruction(c, c, True, True, c))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m6)
+        self.assertTrue(m6 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
         # INVALID case: arg #1 : model (instead of surface type string).
         self.assertFalse(osut.holdsConstruction(mdl, c, True, True, t1))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m6)
+        self.assertTrue(m7 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
         del(model)

@@ -602,8 +602,8 @@ def genShade(subs=None) -> bool:
             A list of sub surfaces.
 
     Returns:
-        True: If successfully generated shade.
-        False: if invalid input (see logs).
+        True: If shade successfully generated.
+        False: If invalid input (see logs).
 
     """
     # Filter OpenStudio warnings for ShadingControl:
@@ -612,10 +612,9 @@ def genShade(subs=None) -> bool:
     # openstudio.Logger().instance().standardOutLogger().setChannelRegex(str)
 
     mth = "osut.genShade"
-    v = int("".join(openstudio.openStudioVersion().split(".")))
-    cl = openstudio.model.SubSurfaceVector
+    cl  = openstudio.model.SubSurfaceVector
 
-    if v < 321:
+    if int("".join(openstudio.openStudioVersion().split("."))) < 321:
         return False
     if not isinstance(subs, cl):
         return oslg.mismatch("subs", subs, cl, mth, CN.DBG, False)
@@ -779,8 +778,7 @@ def genMass(sps=None, ratio=2.0) -> bool:
 
 
 def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
-    """Validates whether a default construction set holds an opaque base
-    construction.
+    """Validates whether a default construction set holds a base construction.
 
     Args:
         set (openstudio.model.DefaultConstructionSet):
@@ -802,11 +800,15 @@ def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
     mth = "osut.holdsConstruction"
     cl1 = openstudio.model.DefaultConstructionSet
     cl2 = openstudio.model.ConstructionBase
+    t1  = openstudio.model.Surface.validSurfaceTypeValues()
+    t2  = openstudio.model.SubSurface.validSubSurfaceTypeValues()
+    t1  = [t.lower() for t in t1]
+    t2  = [t.lower() for t in t2]
 
     if not isinstance(set, cl1):
-        return oslg.invalid("set" , mth, 1, CN.DBG, False)
+        return oslg.mismatch("set", set, cl1, mth, CN.DBG, False)
     if not isinstance(base, cl2):
-        return oslg.invalid("base", mth, 2, CN.DBG, False)
+        return oslg.mismatch("base", base, cl2, mth, CN.DBG, False)
     if gr not in [True, False]:
         return oslg.invalid("ground", mth, 3, CN.DBG, False)
     if ex not in [True, False]:
@@ -819,7 +821,7 @@ def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
 
     type = type.lower()
 
-    if type not in ["floor", "wall", "roofceiling"]:
+    if type not in (t1 + t2):
         return oslg.invalid("surface type", mth, 5, CN.DBG, False)
 
     constructions = None
