@@ -790,7 +790,7 @@ def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
         ex (bool):
             Whether exterior-facing surface.
         type:
-            A surface type ("Wall", "Floor", "RoofCeiling").
+            An OpenStudio surface (or sub surface) type (e.g. "Wall").
 
     Returns:
         bool: Whether default set holds construction.
@@ -804,15 +804,16 @@ def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
     t2  = openstudio.model.SubSurface.validSubSurfaceTypeValues()
     t1  = [t.lower() for t in t1]
     t2  = [t.lower() for t in t2]
+    c   = None
 
     if not isinstance(set, cl1):
         return oslg.mismatch("set", set, cl1, mth, CN.DBG, False)
     if not isinstance(base, cl2):
         return oslg.mismatch("base", base, cl2, mth, CN.DBG, False)
-    if gr not in [True, False]:
-        return oslg.invalid("ground", mth, 3, CN.DBG, False)
-    if ex not in [True, False]:
-        return oslg.invalid("exterior", mth, 4, CN.DBG, False)
+    if not isinstance(gr, bool):
+        return oslg.mismatch("ground", gr, bool, mth, CN.DBG, False)
+    if not isinstance(ex, bool):
+        return oslg.mismatch("exterior", ex, bool, mth, CN.DBG, False)
 
     try:
         type = str(type)
@@ -821,35 +822,62 @@ def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
 
     type = type.lower()
 
-    if type not in (t1 + t2):
+    if type in t1:
+        if gr:
+            if set.defaultGroundContactSurfaceConstructions():
+                c = set.defaultGroundContactSurfaceConstructions().get()
+        elif ex:
+            if set.defaultExteriorSurfaceConstructions():
+                c = set.defaultExteriorSurfaceConstructions().get()
+        else:
+            if set.defaultInteriorSurfaceConstructions():
+                c = set.defaultInteriorSurfaceConstructions().get()
+    elif type in t2:
+        if gr:
+            return False
+        if ex:
+            if set.defaultExteriorSubSurfaceConstructions():
+                c = set.defaultExteriorSubSurfaceConstructions().get()
+        else:
+            if set.defaultInteriorSubSurfaceConstructions():
+                c = set.defaultInteriorSubSurfaceConstructions().get()
+    else:
         return oslg.invalid("surface type", mth, 5, CN.DBG, False)
 
-    constructions = None
+    if not c: return False
 
-    if gr:
-        if set.defaultGroundContactSurfaceConstructions():
-            constructions = set.defaultGroundContactSurfaceConstructions().get()
-    elif ex:
-        if set.defaultExteriorSurfaceConstructions():
-            constructions = set.defaultExteriorSurfaceConstructions().get()
-    else:
-        if set.defaultInteriorSurfaceConstructions():
-            constructions = set.defaultInteriorSurfaceConstructions().get()
-
-    if not constructions: return False
-
-    if type == "roofceiling":
-        if constructions.roofCeilingConstruction():
-            construction = constructions.roofCeilingConstruction().get()
-            if construction == base: return True
-    elif type == "floor":
-        if constructions.floorConstruction():
-            construction = constructions.floorConstruction().get()
-            if construction == base: return True
-    else:
-        if constructions.wallConstruction():
-            construction = constructions.wallConstruction().get()
-            if construction == base: return True
+    if type in t1:
+        if type == "roofceiling":
+            if c.roofCeilingConstruction():
+                if c.roofCeilingConstruction().get() == base: return True
+        elif type == "floor":
+            if c.floorConstruction():
+                if c.floorConstruction().get() == base: return True
+        else: # "wall"
+            if c.wallConstruction():
+                if c.wallConstruction().get() == base: return True
+    else: # t2
+        if type == "tubulardaylightdiffuser":
+            if c.tubularDaylightDiffuserConstruction():
+                if c.tubularDaylightDiffuserConstruction() == base: return True
+        elif type == "tubulardaylightdome":
+            if c.tubularDaylightDomeConstruction():
+                if c.tubularDaylightDomeConstruction().get() == base: return True
+        elif type == "skylight":
+            if c.overheadDoorConstruction():
+                if c.overheadDoorConstruction().get() == base: return True
+        elif type == "glassdoor":
+            if c.glassDoorConstruction():
+                if c.glassDoorConstruction().get() == base: return True
+        elif type == "door":
+            if c.doorConstruction():
+                if c.doorConstruction().get() == base: return True
+        elif type == "operablewindow":
+            if c.operableWindowConstruction():
+                if c.operableWindowConstruction().get() == base: return True
+        else: # "fixedwindow"
+            if c.fixedWindowConstruction():
+                if c.fixedWindowConstruction().get() == base: return True
 
     return False
 
@@ -1180,7 +1208,7 @@ def is_spandrel(s=None):
 
         val = val.get()
 
-        if val not in [True, False]:
+        if not isinstance(val, bool):
             return invalid("spandrel bool", mth, 1, CN.ERR, False)
 
         return val
@@ -1419,7 +1447,7 @@ def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
     if not s1: return False
     if not s2: return False
     if len(s1) != len(s2): return False
-    if indexed not in [True, False]: indexed = True
+    if not isinstance(indexed, bool): indexed = True
 
     if indexed:
         xOK = abs(s1[0].x() - s2[0].x()) < CN.TOL

@@ -875,66 +875,88 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = model.get()
         mdl   = openstudio.model.Model()
 
-        t1  = "roofceiling"
-        t2  = "wall"
-        cl1 = openstudio.model.DefaultConstructionSet
-        cl2 = openstudio.model.LayeredConstruction
-        id1 = cl1.__name__
-        id2 = cl2.__name__
-        n1  = "CBECS Before-1980 ClimateZone 8 (smoff) ConstSet"
-        n2  = "CBECS Before-1980 ExtRoof IEAD ClimateZone 8"
-        m5  = "Invalid 'surface type' arg #5 (osut.holdsConstruction)"
-        m6  = "'set' LayeredConstruction? expecting DefaultConstructionSet"
-        m7  = "'set' Model? expecting DefaultConstructionSet"
-        set = model.getDefaultConstructionSetByName(n1)
-        c   = model.getLayeredConstructionByName(n2)
+        # cl1 = openstudio.model.DefaultConstructionSet
+        # cl2 = openstudio.model.LayeredConstruction
+        # cl2 = openstudio.model.Construction
+        # id1 = cl1.__name__
+        # id2 = cl2.__name__
+        # id3 = cl3.__name__
+
+        t1 = "RoofCeiling"
+        t2 = "Wall"
+        t3 = "Floor"
+        t4 = "FixedWindow"
+        n0 = "CBECS Before-1980 ClimateZone 8 (smoff) ConstSet"
+        n1 = "CBECS Before-1980 ExtRoof IEAD ClimateZone 8"
+        n2 = "CBECS Before-1980 ExtWall Mass ClimateZone 8"
+        n3 = "000 ExtSlabCarpet 4in ClimateZone 1-8"
+        n4 = "CBECS Before-1980 ExtWindow ClimateZone 5-8"
+        m1 = "Invalid 'surface type' arg #5 (osut.holdsConstruction)"
+        m2 = "'set' LayeredConstruction? expecting DefaultConstructionSet"
+        m3 = "'set' Model? expecting DefaultConstructionSet"
+
+        set = model.getDefaultConstructionSetByName(n0)
+        c1  = model.getLayeredConstructionByName(n1)
+        c2  = model.getLayeredConstructionByName(n2)
+        c3  = model.getLayeredConstructionByName(n3)
+        c4  = model.getLayeredConstructionByName(n4)
         self.assertTrue(set)
-        self.assertTrue(c)
+        self.assertTrue(c1)
+        self.assertTrue(c2)
+        self.assertTrue(c3)
+        self.assertTrue(c4)
         set = set.get()
-        c   = c.get()
+        c1  = c1.get()
+        c2  = c2.get()
+        c3  = c3.get()
+        c4  = c4.get()
 
-        # TRUE case: 'set' holds 'c' (exterior roofceiling construction).
-        answer = osut.holdsConstruction(set, c, False, True, t1)
-        self.assertTrue(osut.holdsConstruction(set, c, False, True, t1))
+        # TRUE cases:
+        self.assertTrue(osut.holdsConstruction(set, c1, False, True, t1))
+        self.assertTrue(osut.holdsConstruction(set, c2, False, True, t2))
+        self.assertTrue(osut.holdsConstruction(set, c3, True, False, t3))
+        self.assertTrue(osut.holdsConstruction(set, c4, False, True, t4))
+
+        # FALSE case: roofceiling as ground roof construction.
+        self.assertFalse(osut.holdsConstruction(set, c1, True, False, t1))
+
+        # FALSE case: ground-facing sub subsurface.
+        self.assertFalse(osut.holdsConstruction(set, c4, True, False, t4))
         self.assertEqual(o.status(), 0)
 
-        # FALSE case: not ground construction.
-        self.assertFalse(osut.holdsConstruction(set, c, True, True, t1))
-        self.assertEqual(o.status(), 0)
-
-        # INVALID case: arg #5 : None (instead of surface type string).
-        self.assertFalse(osut.holdsConstruction(set, c, True, True, None))
+        # INVALID case: arg #1 : None (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(set, c1, False, True, None))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.logs()[0]["message"], m1)
         self.assertEqual(o.clean(), DBG)
 
-        # INVALID case: arg #5 : empty surface type string.
-        self.assertFalse(osut.holdsConstruction(set, c, True, True, ""))
+        # INVALID case: arg #2 : empty surface type string.
+        self.assertFalse(osut.holdsConstruction(set, c1, False, True, ""))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.logs()[0]["message"], m1)
         self.assertEqual(o.clean(), DBG)
 
-        # INVALID case: arg #5 : c construction (instead of surface type string).
-        self.assertFalse(osut.holdsConstruction(set, c, True, True, c))
+        # INVALID case: arg #3 : construction (instead of surface type string).
+        self.assertFalse(osut.holdsConstruction(set, c1, False, True, c2))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m5)
+        self.assertEqual(o.logs()[0]["message"], m1)
         self.assertEqual(o.clean(), DBG)
 
-        # INVALID case: arg #1 : c construction (instead of surface type string).
-        self.assertFalse(osut.holdsConstruction(c, c, True, True, c))
+        # INVALID case: arg #4 : construction (instead of set).
+        self.assertFalse(osut.holdsConstruction(c2, c1, False, True, t1))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertTrue(m6 in o.logs()[0]["message"])
+        self.assertTrue(m2 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
-        # INVALID case: arg #1 : model (instead of surface type string).
-        self.assertFalse(osut.holdsConstruction(mdl, c, True, True, t1))
+        # INVALID case: arg #5 : model (instead of set).
+        self.assertFalse(osut.holdsConstruction(mdl, c1, False, True, t1))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertTrue(m7 in o.logs()[0]["message"])
+        self.assertTrue(m3 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
         del(model)
