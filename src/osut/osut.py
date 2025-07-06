@@ -952,7 +952,7 @@ def defaultConstructionSet(s=None):
 
 
 def are_standardOpaqueLayers(lc=None) -> bool:
-    """Validates if every material in a layered construction is standard & opaque.
+    """Validates if every material in a layered construction is standard/opaque.
 
     Args:
         lc (openstudio.model.LayeredConstruction):
@@ -1002,7 +1002,7 @@ def thickness(lc=None) -> float:
     return d
 
 
-def glazingAirFilmRSi(usi=5.85):
+def glazingAirFilmRSi(usi=5.85) -> float:
     """Returns total air film resistance of a fenestrated construction (m2•K/W).
 
     Args:
@@ -1180,7 +1180,7 @@ def insulatingLayer(lc=None) -> dict:
     return res
 
 
-def is_spandrel(s=None):
+def is_spandrel(s=None) -> bool:
     """Validates whether opaque surface can be considered as a curtain wall
     (or similar technology) spandrel, regardless of construction layers, by
     looking up AdditionalProperties or its identifier.
@@ -1217,7 +1217,7 @@ def is_spandrel(s=None):
     return "spandrel" in s.nameString().lower()
 
 
-def is_fenestration(s=None):
+def is_fenestration(s=None) -> bool:
     """Validates whether a sub surface is fenestrated.
 
     Args:
@@ -1249,7 +1249,31 @@ def is_fenestration(s=None):
     return True
 
 
-def scheduleRulesetMinMax(sched=None):
+def has_airLoopsHVAC(model=None) -> bool:
+    """Validates if model has zones with HVAC air loops.
+
+    Args:
+        model (openstudio.model.Model):
+            An OpenStudio model.
+
+    Returns:
+        bool: Whether model has HVAC air loops.
+        False: If invalid input (see logs).
+    """
+    mth = "osut.has_airLoopsHVAC"
+    cl  = openstudio.model.Model
+
+    if not isinstance(model, cl):
+        return oslg.mismatch("model", model, cl, mth, CN.DBG, False)
+
+    for zone in model.getThermalZones():
+        if zone.canBePlenum(): continue
+        if zone.airLoopHVACs() or zone.isPlenum(): return True
+
+    return False
+
+
+def scheduleRulesetMinMax(sched=None) -> dict:
     """Returns MIN/MAX values of a schedule (ruleset).
 
     Args:
@@ -1272,11 +1296,139 @@ def scheduleRulesetMinMax(sched=None):
     res = dict(min=None, max=None)
 
     if not isinstance(sched, cl):
-        return oslg.invalid("sched", mth, 0, CN.DBG, res)
+        return oslg.mismatch("sched", sched, cl, mth, CN.DBG, res)
 
     values = list(sched.defaultDaySchedule().values())
 
     for rule in sched.scheduleRules(): values += rule.daySchedule().values()
+
+    res["min"] = min(values)
+    res["max"] = max(values)
+
+    try:
+        res["min"] = float(res["min"])
+    except:
+        res["min"] = None
+
+    try:
+        res["max"] = float(res["max"])
+    except:
+        res["max"] = None
+
+    return res
+
+
+def scheduleConstantMinMax(sched=None) -> dict:
+    """Returns MIN/MAX values of a schedule (constant).
+
+    Args:
+        sched (openstudio.model.ScheduleConstant):
+            A schedule.
+
+    Returns:
+        dict:
+        - "min" (float): min temperature. (None if invalid inputs - see logs).
+        - "max" (float): max temperature. (None if invalid inputs - see logs).
+    """
+    # Largely inspired from David Goldwasser's
+    # "schedule_constant_annual_min_max_value":
+    #
+    #   github.com/NREL/openstudio-standards/blob/
+    #   99cf713750661fe7d2082739f251269c2dfd9140/lib/openstudio-standards/
+    #   standards/Standards.ScheduleConstant.rb#L21
+    mth = "osut.scheduleConstantMinMax"
+    cl  = openstudio.model.ScheduleConstant
+    res = dict(min=None, max=None)
+
+    if not isinstance(sched, cl):
+        return oslg.mismatch("sched", sched, cl, mth, CN.DBG, res)
+
+    try:
+        value = float(sched.value())
+    except:
+        return None
+
+    res["min"] = value
+    res["max"] = value
+
+    return res
+
+
+def scheduleCompactMinMax(sched=None) -> dict:
+    """Returns MIN/MAX values of a schedule (compact).
+
+    Args:
+        sched (openstudio.model.ScheduleCompact):
+            A schedule.
+
+    Returns:
+        dict:
+        - "min" (float): min temperature. (None if invalid inputs - see logs).
+        - "max" (float): max temperature. (None if invalid inputs - see logs).
+    """
+    # Largely inspired from Andrew Parker's
+    # "schedule_compact_annual_min_max_value":
+    #
+    #   github.com/NREL/openstudio-standards/blob/
+    #   99cf713750661fe7d2082739f251269c2dfd9140/lib/openstudio-standards/
+    #   standards/Standards.ScheduleCompact.rb#L8
+    mth  = "osut.scheduleCompactMinMax"
+    cl   = openstudio.model.ScheduleCompact
+    vals = []
+    prev = ""
+    res  = dict(min=None, max=None)
+
+    if not isinstance(sched, cl):
+        return oslg.mismatch("sched", sched, cl, mth, CN.DBG, res)
+
+    for eg in sched.extensibleGroups():
+        if "until" in prev:
+            if eg.getDouble(0): vals.append(eg.getDouble(0).get())
+
+        str  = eg.getString(0)
+
+        if str: prev = str.get().lower()
+
+    if not vals:
+        return oslg.empty("compact sched values", mth, CN.WRN, res)
+
+    res["min"] = min(vals)
+    res["max"] = max(vals)
+
+    try:
+        res["min"] = float(res["min"])
+    except:
+        res["min"] = None
+
+    try:
+        res["max"] = float(res["max"])
+    except:
+        res["max"] = None
+
+    return res
+
+
+def scheduleIntervalMinMax(sched=None) -> dict:
+    """Returns MIN/MAX values of a schedule (interval).
+
+    Args:
+        sched (openstudio.model.ScheduleInterval):
+            A schedule.
+
+    Returns:
+        dict:
+        - "min" (float): min temperature. (None if invalid inputs - see logs).
+        - "max" (float): max temperature. (None if invalid inputs - see logs).
+    """
+    mth  = "osut.scheduleCompactMinMax"
+    cl   = openstudio.model.ScheduleInterval
+    vals = []
+    res  = dict(min=None, max=None)
+
+    if not isinstance(sched, cl):
+        return oslg.mismatch("sched", sched, cl, mth, CN.DBG, res)
+
+    vals = sched.timeSeries().values()
 
     res["min"] = min(values)
     res["max"] = max(values)

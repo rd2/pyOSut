@@ -1348,7 +1348,10 @@ class TestOSutModuleMethods(unittest.TestCase):
         cl2 = openstudio.model.ScheduleConstant
         sc1 = "Space Thermostat Cooling Setpoint"
         sc2 = "Schedule Constant 1"
-        m1  = "Invalid 'sched' (osut.scheduleRulesetMinMax)"
+        mth = "osut.scheduleRulesetMinMax"
+        m1  = "'sched' NoneType? expecting ScheduleRuleset (%s)" % mth
+        m2  = "'sched' str? expecting ScheduleRuleset (%s)" % mth
+        m3  = "'sched' ScheduleConstant? expecting ScheduleRuleset (%s)" % mth
 
         sched = model.getScheduleRulesetByName(sc1)
         self.assertTrue(sched)
@@ -1383,7 +1386,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.clean(), DBG)
 
         # Invalid parameter.
-        minmax = osut.scheduleRulesetMinMax(model)
+        minmax = osut.scheduleRulesetMinMax("")
         self.assertTrue(isinstance(minmax, dict))
         self.assertTrue("min" in minmax)
         self.assertTrue("max" in minmax)
@@ -1391,7 +1394,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(minmax["max"])
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.logs()[0]["message"], m2)
         self.assertEqual(o.clean(), DBG)
 
         # Invalid parameter (wrong schedule type).
@@ -1403,38 +1406,222 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(minmax["max"])
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.logs()[0]["message"], m3)
         self.assertEqual(o.clean(), DBG)
 
         del(model)
 
-    # def test15_schedule_constant_minmax(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+    def test15_schedule_constant_minmax(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
 
-    # def test16_schedule_comapct_minmax(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
 
-    # def test17_minmax_heatcool_setpoints(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
 
-    # def test18_hvac_airloops(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+        cl1 = openstudio.model.ScheduleConstant
+        cl2 = openstudio.model.ScheduleRuleset
+        sc1 = "Schedule Constant 1"
+        sc2 = "Space Thermostat Cooling Setpoint"
+        mth = "osut.scheduleConstantMinMax"
+        m1 = "'sched' NoneType? expecting ScheduleConstant (%s)" % mth
+        m2 = "'sched' str? expecting ScheduleConstant (%s)" % mth
+        m3 = "'sched' ScheduleRuleset? expecting ScheduleConstant (%s)" % mth
+
+        sched = model.getScheduleConstantByName(sc1)
+        self.assertTrue(sched)
+        sched = sched.get()
+        self.assertTrue(isinstance(sched, cl1))
+
+        sch = model.getScheduleRulesetByName(sc2)
+        self.assertTrue(sch)
+        sch = sch.get()
+        self.assertTrue(isinstance(sch, cl2))
+
+        # Valid case.
+        minmax = osut.scheduleConstantMinMax(sched)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertAlmostEqual(minmax["min"], 139.88, places=2)
+        self.assertAlmostEqual(minmax["max"], 139.88, places=2)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+
+        # Invalid parameter.
+        minmax = osut.scheduleConstantMinMax(None)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        # Invalid parameter.
+        minmax = osut.scheduleConstantMinMax("")
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m2)
+        self.assertEqual(o.clean(), DBG)
+
+        # Invalid parameter.
+        minmax = osut.scheduleConstantMinMax(sch)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m3)
+        self.assertEqual(o.clean(), DBG)
+
+        del(model)
+
+    def test16_schedule_compact_minmax(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        spt = 22
+        sc2 = "Building HVAC Operation"
+        cl1 = openstudio.model.ScheduleCompact
+        cl2 = openstudio.model.Schedule
+        mth = "osut.scheduleCompactMinMax"
+        m1  = "'sched' NoneType? expecting ScheduleCompact (%s)" % mth
+        m2  = "'sched' str? expecting ScheduleCompact (%s)" % mth
+        m3  = "'sched' Schedule? expecting ScheduleCompact (%s)" % mth
+
+        sched = openstudio.model.ScheduleCompact(model, spt)
+        self.assertTrue(isinstance(sched, openstudio.model.ScheduleCompact))
+        sched.setName("compact schedule")
+
+        sch = model.getScheduleByName(sc2)
+        self.assertTrue(sch)
+        sch = sch.get()
+
+        # Valid case.
+        minmax = osut.scheduleCompactMinMax(sched)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertAlmostEqual(minmax["min"], spt, places=2)
+        self.assertAlmostEqual(minmax["max"], spt, places=2)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+
+        # Invalid parameter.
+        minmax = osut.scheduleCompactMinMax(None)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        # Invalid parameter.
+        minmax = osut.scheduleCompactMinMax("")
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m2)
+        self.assertEqual(o.clean(), DBG)
+
+        # Invalid parameter.
+        minmax = osut.scheduleCompactMinMax(sch)
+        self.assertTrue(isinstance(minmax, dict))
+        self.assertTrue("min" in minmax)
+        self.assertTrue("max" in minmax)
+        self.assertFalse(minmax["min"])
+        self.assertFalse(minmax["max"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m3)
+        self.assertEqual(o.clean(), DBG)
+
+        del(model)
+
+    def test17_minmax_heatcool_setpoints(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+    def test18_hvac_airloops(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        msg = "'model' str? expecting Model (osut.has_airLoopsHVAC)"
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        self.assertEqual(o.clean(), DBG)
+        self.assertTrue(osut.has_airLoopsHVAC(model))
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(osut.has_airLoopsHVAC(""), False)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], msg)
+        self.assertEqual(o.clean(), DBG)
+        del(model)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path  = openstudio.path("./tests/files/osms/in/5ZoneNoHVAC.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        self.assertEqual(o.clean(), DBG)
+        self.assertFalse(osut.has_airLoopsHVAC(model))
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(osut.has_airLoopsHVAC(""), False)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], msg)
+        self.assertEqual(o.clean(), DBG)
+        del(model)
 
     # def test19_vestibules(self):
     #     o = osut.oslg
