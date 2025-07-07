@@ -664,7 +664,7 @@ def genShade(subs=None) -> bool:
       rule.setName(id)
       rule.setStartDate(start)
       rule.setEndDate(finish)
-      rule.setApplyAllDays(true)
+      rule.setApplyAllDays(True)
       rule.daySchedule.setName("OSut.SHADE.Rule.Default")
       rule.daySchedule.addValue(openstudio.Time(0,24,0,0), 1)
 
@@ -1444,6 +1444,914 @@ def scheduleIntervalMinMax(sched=None) -> dict:
         res["max"] = None
 
     return res
+
+
+def maxHeatScheduledSetpoint(zone=None) -> dict:
+    """Returns MAX zone heating temperature schedule setpoint [°C] and
+    whether zone has an active dual setpoint thermostat.
+
+    Args:
+        zone (openstudio.model.ThermalZone):
+            An OpenStudio thermal zone.
+
+    Returns:
+        dict:
+        - spt (float): MAX heating setpoint (None if invalid inputs - see logs).
+        - dual (bool): dual setpoint? (False if invalid inputs - see logs).
+    """
+    # Largely inspired from Parker & Marrec's "thermal_zone_heated?" procedure.
+    # The solution here is a tad more relaxed to encompass SEMIHEATED zones as
+    # per Canadian NECB criteria (basically any space with at least 10 W/m2 of
+    # installed heating equipement, i.e. below freezing in Canada).
+    #
+    #   github.com/NREL/openstudio-standards/blob/
+    #   58964222d25783e9da4ae292e375fb0d5c902aa5/lib/openstudio-standards/
+    #   standards/Standards.ThermalZone.rb#L910
+    mth = "osut.maxHeatScheduledSetpoint"
+    cl  = openstudio.model.ThermalZone
+    res = dict(spt=None, dual=False)
+
+    if not isinstance(zone, cl):
+        return oslg.mismatch("zone", zone, cl, mth, CN.DBG, res)
+
+    # Zone radiant heating? Get schedule from radiant system.
+    for equip in zone.equipment():
+        sched = None
+
+        if equip.to_ZoneHVACHighTemperatureRadiant():
+            equip = equip.to_ZoneHVACHighTemperatureRadiant().get()
+
+            if equip.heatingSetpointTemperatureSchedule():
+                sched = equip.heatingSetpointTemperatureSchedule().get()
+
+        if equip.to_ZoneHVACLowTemperatureRadiantElectric():
+            equip = equip.to_ZoneHVACLowTemperatureRadiantElectric().get()
+
+            sched = equip.heatingSetpointTemperatureSchedule()
+
+        if equip.to_ZoneHVACLowTempRadiantConstFlow():
+            equip = equip.to_ZoneHVACLowTempRadiantConstFlow().get()
+            coil = equip.heatingCoil()
+
+            if coil.to_CoilHeatingLowTempRadiantConstFlow():
+                coil = coil.to_CoilHeatingLowTempRadiantConstFlow().get()
+
+                if coil.heatingHighControlTemperatureSchedule():
+                    sched = c.heatingHighControlTemperatureSchedule().get()
+
+        if equip.to_ZoneHVACLowTempRadiantVarFlow():
+            equip = equip.to_ZoneHVACLowTempRadiantVarFlow().get()
+            coil = equip.heatingCoil()
+
+            if coil.to_CoilHeatingLowTempRadiantVarFlow():
+                coil = coil.to_CoilHeatingLowTempRadiantVarFlow().get()
+
+                if coil.heatingControlTemperatureSchedule():
+                    sched = coil.heatingControlTemperatureSchedule().get()
+
+        if not sched: continue
+
+        if sched.to_ScheduleRuleset():
+            sched = sched.to_ScheduleRuleset().get()
+            maximum = scheduleRulesetMinMax(sched)["max"]
+
+            if maximum:
+                if not res["spt"] or res["spt"] < maximum:
+                    res["spt"] = maximum
+
+            dd = sched.winterDesignDaySchedule()
+
+            if dd.values():
+                if not res["spt"] or res["spt"] < max(dd.values()):
+                    res["spt"] = max(dd.values())
+
+        if sched.to_ScheduleConstant():
+            sched = sched.to_ScheduleConstant().get()
+            maximum = scheduleConstantMinMax(sched)["max"]
+
+            if maximum:
+                if not res["spt"] or res["spt"] < maximum:
+                    res["spt"] = maximum
+
+        if sched.to_ScheduleCompact():
+            sched = sched.to_ScheduleCompact().get()
+            maximum = scheduleCompactMinMax(sched)["max"]
+
+            if maximum:
+                if not res["spt"] or res["spt"] < maximum:
+                    res["spt"] = maximum
+
+        if sched.to_ScheduleInterval():
+            sched = sched.to_ScheduleInterval().get()
+            maximum = scheduleIntervalMinMax(sched)["max"]
+
+            if maximum:
+                if not res["spt"] or res["spt"] < maximum:
+                    res["spt"] = maximum
+
+    if not zone.thermostat(): return res
+
+    tstat = zone.thermostat().get()
+    res["spt"] = None
+
+    if (tstat.to_ThermostatSetpointDualSetpoint() or
+        tstat.to_ZoneControlThermostatStagedDualSetpoint()):
+
+        if tstat.to_ThermostatSetpointDualSetpoint():
+            tstat = tstat.to_ThermostatSetpointDualSetpoint().get()
+        else:
+            tstat = tstat.to_ZoneControlThermostatStagedDualSetpoint().get()
+
+        if tstat.heatingSetpointTemperatureSchedule():
+            res["dual"] = True
+            sched = tstat.heatingSetpointTemperatureSchedule().get()
+
+            if sched.to_ScheduleRuleset():
+                sched = sched.to_ScheduleRuleset().get()
+                maximum = scheduleRulesetMinMax(sched)["max"]
+
+                if maximum:
+                    if not res["spt"] or res["spt"] < maximum:
+                        res["spt"] = maximum
+
+                dd = sched.winterDesignDaySchedule()
+
+                if dd.values():
+                    if not res["spt"] or res["spt"] < max(dd.values()):
+                        res["spt"] = max(dd.values())
+
+            if sched.to_ScheduleConstant():
+                sched = sched.to_ScheduleConstant().get()
+                maximum = scheduleConstantMinMax(sched)["max"]
+
+                if maximum:
+                    if not res["spt"] or res["spt"] < maximum:
+                        res["spt"] = maximum
+
+            if sched.to_ScheduleCompact():
+                sched = sched.to_ScheduleCompact().get()
+                maximum = scheduleCompactMinMax(sched)["max"]
+
+                if maximum:
+                    if not res["spt"] or res["spt"] < maximum:
+                        res["spt"] = maximum
+
+            if sched.to_ScheduleInterval():
+                sched = sched.to_ScheduleInterval().get()
+                maximum = scheduleIntervalMinMax(sched)["max"]
+
+                if maximum:
+                    if not res["spt"] or res["spt"] < maximum:
+                        res["spt"] = maximum
+
+            if sched.to_ScheduleYear():
+                sched = sched.to_ScheduleYear().get()
+
+                for week in sched.getScheduleWeeks():
+                    if not week.winterDesignDaySchedule():
+                        dd = week.winterDesignDaySchedule().get()
+
+                        if dd.values():
+                            if not res["spt"] or res["spt"] < max(dd.values()):
+                                res["spt"] = max(dd.values())
+    return res
+
+
+def has_heatingTemperatureSetpoints(model=None):
+    """Confirms if model has zones with valid heating temperature setpoints.
+
+    Args:
+        model (openstudio.model.Model):
+            An OpenStudio model.
+
+    Returns:
+        bool: Whether model holds valid heating temperature setpoints.
+        False: If invalid inputs (see logs).
+    """
+    mth = "osut.has_heatingTemperatureSetpoints"
+    cl  = openstudio.model.Model
+
+    if not isinstance(model, cl):
+        return oslg.mismatch("model", model, cl, mth, CN.DBG, False)
+
+    for zone in model.getThermalZones():
+        if maxHeatScheduledSetpoint(zone)["spt"]: return True
+
+    return False
+
+
+def minCoolScheduledSetpoint(zone=None):
+    """Returns MIN zone cooling temperature schedule setpoint [°C] and
+    whether zone has an active dual setpoint thermostat.
+
+    Args:
+        zone (openstudio.model.ThermalZone):
+            An OpenStudio thermal zone.
+
+    Returns:
+        dict:
+        - spt (float): MIN cooling setpoint (None if invalid inputs - see logs).
+        - dual (bool): dual setpoint? (False if invalid inputs - see logs).
+    """
+    # Largely inspired from Parker & Marrec's "thermal_zone_cooled?" procedure.
+    #
+    #   github.com/NREL/openstudio-standards/blob/
+    #   99cf713750661fe7d2082739f251269c2dfd9140/lib/openstudio-standards/
+    #   standards/Standards.ThermalZone.rb#L1058
+    mth = "osut.minCoolScheduledSetpoint"
+    cl  = openstudio.model.ThermalZone
+    res = dict(spt=None, dual=False)
+
+    if not isinstance(zone, cl):
+        return oslg.mismatch("zone", zone, cl, mth, CN.DBG, res)
+
+    # Zone radiant cooling? Get schedule from radiant system.
+    for equip in zone.equipment():
+        sched = None
+
+        if equip.to_ZoneHVACLowTempRadiantConstFlow():
+            equip = equip.to_ZoneHVACLowTempRadiantConstFlow().get()
+            coil = equip.coolingCoil()
+
+            if coil.to_CoilCoolingLowTempRadiantConstFlow():
+                coil = coil.to_CoilCoolingLowTempRadiantConstFlow().get()
+
+                if coil.coolingLowControlTemperatureSchedule():
+                    sched = coil.coolingLowControlTemperatureSchedule().get()
+
+        if equip.to_ZoneHVACLowTempRadiantVarFlow():
+            equip = equip.to_ZoneHVACLowTempRadiantVarFlow().get()
+            coil = equip.coolingCoil()
+
+            if coil.to_CoilCoolingLowTempRadiantVarFlow():
+                coil = coil.to_CoilCoolingLowTempRadiantVarFlow().get()
+
+                if coil.coolingControlTemperatureSchedule():
+                    sched = coil.coolingControlTemperatureSchedule().get()
+
+        if not sched: continue
+
+        if sched.to_ScheduleRuleset():
+            sched = sched.to_ScheduleRuleset().get()
+            minimum = scheduleRulesetMinMax(sched)["min"]
+
+            if minimum:
+                if not res["spt"] or res["spt"] > minimum:
+                    res["spt"] = minimum
+
+            dd = sched.summerDesignDaySchedule()
+
+            if dd.values():
+                if not res["spt"] or res["spt"] > min(dd.values()):
+                    res["spt"] = min(dd.values())
+
+        if sched.to_ScheduleConstant():
+            sched = sched.to_ScheduleConstant().get()
+            minimum = scheduleConstantMinMax(sched)["min"]
+
+            if minimum:
+                if not res["spt"] or res["spt"] > minimum:
+                    res["spt"] = minimum
+
+        if sched.to_ScheduleCompact():
+            sched = sched.to_ScheduleCompact().get()
+            minimum = scheduleCompactMinMax(sched)["min"]
+
+            if minimum:
+                if not res["spt"] or res["spt"] > minimum:
+                    res["spt"] = minimum
+
+        if sched.to_ScheduleInterval():
+            sched = sched.to_ScheduleInterval().get()
+            minimum = scheduleIntervalMinMax(sched)["min"]
+
+            if minimum:
+                if not res["spt"] or res["spt"] > minimum:
+                    res["spt"] = minimum
+
+    if not zone.thermostat(): return res
+
+    tstat     = zone.thermostat().get()
+    res["spt"] = None
+
+    if (tstat.to_ThermostatSetpointDualSetpoint() or
+        tstat.to_ZoneControlThermostatStagedDualSetpoint()):
+
+        if tstat.to_ThermostatSetpointDualSetpoint():
+            tstat = tstat.to_ThermostatSetpointDualSetpoint().get()
+        else:
+            tstat = tstat.to_ZoneControlThermostatStagedDualSetpoint().get()
+
+        if tstat.coolingSetpointTemperatureSchedule():
+            res["dual"] = True
+            sched = tstat.coolingSetpointTemperatureSchedule().get()
+
+            if sched.to_ScheduleRuleset():
+                sched = sched.to_ScheduleRuleset().get()
+
+                minimum = scheduleRulesetMinMax(sched)["min"]
+
+                if minimum:
+                    if not res["spt"] or res["spt"] > minimum:
+                        res["spt"] = minimum
+
+                dd = sched.summerDesignDaySchedule()
+
+                if dd.values():
+                    if not res["spt"] or res["spt"] > min(dd.values()):
+                        res["spt"] = min(dd.values())
+
+            if sched.to_ScheduleConstant():
+                sched = sched.to_ScheduleConstant().get()
+                minimum = scheduleConstantMinMax(sched)[:min]
+
+                if minimum:
+                    if not res["spt"] or res["spt"] > minimum:
+                        res["spt"] = minimum
+
+            if sched.to_ScheduleCompact():
+                sched = sched.to_ScheduleCompact().get()
+                minimum = scheduleCompactMinMax(sched)["min"]
+
+                if minimum:
+                    if not res["spt"] or res["spt"] > minimum:
+                        res["spt"] = minimum
+
+            if sched.to_ScheduleInterval():
+                sched = sched.to_ScheduleInterval().get()
+                minimum = scheduleIntervalMinMax(sched)["min"]
+
+                if minimum:
+                    if not res["spt"] or res["spt"] > minimum:
+                        res["spt"] = minimum
+
+            if sched.to_ScheduleYear():
+                sched = sched.to_ScheduleYear().get()
+
+                for week in sched.getScheduleWeeks():
+                    if not week.summerDesignDaySchedule():
+                        dd = week.summerDesignDaySchedule().get()
+
+                        if dd.values():
+                            if not res["spt"] or res["spt"] < min(dd.values()):
+                                res["spt"] = min(dd.values())
+
+    return res
+
+
+def has_coolingTemperatureSetpoints(model=None):
+    """Confirms if model has zones with valid cooling temperature setpoints.
+
+    Args:
+        model (openstudio.model.Model):
+            An OpenStudio model.
+
+    Returns:
+        bool: Whether model holds valid cooling temperature setpoints.
+        False: If invalid inputs (see logs).
+    """
+    mth = "osut.has_coolingTemperatureSetpoints"
+    cl  = openstudio.model.Model
+
+    if not isinstance(model, cl):
+        return oslg.mismatch("model", model, cl, mth, CN.DBG, False)
+
+    for zone in model.getThermalZones():
+        if minCoolScheduledSetpoint(zone)["spt"]: return True
+
+    return False
+
+
+def is_vestibule(space=None):
+    """Validates whether space is a vestibule.
+
+    Args:
+        space ():
+            An OpenStudio space.
+
+    Returns:
+        bool: Whether space is considered a vestibule.
+        False: If invalid input (see logs).
+    """
+    # INFO: OpenStudio-Standards' "thermal_zone_vestibule" criteria:
+    #   - zones less than 200ft2; AND
+    #   - having infiltration using Design Flow Rate
+    #
+    #   github.com/NREL/openstudio-standards/blob/
+    #   86bcd026a20001d903cc613bed6d63e94b14b142/lib/openstudio-standards/
+    #   standards/Standards.ThermalZone.rb#L1264
+    #
+    # This (unused) OpenStudio-Standards method likely needs revision; it
+    # returns "false" if the thermal zone area were less than 200ft2. Not sure
+    # which edition of 90.1 relies on a 200ft2 threshold (2010?); 90.1 2016
+    # doesn't. Yet even fixed, the method would nonetheless misidentify as
+    # "vestibule" a small space along an exterior wall, such as a semiheated
+    # storage space.
+    #
+    # The code below is intended as a simple short-term solution, basically
+    # relying on AdditionalProperties, or (if missing) a "vestibule" substring
+    # within a space's spaceType name (or the latter's standardsSpaceType).
+    #
+    # Alternatively, some future method could infer its status as a vestibule
+    # based on a few basic features (common to all vintages):
+    #   - 1x+ outdoor-facing wall(s) holding 1x+ door(s)
+    #   - adjacent to 1x+ 'occupied' conditioned space(s)
+    #   - ideally, 1x+ door(s) between vestibule and 1x+ such adjacent space(s)
+    #
+    # An additional method parameter (i.e. std = "necb") could be added to
+    # ensure supplementary Standard-specific checks, e.g. maximum floor area,
+    # minimum distance between doors.
+    #
+    # Finally, an entirely separate method could be developed to first identify
+    # whether "building entrances" (a defined term in 90.1) actually require
+    # vestibules as per specific code requirements. Food for thought.
+    mth = "osut.is_vestibule"
+    cl  = openstudio.model.Space
+
+    if not isinstance(space, cl):
+        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
+
+    id  = space.nameString()
+    m1  = "%s:vestibule" % id
+    m2  = "%s:boolean" % m1
+
+    if space.additionalProperties().hasFeature("vestibule"):
+        val = space.additionalProperties().getFeatureAsBoolean("vestibule")
+
+        if val:
+            val = val.get()
+
+            if isinstance(val, bool):
+                return val
+            else:
+                return oslg.invalid(m2, mth, 1, CN.ERR, False)
+        else:
+            return oslg.invalid(m1, mth, 1, CN.ERR, False)
+
+    if space.spaceType():
+        type = space.spaceType().get()
+        if "plenum" in type.nameString().lower(): return False
+        if "vestibule" in type.nameString().lower(): return True
+
+        if type.standardsSpaceType():
+            type = type.standardsSpaceType().get().lower()
+            if "plenum" in type: return False
+            if "vestibule" in type: return True
+
+    return False
+
+
+def is_plenum(space=None):
+    """Validates whether a space is an indirectly-conditioned plenum.
+
+    Args:
+        space (openstudio.model.Space):
+            An OpenStudio space.
+
+    Returns:
+        bool: Whether space is considered a plenum.
+        False: If invalid input (see logs).
+    """
+    # Largely inspired from NREL's "space_plenum?":
+    #
+    #   github.com/NREL/openstudio-standards/blob/
+    #   58964222d25783e9da4ae292e375fb0d5c902aa5/lib/openstudio-standards/
+    #   standards/Standards.Space.rb#L1384
+    #
+    # Ideally, OSut's "is_plenum" should be in sync with OpenStudio SDK's
+    # "isPlenum" method, which solely looks for either HVAC air mixer objects:
+    #  - AirLoopHVACReturnPlenum
+    #  - AirLoopHVACSupplyPlenum
+    #
+    # Of the OpenStudio-Standards Prototype models, only the LargeOffice
+    # holds AirLoopHVACReturnPlenum objects. OpenStudio-Standards' method
+    # "space_plenum?" indeed catches them by checking if the space is
+    # "partofTotalFloorArea" (which internally has an "isPlenum" check). So
+    # "isPlenum" closely follows ASHRAE 90.1 2016's definition of "plenum":
+    #
+    #   "plenum": a compartment or chamber ...
+    #             - to which one or more ducts are connected
+    #             - that forms a part of the air distribution system, and
+    #             - that is NOT USED for occupancy or storage.
+    #
+    # Canadian NECB 2020 has the following (not as well) defined term:
+    #   "plenum": a chamber forming part of an air duct system.
+    #             ... we'll assume that a space shall also be considered
+    #             UNOCCUPIED if it's "part of an air duct system".
+    #
+    # As intended, "isPlenum" would NOT identify as a "plenum" any vented
+    # UNCONDITIONED or UNENCLOSED attic or crawlspace - good. Yet "isPlenum"
+    # would also ignore dead air spaces integrating ducted return air. The
+    # SDK's "partofTotalFloorArea" would be more suitable in such cases, as
+    # long as modellers have, a priori, set this parameter to FALSE.
+    #
+    # By initially relying on the SDK's "partofTotalFloorArea", "space_plenum?"
+    # ends up catching a MUCH WIDER range of spaces, which aren't caught by
+    # "isPlenum". This includes attics, crawlspaces, non-plenum air spaces above
+    # ceiling tiles, and any other UNOCCUPIED space in a model. The term
+    # "plenum" in this context is more of a catch-all shorthand - to be used
+    # with caution. For instance, "space_plenum?" shouldn't be used (in
+    # isolation) to determine whether an UNOCCUPIED space should have its
+    # envelope insulated ("plenum") or not ("attic").
+    #
+    # In contrast to OpenStudio-Standards' "space_plenum?", OSut's "is_plenum"
+    # strictly returns FALSE if a space is indeed "partofTotalFloorArea". It
+    # also returns FALSE if the space is a vestibule. Otherwise, it needs more
+    # information to determine if such an UNOCCUPIED space is indeed a
+    # plenum. Beyond these 2x criteria, a space is considered a plenum if:
+    #
+    # CASE A: it includes the substring "plenum" (case insensitive) in its
+    #         spaceType's name, or in the latter's standardsSpaceType string;
+    #
+    # CASE B: "isPlenum" == TRUE in an OpenStudio model WITH HVAC airloops; OR
+    #
+    # CASE C: its zone holds an 'inactive' thermostat (i.e. can't extract valid
+    #         setpoints) in an OpenStudio model with setpoint temperatures.
+    #
+    # If a modeller is instead simply interested in identifying UNOCCUPIED
+    # spaces that are INDIRECTLYCONDITIONED (not necessarily plenums), then the
+    # following combination is likely more reliable and less confusing:
+    #   - SDK's partofTotalFloorArea == FALSE
+    #   - OSut's is_unconditioned == FALSE
+    mth = "osut.is_plenum"
+    cl  = openstudio.model.Space
+
+    if not isinstance(space, cl):
+        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
+
+    if space.partofTotalFloorArea(): return False
+    if is_vestibule(space): return False
+
+    # CASE A: "plenum" spaceType.
+    if space.spaceType():
+        type = space.spaceType().get()
+
+        if "plenum" in type.nameString().lower():
+            return True
+
+        if type.standardsSpaceType():
+            type = type.standardsSpaceType().get().lower()
+
+            if "plenum" in type: return True
+
+    # CASE B: "isPlenum" == TRUE if airloops.
+    if has_airLoopsHVAC(space.model()): return space.isPlenum()
+
+    # CASE C: zone holds an 'inactive' thermostat.
+    zone   = space.thermalZone()
+    heated = has_heatingTemperatureSetpoints(space.model())
+    cooled = has_coolingTemperatureSetpoints(space.model())
+
+    if heated or cooled:
+        if not zone: return False
+
+        zone = zone.get()
+        heat = maxHeatScheduledSetpoint(zone)
+        cool = minCoolScheduledSetpoint(zone)
+        if heat["spt"] or cool["spt"]: return False  # directly CONDITIONED
+        return heat["dual"] or cool["dual"]          # FALSE if both are None
+
+    return False
+
+
+def setpoints(space=None):
+    """Retrieves a space's (implicit or explicit) heating/cooling setpoints.
+
+    Args:
+        space (OpenStudio::Model::Space):
+            An OpenStudio space.
+    Returns:
+        dict:
+        - heating (float): heating setpoint (None if invalid inputs - see logs).
+        - cooling (float): cooling setpoint (None if invalid inputs - see logs).
+    """
+    mth = "osut.setpoints"
+    cl1 = openstudio.model.Space
+    cl2 = str
+    res = dict(heating=None, cooling=None)
+    tg1 = "space_conditioning_category"
+    tg2 = "indirectlyconditioned"
+    cts = ["nonresconditioned", "resconditioned", "semiheated", "unconditioned"]
+    cnd = None
+
+    if not isinstance(space, cl1):
+        return oslg.mismatch("space", space, cl1, mth, CN.DBG, res)
+
+    # 1. Check for OpenStudio-Standards' space conditioning categories.
+    if space.additionalProperties().hasFeature(tg1):
+        cnd = space.additionalProperties().getFeatureAsString(tg1)
+
+        if cnd:
+            cnd = cnd.get()
+
+            if cnd.lower() in cts:
+                if cnd.lower() == "unconditioned": return res
+            else:
+                oslg.invalid("%s:%s" % (tg1, cnd), mth, 0, CN.ERR)
+                cnd = None
+        else:
+            cnd = None
+
+    # 2. Check instead OSut's INDIRECTLYCONDITIONED (parent space) link.
+    if not cnd:
+        id = space.additionalProperties().getFeatureAsString(tg2)
+
+        if id:
+            id  = id.get()
+            dad = space.model().getSpaceByName(id)
+
+            if dad:
+                # Now focus on 'parent' space of INDIRECTLYCONDITIONED space.
+                space = dad.get()
+                cnd   = tg2
+            else:
+                log(ERR, "Unknown space %s (%s)" % (id, mth))
+
+    # 3. Fetch space setpoints (if model indeed holds valid setpoints).
+    heated = has_heatingTemperatureSetpoints(space.model())
+    cooled = has_coolingTemperatureSetpoints(space.model())
+    zone   = space.thermalZone()
+
+    if heated or cooled:
+        if not zone: return res # UNCONDITIONED
+
+        zone = zone.get()
+        res["heating"] = maxHeatScheduledSetpoint(zone)["spt"]
+        res["cooling"] = minCoolScheduledSetpoint(zone)["spt"]
+
+    # 4. Reset if AdditionalProperties were found & valid.
+    if cnd:
+        if cnd.lower() == "unconditioned":
+            res["heating"] = None
+            res["cooling"] = None
+        elif cnd.lower() == "semiheated":
+            if not res["heating"]: res["heating"] = 14.0
+            res["cooling"] = None
+        elif "conditioned" in cnd.lower():
+            # "nonresconditioned", "resconditioned" or "indirectlyconditioned"
+            if not res["heating"]: res["heating"] = 21.0 # default
+            if not res["cooling"]: res["cooling"] = 24.0 # default
+
+    # 5. Reset if plenum.
+    if is_plenum(space):
+        if not res["heating"]: res["heating"] = 21.0 # default
+        if not res["cooling"]: res["cooling"] = 24.0 # default
+
+    return res
+
+
+def is_unconditioned(space=None):
+    """Validates if a space is UNCONDITIONED.
+
+    Args:
+        space (openstudio.model.Space):
+            An OpenStudio space.
+    Returns:
+        bool: Whether space is considered UNCONDITIONED.
+        False: If invalid input (see logs).
+    """
+    mth = "osut.is_unconditioned"
+    cl  = openstudio.model.Space
+
+    if not isinstance(space, cl):
+        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
+
+    if setpoints(space)["heating"]: return False
+    if setpoints(space)["cooling"]: return False
+
+    return True
+
+
+def is_refrigerated(space=None):
+    """Confirms if a space can be considered as REFRIGERATED.
+
+    Args:
+        space (openstudio.model.Space):
+            An OpenStudio space.
+
+    Returns:
+        bool: Whether space is considered REFRIGERATED.
+        False: If invalid inputs (see logs).
+    """
+    mth = "osut.is_refrigerated"
+    cl  = openstudio.model.Space
+    tg0 = "refrigerated"
+
+    if not isinstance(space, cl):
+        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
+
+    id = space.nameString()
+
+    # 1. First check OSut's REFRIGERATED status.
+    status = space.additionalProperties().getFeatureAsString(tg0)
+
+    if status:
+        status = status.get()
+        if isinstance(status, bool): return status
+        log(ERR, "Unknown %s REFRIGERATED %s (%s)" % (id, status, mth))
+
+    # 2. Else, compare design heating/cooling setpoints.
+    stps = setpoints(space)
+    if stps["heating"]: return False
+    if not stps["cooling"]: return False
+    if stps["cooling"] < 15: return True
+
+    return False
+
+
+def is_semiheated(space=None):
+    """Confirms if a space can be considered as SEMIHEATED as per NECB 2020
+    1.2.1.2. 2): Design heating setpoint < 15°C (and non-REFRIGERATED).
+
+    Args:
+        space (openstudio.model.space):
+            An OpenStudio space.
+
+    Returns:
+        bool: Whether space is considered SEMIHEATED.
+        False: If invalid inputs (see logs).
+    """
+    mth = "osut.is_semiheated"
+    cl  = openstudio.model.Space
+
+    if not isinstance(space, cl):
+        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
+    if is_refrigerated(space):
+        return False
+
+    stps = setpoints(space)
+    if stps["cooling"]: return False
+    if not stps["heating"]: return False
+    if stps["heating"] < 15: return True
+
+    return False
+
+
+def availabilitySchedule(model=None, avl=""):
+    """Generates an HVAC availability schedule (if missing from model).
+
+    Args:
+        model (openstudio.model.Model):
+            An OpenStudio model.
+        avl (str):
+            Seasonal availability choice (optional, default "ON").
+
+    Returns:
+        OpenStudio::Model::Schedule: An OpenStudio HVAC availability schedule.
+        None: If invalid input (see logs).
+    """
+    mth    = "osut.availabilitySchedule"
+    cl     = openstudio.model.Model
+    limits = None
+
+    if not isinstance(model, cl):
+        return oslg.mismatch("model", model, cl, mth)
+
+    try:
+        avl = str(avl)
+    except:
+        return oslg.mismatch("availability", avl, str, mth, CN.ERR)
+
+    # Either fetch availability ScheduleTypeLimits object, or create one.
+    for l in model.getScheduleTypeLimitss():
+        id = l.nameString().lower()
+
+        if limits: break
+        if not l.lowerLimitValue(): continue
+        if not l.upperLimitValue(): continue
+        if not l.numericType(): continue
+        if not int(l.lowerLimitValue().get()) == 0: continue
+        if not int(l.upperLimitValue().get()) == 1: continue
+        if not l.numericType().get().lower() == "discrete": continue
+        if not l.unitType().lower() == "availability": continue
+        if id != "hvac operation scheduletypelimits": continue
+
+        limits = l
+
+    if not limits:
+        limits = openstudio.model.ScheduleTypeLimits(model)
+        limits.setName("HVAC Operation ScheduleTypeLimits")
+        limits.setLowerLimitValue(0)
+        limits.setUpperLimitValue(1)
+        limits.setNumericType("Discrete")
+        limits.setUnitType("Availability")
+
+    time = openstudio.Time(0,24)
+    secs = time.totalSeconds()
+    on   = openstudio.model.ScheduleDay(model, 1)
+    off  = openstudio.model.ScheduleDay(model, 0)
+
+    # Seasonal availability start/end dates.
+    year = model.yearDescription()
+
+    if not year:
+        return oslg.empty("yearDescription", mth, CN.ERR)
+
+    year  = year.get()
+    may01 = year.makeDate(openstudio.MonthOfYear("May"),  1)
+    oct31 = year.makeDate(openstudio.MonthOfYear("Oct"), 31)
+
+    if oslg.trim(avl).lower() == "winter":
+        # available from November 1 to April 30 (6 months)
+        val = 1
+        sch = off
+        nom = "WINTER Availability SchedRuleset"
+        dft = "WINTER Availability dftDaySched"
+        tag = "May-Oct WINTER Availability SchedRule"
+        day = "May-Oct WINTER SchedRule Day"
+    elif oslg.trim(avl).lower() == "summer":
+        # available from May 1 to October 31 (6 months)
+        val = 0
+        sch = on
+        nom = "SUMMER Availability SchedRuleset"
+        dft = "SUMMER Availability dftDaySched"
+        tag = "May-Oct SUMMER Availability SchedRule"
+        day = "May-Oct SUMMER SchedRule Day"
+    elif oslg.trim(avl).lower() == "off":
+        # never available
+        val = 0
+        sch = on
+        nom = "OFF Availability SchedRuleset"
+        dft = "OFF Availability dftDaySched"
+        tag = ""
+        day = ""
+    else:
+        # always available
+        val = 1
+        sch = on
+        nom = "ON Availability SchedRuleset"
+        dft = "ON Availability dftDaySched"
+        tag = ""
+        day = ""
+
+    # Fetch existing schedule.
+    ok = True
+    schedule = model.getScheduleByName(nom)
+
+    if schedule:
+        schedule = schedule.get().to_ScheduleRuleset()
+
+        if schedule:
+            schedule = schedule.get()
+            default  = schedule.defaultDaySchedule()
+            ok = ok and default.nameString()           == dft
+            ok = ok and len(default.times())           == 1
+            ok = ok and len(default.values())          == 1
+            ok = ok and default.times()[0]          == time
+            ok = ok and default.values()[0]         == val
+            rules = schedule.scheduleRules()
+            ok = ok and len(rules) < 2
+
+            if len(rules) == 1:
+                rule = rules[0]
+                ok = ok and rule.nameString()            == tag
+                ok = ok and rule.startDate()
+                ok = ok and rule.endDate()
+                ok = ok and rule.startDate().get()         == may01
+                ok = ok and rule.endDate().get()           == oct31
+                ok = ok and rule.applyAllDays()
+
+                d = rule.daySchedule()
+                ok = ok and d.nameString()               == day
+                ok = ok and len(d.times())              == 1
+                ok = ok and len(d.values())              == 1
+                ok = ok and d.times()[0].totalSeconds() == secs
+                ok = ok and int(d.values()[0])       != val
+
+        if ok: return schedule
+
+    schedule = openstudio.model.ScheduleRuleset(model)
+    schedule.setName(nom)
+
+    if not schedule.setScheduleTypeLimits(limits):
+        oslg.log(ERR, "'%s': Can't set schedule type limits (%s)" % (nom, mth))
+        return nil
+
+    if not schedule.defaultDaySchedule().addValue(time, val):
+        oslg.log(ERR, "'%s': Can't set default day schedule (%s)" % (nom, mth))
+        return None
+
+    schedule.defaultDaySchedule().setName(dft)
+
+    if tag:
+        rule = openstudio.modelScheduleRule(schedule, sch)
+        rule.setName(tag)
+
+        if not rule.setStartDate(may01):
+            oslg.log(ERR, "'%s': Can't set start date (%s)" % (tag, mth))
+            return None
+
+        if not rule.setEndDate(oct31):
+            oslg.log(ERR, "'%s': Can't set end date (%s)" % (tag, mth))
+            return None
+
+        if not rule.setApplyAllDays(true):
+            oslg.log(ERR, "'%s': Can't apply to all days (%s)" % (tag, mth))
+            return None
+
+        rule.daySchedule().setName(day)
+
+    return schedule
 
 
 def transforms(group=None) -> dict:

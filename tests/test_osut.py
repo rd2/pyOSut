@@ -1580,6 +1580,170 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        m1 = "osut.maxHeatScheduledSetpoint"
+        m2 = "osut.minCoolScheduledSetpoint"
+        z1 = "Level 0 Ceiling Plenum Zone"
+        z2 = "Single zone"
+
+        mth1 = "osut.maxHeatScheduledSetpoint"
+        mth2 = "osut.minCoolScheduledSetpoint"
+        msg1 = "'zone' NoneType? expecting ThermalZone (%s)" % mth1
+        msg2 = "'zone' NoneType? expecting ThermalZone (%s)" % mth2
+        msg3 = "'zone' str? expecting ThermalZone (%s)" % mth1
+        msg4 = "'zone' str? expecting ThermalZone (%s)" % mth2
+
+        for z in model.getThermalZones():
+            z0  = z.nameString()
+            res = osut.maxHeatScheduledSetpoint(z)
+            self.assertTrue(isinstance(res, dict))
+            self.assertTrue("spt" in res)
+            self.assertTrue("dual" in res)
+            if z0 == z1: self.assertFalse(res["spt"])
+            if z1 == z2: self.assertAlmostTrue(res["spt"], 22.11, places=2)
+            if z0 == z1: self.assertFalse(res["dual"])
+            if z0 == z2: self.assertTrue(res["dual"])
+            self.assertEqual(o.status(), 0)
+
+            res = osut.minCoolScheduledSetpoint(z)
+            self.assertTrue(isinstance(res, dict))
+            self.assertTrue("spt" in res)
+            self.assertTrue("dual" in res)
+            if z0 == z1: self.assertFalse(res["spt"])
+            if z0 == z2: self.assertAlmostEqual(res["spt"], 22.78, places=2)
+            if z0 == z1: self.assertFalse(res["dual"])
+            if z0 == z2: self.assertTrue(res["dual"])
+            self.assertEqual(o.status(), 0)
+
+        # Invalid cases.
+        res = osut.maxHeatScheduledSetpoint(None) # bad argument
+        self.assertTrue(isinstance(res, dict))
+        self.assertTrue("spt" in res)
+        self.assertTrue("dual" in res)
+        self.assertFalse(res["spt"])
+        self.assertFalse(res["dual"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], msg1)
+        self.assertEqual(o.clean(), DBG)
+
+        res = osut.minCoolScheduledSetpoint(None) # bad argument
+        self.assertTrue(isinstance(res, dict))
+        self.assertTrue("spt" in res)
+        self.assertTrue("dual" in res)
+        self.assertFalse(res["spt"])
+        self.assertFalse(res["dual"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], msg2)
+        self.assertEqual(o.clean(), DBG)
+
+        res = osut.maxHeatScheduledSetpoint("") # bad argument
+        self.assertTrue(isinstance(res, dict))
+        self.assertTrue("spt" in res)
+        self.assertTrue("dual" in res)
+        self.assertFalse(res["spt"])
+        self.assertFalse(res["dual"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], msg3)
+        self.assertEqual(o.clean(), DBG)
+
+        res = osut.minCoolScheduledSetpoint("") # bad argument
+        self.assertTrue(isinstance(res, dict))
+        self.assertTrue("spt" in res)
+        self.assertTrue("dual" in res)
+        self.assertFalse(res["spt"])
+        self.assertFalse(res["dual"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], msg4)
+        self.assertEqual(o.clean(), DBG)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Add electric heating to 1x slab.
+        entry = model.getSpaceByName("Entry way 1")
+        self.assertTrue(entry)
+        entry = entry.get()
+        floor = [s for s in entry.surfaces() if s.surfaceType() == "Floor"]
+
+        self.assertTrue(isinstance(floor, list))
+        self.assertEqual(len(floor), 1)
+        floor = floor[0]
+
+        self.assertTrue(entry.thermalZone())
+        tzone = entry.thermalZone().get()
+
+        # Retrieve construction.
+        self.assertFalse(floor.isConstructionDefaulted())
+        c = floor.construction()
+        self.assertTrue(c)
+        c = c.get().to_LayeredConstruction()
+        self.assertTrue(c)
+        c = c.get()
+
+        # Recover single construction layer (concrete slab).
+        layers = openstudio.model.MaterialVector()
+        layers.append(c.layers()[0])
+        layers.append(c.layers()[0])
+        self.assertEqual(len(c.layers()), 1)
+
+        # Generate construction with internal heat source.
+        cc = openstudio.model.ConstructionWithInternalSource(model)
+        cc.setName("ihs")
+        self.assertTrue(cc.setLayers(layers))
+        self.assertTrue(cc.setSourcePresentAfterLayerNumber(1))
+        self.assertTrue(cc.setTemperatureCalculationRequestedAfterLayerNumber(1))
+        self.assertTrue(floor.setConstruction(cc))
+
+        availability = osut.availabilitySchedule(model)
+        schedule = openstudio.model.ScheduleConstant(model)
+        self.assertTrue(schedule.setValue(22.78)) # reuse cooling setpoint
+
+        # Create radiant electric heating.
+        ht = (openstudio.model.ZoneHVACLowTemperatureRadiantElectric(
+            model, availability, schedule))
+        ht.setName("radiant electric")
+        self.assertTrue(ht.setRadiantSurfaceType("Floors"))
+        self.assertTrue(ht.addToThermalZone(tzone))
+        self.assertTrue(tzone.setHeatingPriority(ht, 1))
+        found = False
+
+        for eq in tzone.equipment():
+          if eq.nameString() == "radiant electric": found = True
+
+        self.assertTrue(found)
+
+        model.save("./tests/files/osms/out/seb_ihs.osm", True)
+
+        # Regardless of the radiant electric heating installation, priority is
+        # given to the zone thermostat heating setpoint.
+        stpts = osut.setpoints(entry)
+        self.assertAlmostEqual(stpts["heating"], 22.11, places=2)
+
+        # Yet if one were to remove the thermostat altogether ...
+        tzone.resetThermostatSetpointDualSetpoint()
+        res = osut.maxHeatScheduledSetpoint(tzone)
+        self.assertTrue(isinstance(res, dict))
+        self.assertTrue("spt" in res)
+        self.assertTrue("dual" in res)
+        self.assertTrue(res["spt"])
+        self.assertAlmostEqual(res["spt"], 22.78, places=2) # radiant heating
+        self.assertFalse(res["dual"])
+
+        stpts = osut.setpoints(entry)
+        self.assertTrue(stpts["heating"])
+        self.assertAlmostEqual(stpts["heating"], 22.78, places=2)
+
+        del(model)
+
     def test18_hvac_airloops(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
@@ -1623,19 +1787,271 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.clean(), DBG)
         del(model)
 
-    # def test19_vestibules(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+    def test19_vestibules(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
 
-    # def test20_setpoints_plenums_attics(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        # Tag "Entry way 1" in SEB as a vestibule.
+        tag   = "vestibule"
+        entry = model.getSpaceByName("Entry way 1")
+        self.assertTrue(entry)
+        entry = entry.get()
+        self.assertFalse(entry.additionalProperties().hasFeature(tag))
+        self.assertFalse(osut.is_vestibule(entry))
+        self.assertEqual(o.status(), 0)
+
+        self.assertTrue(entry.additionalProperties().setFeature(tag, True))
+        self.assertTrue(entry.additionalProperties().hasFeature(tag))
+        prop = entry.additionalProperties().getFeatureAsBoolean(tag)
+        self.assertTrue(prop)
+        self.assertTrue(prop.get())
+        self.assertTrue(osut.is_vestibule(entry))
+        self.assertEqual(o.status(), 0)
+
+    def test20_setpoints_plenums_attics(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        cl1 = openstudio.model.Space
+        cl2 = openstudio.model.Model
+        mt1 = "(osut.is_plenum)"
+        mt2 = "(osut.has_heatingTemperatureSetpoints)"
+        mt3 = "(osut.setpoints)"
+        ms1 = "'space' NoneType? expecting %s %s" % (cl1.__name__, mt1)
+        ms2 = "'model' NoneType? expecting %s %s" % (cl2.__name__, mt2)
+        ms3 = "'space' Nonetype? expecting %s %s" % (cl1.__name__, mt3)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Stress tests.
+        self.assertEqual(o.clean(), DBG)
+        self.assertFalse(osut.is_plenum(None))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], ms1)
+        self.assertEqual(o.clean(), DBG)
+
+        self.assertFalse(osut.has_heatingTemperatureSetpoints(None))
+        self.assertTrue(o.is_debug())
+        self.assertTrue(len(o.logs()), 1)
+        self.assertTrue(o.logs()[0]["message"], ms2)
+        self.assertEqual(o.clean(), DBG)
+
+        self.assertFalse(osut.setpoints(None)["heating"])
+        self.assertTrue(o.is_debug())
+        self.assertTrue(len(o.logs()), 1)
+        self.assertTrue(o.logs()[0]["message"], ms3)
+        self.assertEqual(o.clean(), DBG)
+
+        translator = openstudio.osversion.VersionTranslator()
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        plenum = model.getSpaceByName("Level 0 Ceiling Plenum")
+        self.assertTrue(plenum)
+        plenum = plenum.get()
+
+        for space in model.getSpaces():
+            if space == plenum: continue
+
+            self.assertTrue(space.partofTotalFloorArea())
+            zone = space.thermalZone()
+            self.assertTrue(zone)
+            zone = zone.get()
+            heat = osut.maxHeatScheduledSetpoint(zone)
+            cool = osut.minCoolScheduledSetpoint(zone)
+            spts = osut.setpoints(space)
+
+            self.assertAlmostEqual(heat["spt"], 22.11, places=2)
+            self.assertAlmostEqual(cool["spt"], 22.78, places=2)
+            self.assertTrue(heat["dual"])
+            self.assertTrue(cool["dual"])
+
+            self.assertFalse(osut.is_plenum(space))
+            self.assertFalse(osut.is_unconditioned(space))
+            self.assertAlmostEqual(spts["heating"], 22.11, places=2)
+            self.assertAlmostEqual(spts["cooling"], 22.78, places=2)
+            self.assertEqual(o.status(), 0)
+
+        zone = plenum.thermalZone()
+        self.assertTrue(zone)
+        zone = zone.get()
+        heat = osut.maxHeatScheduledSetpoint(zone) # simply returns model info
+        cool = osut.minCoolScheduledSetpoint(zone) # simply returns model info
+        stps = osut.setpoints(plenum)
+
+        self.assertFalse(heat["spt"])
+        self.assertFalse(cool["spt"])
+        self.assertFalse(heat["dual"])
+        self.assertFalse(cool["dual"])
+
+        # "Plenum" spaceType triggers an INDIRECTLYCONDITIONED status; returns
+        # defaulted setpoint temperatures.
+        self.assertFalse(plenum.partofTotalFloorArea())
+        self.assertTrue(osut.is_plenum(plenum))
+        self.assertFalse(osut.is_unconditioned(plenum))
+        self.assertAlmostEqual(stps["heating"], 21.00, places=2)
+        self.assertAlmostEqual(stps["cooling"], 24.00, places=2)
+        self.assertEqual(o.status(), 0)
+
+        # Tag plenum as an INDIRECTLYCONDITIONED space (linked to "Open area 1");
+        # returns "Open area 1" setpoint temperatures.
+        key  = "indirectlyconditioned"
+        val  = "Open area 1"
+        self.assertTrue(plenum.additionalProperties().setFeature(key, val))
+        stps = osut.setpoints(plenum)
+        self.assertTrue(osut.is_plenum(plenum))
+        self.assertFalse(osut.is_unconditioned(plenum))
+        self.assertAlmostEqual(stps["heating"], 22.11, places=2)
+        self.assertAlmostEqual(stps["cooling"], 22.78, places=2)
+        self.assertEqual(o.status(), 0)
+
+        # Tag plenum instead as an UNCONDITIONED space.
+        self.assertTrue(plenum.additionalProperties().resetFeature(key))
+        key = "space_conditioning_category"
+        val = "Unconditioned"
+        self.assertTrue(plenum.additionalProperties().setFeature(key, val))
+        self.assertTrue(osut.is_plenum(plenum))
+        self.assertTrue(osut.is_unconditioned(plenum))
+        self.assertFalse(osut.setpoints(plenum)["heating"])
+        self.assertFalse(osut.setpoints(plenum)["cooling"])
+        self.assertEqual(o.status(), 0)
+
+        del(model)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path  = openstudio.path("./tests/files/osms/in/warehouse.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        # Despite different heating setpoints, all 3 thermal spaces/zones have
+        # some heating and some cooling, i.e. not strictly REFRIGERATED nor
+        # SEMIHEATED.
+        for space in model.getSpaces():
+            self.assertFalse(osut.is_refrigerated(space))
+            self.assertFalse(osut.is_semiheated(space))
+
+        del(model)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path  = openstudio.path("./tests/files/osms/in/smalloffice.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        attic = model.getSpaceByName("Attic")
+        self.assertTrue(attic)
+        attic = attic.get()
+
+        for space in model.getSpaces():
+            if space == attic: continue
+
+            zone = space.thermalZone()
+            self.assertTrue(zone)
+            zone = zone.get()
+            heat = osut.maxHeatScheduledSetpoint(zone)
+            cool = osut.minCoolScheduledSetpoint(zone)
+            stps = osut.setpoints(space)
+
+            self.assertAlmostEqual(heat["spt"], 21.11, places=2)
+            self.assertAlmostEqual(cool["spt"], 23.89, places=2)
+            self.assertTrue(heat["dual"])
+            self.assertTrue(cool["dual"])
+
+            self.assertTrue(space.partofTotalFloorArea())
+            self.assertFalse(osut.is_plenum(space))
+            self.assertFalse(osut.is_unconditioned(space))
+            self.assertAlmostEqual(stps["heating"], 21.11, places=2)
+            self.assertAlmostEqual(stps["cooling"], 23.89, places=2)
+
+        zone = attic.thermalZone()
+        self.assertTrue(zone)
+        zone = zone.get()
+        heat = osut.maxHeatScheduledSetpoint(zone)
+        cool = osut.minCoolScheduledSetpoint(zone)
+        stps = osut.setpoints(attic)
+
+        self.assertFalse(heat["spt"])
+        self.assertFalse(cool["spt"])
+        self.assertFalse(heat["dual"])
+        self.assertFalse(cool["dual"])
+        self.assertFalse(osut.is_plenum(attic))
+        self.assertTrue(osut.is_unconditioned(attic))
+        self.assertFalse(attic.partofTotalFloorArea())
+        self.assertEqual(o.status(), 0)
+
+        # Tag attic as an INDIRECTLYCONDITIONED space (linked to "Core_ZN").
+        key = "indirectlyconditioned"
+        val = "Core_ZN"
+        self.assertTrue(attic.additionalProperties().setFeature(key, val))
+        stps = osut.setpoints(attic)
+        self.assertFalse(osut.is_plenum(attic))
+        self.assertFalse(osut.is_unconditioned(attic))
+        self.assertAlmostEqual(stps["heating"], 21.11, places=2)
+        self.assertAlmostEqual(stps["cooling"], 23.89, places=2)
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(attic.additionalProperties().resetFeature(key))
+
+        # Tag attic instead as an SEMIHEATED space. First, test an invalid entry.
+        key = "space_conditioning_category"
+        val = "Demiheated"
+        msg = "Invalid '%s:%s' (osut.setpoints)" % (key, val)
+        self.assertTrue(attic.additionalProperties().setFeature(key, val))
+        stps = osut.setpoints(attic)
+        self.assertFalse(osut.is_plenum(attic))
+        self.assertTrue(osut.is_unconditioned(attic))
+        self.assertFalse(stps["heating"])
+        self.assertFalse(stps["cooling"])
+        self.assertTrue(attic.additionalProperties().hasFeature(key))
+        cnd = attic.additionalProperties().getFeatureAsString(key)
+        self.assertTrue(cnd)
+        self.assertEqual(cnd.get(), val)
+        self.assertTrue(o.is_error())
+
+        # 3x same error, as is_plenum/is_unconditioned call setpoints(attic).
+        self.assertEqual(len(o.logs()), 3)
+        for l in o.logs(): self.assertEqual(l["message"], msg)
+
+        # Now test a valid entry.
+        self.assertTrue(attic.additionalProperties().resetFeature(key))
+        self.assertEqual(o.clean(), DBG)
+        val = "Semiheated"
+        self.assertTrue(attic.additionalProperties().setFeature(key, val))
+        stps = osut.setpoints(attic)
+        self.assertFalse(osut.is_plenum(attic))
+        self.assertFalse(osut.is_unconditioned(attic))
+        self.assertTrue(osut.is_semiheated(attic))
+        self.assertFalse(osut.is_refrigerated(attic))
+        self.assertAlmostEqual(stps["heating"], 14.00, places=2)
+        self.assertFalse(stps["cooling"])
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(attic.additionalProperties().hasFeature(key))
+        cnd = attic.additionalProperties().getFeatureAsString(key)
+        self.assertTrue(cnd)
+        self.assertEqual(cnd.get(), val)
+        self.assertEqual(o.status(), 0)
+
+        del(model)
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Consider adding LargeOffice model to test SDK's "isPlenum" ... @todo
 
     # def test21_availability_schedules(self):
     #     o = osut.oslg
@@ -1735,164 +2151,164 @@ class TestOSutModuleMethods(unittest.TestCase):
     #     self.assertEqual(o.level(), DBG)
     #     self.assertEqual(o.status(), 0)
 
-    def test35_facet_retrieval(self):
-        o = osut.oslg
-        self.assertEqual(o.status(), 0)
-        self.assertEqual(o.reset(DBG), DBG)
-        self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
+    # def test35_facet_retrieval(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+    #
+    #     version = int("".join(openstudio.openStudioVersion().split(".")))
+    #     translator = openstudio.osversion.VersionTranslator()
+    #
+    #     path   = openstudio.path("./tests/files/osms/out/seb2.osm")
+    #     model  = translator.loadModel(path)
+    #     self.assertTrue(model)
+    #     model  = model.get()
+    #     spaces = model.getSpaces()
+    #     surfs  = model.getSurfaces()
+    #     subs   = model.getSubSurfaces()
+    #     self.assertEqual(len(surfs), 56)
+    #     self.assertEqual(len(subs), 8)
+    #
+    #     # The solution is similar to:
+    #     #   OpenStudio::Model::Space::findSurfaces(minDegreesFromNorth,
+    #     #                                          maxDegreesFromNorth,
+    #     #                                          minDegreesTilt,
+    #     #                                          maxDegreesTilt,
+    #     #                                          tol)
+    #     #   https://s3.amazonaws.com/openstudio-sdk-documentation/cpp/
+    #     #   OpenStudio-3.6.1-doc/model/html/classopenstudio_1_1model_1_1_space.html
+    #     #   #a0cf3c265ac314c1c846ee4962e852a3e
+    #     #
+    #     # ... yet it offers filters, e.g. surface type and boundary conditions.
+    #     windows    = osut.facets(spaces, "Outdoors", "FixedWindow")
+    #     skylights  = osut.facets(spaces, "Outdoors", "Skylight")
+    #     walls      = osut.facets(spaces, "Outdoors", "Wall")
+    #     northsouth = osut.facets(spaces, "Outdoors", "Wall", ["north", "south"])
+    #     northeast  = osut.facets(spaces, "Outdoors", "Wall", ["north", "east"])
+    #     north      = osut.facets(spaces, "Outdoors", "Wall", "north")
+    #     floors1a   = osut.facets(spaces, "Ground", "Floor", "bottom")
+    #     floors1b   = osut.facets(spaces, "Surface", "Floor") # plenum
+    #     roofs1     = osut.facets(spaces, "Outdoors", "RoofCeiling", "top")
+    #     roofs2     = osut.facets(spaces, "Outdoors", "RoofCeiling", "foo")
+    #
+    #     self.assertEqual(len(windows), 8)
+    #     self.assertEqual(len(skylights), 0)
+    #     self.assertEqual(len(walls), 26)
+    #     self.assertFalse(northsouth)
+    #     self.assertEqual(len(northeast), 8)
+    #     self.assertEqual(len(north), 14)
+    #     self.assertEqual(len(floors1a), 4)
+    #     self.assertEqual(len(floors1b), 4)
+    #     self.assertEqual(len(roofs1), 4)
+    #     self.assertFalse(roofs2)
+    #
+    #     # Concise variants, same output. In the SEB model, floors face "Ground".
+    #     floors2 = osut.facets(spaces, "Ground", "Floor")
+    #     floors3 = osut.facets(spaces, "Ground")
+    #     roofs3  = osut.facets(spaces, "Outdoors", "RoofCeiling")
+    #     self.assertEqual(floors2, floors1a)
+    #     self.assertEqual(floors3, floors1a)
+    #     self.assertEqual(roofs3, roofs1)
+    #
+    #     # Dropping filters, 'envelope' includes all above-grade envelope.
+    #     nb       = len(walls) + len(roofs3) + len(windows) + len(skylights)
+    #     floors4  = osut.facets(spaces, "ALL", "Floor")
+    #     envelope = osut.facets(spaces, "Outdoors", "ALL")
+    #
+    #     for fl in floors1a: self.assertTrue(fl in floors4)
+    #     for fl in floors1b: self.assertTrue(fl in floors4)
+    #     self.assertEqual(len(envelope), nb)
+    #
+    #     # Without arguments, the method returns ALL surfaces and subsurfaces.
+    #     self.assertEqual(len(osut.facets(spaces)), len(surfs) + len(subs))
 
-        version = int("".join(openstudio.openStudioVersion().split(".")))
-        translator = openstudio.osversion.VersionTranslator()
-
-        path   = openstudio.path("./tests/files/osms/out/seb2.osm")
-        model  = translator.loadModel(path)
-        self.assertTrue(model)
-        model  = model.get()
-        spaces = model.getSpaces()
-        surfs  = model.getSurfaces()
-        subs   = model.getSubSurfaces()
-        self.assertEqual(len(surfs), 56)
-        self.assertEqual(len(subs), 8)
-
-        # The solution is similar to:
-        #   OpenStudio::Model::Space::findSurfaces(minDegreesFromNorth,
-        #                                          maxDegreesFromNorth,
-        #                                          minDegreesTilt,
-        #                                          maxDegreesTilt,
-        #                                          tol)
-        #   https://s3.amazonaws.com/openstudio-sdk-documentation/cpp/
-        #   OpenStudio-3.6.1-doc/model/html/classopenstudio_1_1model_1_1_space.html
-        #   #a0cf3c265ac314c1c846ee4962e852a3e
-        #
-        # ... yet it offers filters, e.g. surface type and boundary conditions.
-        windows    = osut.facets(spaces, "Outdoors", "FixedWindow")
-        skylights  = osut.facets(spaces, "Outdoors", "Skylight")
-        walls      = osut.facets(spaces, "Outdoors", "Wall")
-        northsouth = osut.facets(spaces, "Outdoors", "Wall", ["north", "south"])
-        northeast  = osut.facets(spaces, "Outdoors", "Wall", ["north", "east"])
-        north      = osut.facets(spaces, "Outdoors", "Wall", "north")
-        floors1a   = osut.facets(spaces, "Ground", "Floor", "bottom")
-        floors1b   = osut.facets(spaces, "Surface", "Floor") # plenum
-        roofs1     = osut.facets(spaces, "Outdoors", "RoofCeiling", "top")
-        roofs2     = osut.facets(spaces, "Outdoors", "RoofCeiling", "foo")
-
-        self.assertEqual(len(windows), 8)
-        self.assertEqual(len(skylights), 0)
-        self.assertEqual(len(walls), 26)
-        self.assertFalse(northsouth)
-        self.assertEqual(len(northeast), 8)
-        self.assertEqual(len(north), 14)
-        self.assertEqual(len(floors1a), 4)
-        self.assertEqual(len(floors1b), 4)
-        self.assertEqual(len(roofs1), 4)
-        self.assertFalse(roofs2)
-
-        # Concise variants, same output. In the SEB model, floors face "Ground".
-        floors2 = osut.facets(spaces, "Ground", "Floor")
-        floors3 = osut.facets(spaces, "Ground")
-        roofs3  = osut.facets(spaces, "Outdoors", "RoofCeiling")
-        self.assertEqual(floors2, floors1a)
-        self.assertEqual(floors3, floors1a)
-        self.assertEqual(roofs3, roofs1)
-
-        # Dropping filters, 'envelope' includes all above-grade envelope.
-        nb       = len(walls) + len(roofs3) + len(windows) + len(skylights)
-        floors4  = osut.facets(spaces, "ALL", "Floor")
-        envelope = osut.facets(spaces, "Outdoors", "ALL")
-
-        for fl in floors1a: self.assertTrue(fl in floors4)
-        for fl in floors1b: self.assertTrue(fl in floors4)
-        self.assertEqual(len(envelope), nb)
-
-        # Without arguments, the method returns ALL surfaces and subsurfaces.
-        self.assertEqual(len(osut.facets(spaces)), len(surfs) + len(subs))
-
-    def test36_roller_shades(self):
-        o = osut.oslg
-        self.assertEqual(o.status(), 0)
-        self.assertEqual(o.reset(DBG), DBG)
-        self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
-
-        version = int("".join(openstudio.openStudioVersion().split(".")))
-        translator = openstudio.osversion.VersionTranslator()
-
-        path   = openstudio.path("./tests/files/osms/out/seb2.osm")
-        model  = translator.loadModel(path)
-        self.assertTrue(model)
-        model  = model.get()
-        spaces = model.getSpaces()
-
-        # file   = File.join(__dir__, "files/osms/out/seb_ext4.osm")
-        # path   = OpenStudio::Path.new(file)
-        # model  = translator.loadModel(path)
-        # self.assertTrue(model).to_not be_empty
-        # model  = model.get
-        # spaces = model.getSpaces
-
-        # slanted = osut.facets(spaces, "Outdoors", "RoofCeiling", ["top", "north"])
-        # self.assertEqual(len(slanted), 1)
-
-        # slanted   = slanted.first
-        # self.assertTrue(slanted.nameString).to eq("Openarea slanted roof")
-        # skylights = slanted.subSurfaces
-        #
-        # tilted  = mod1.facets(spaces, "Outdoors", "Wall", :bottom)
-        # self.assertTrue(tilted.size).to eq(1)
-        # tilted  = tilted.first
-        # self.assertTrue(tilted.nameString).to eq("Openarea tilted wall")
-        # windows = tilted.subSurfaces
-        #
-        # # 2x control groups:
-        # #   - 3x windows as a single control group
-        # #   - 3x skylight as another single control group
-        # skies = OpenStudio::Model::SubSurfaceVector.new
-        # wins  = OpenStudio::Model::SubSurfaceVector.new
-        # skylights.each { |sub| skies << sub }
-        # windows.each   { |sub| wins  << sub }
-        #
-        # if OpenStudio.openStudioVersion.split(".").join.to_i < 321
-        #   self.assertTrue(mod1.genShade(skies)).to be false
-        #   self.assertTrue(mod1.status).to be_zero
-        # else
-        #   self.assertTrue(mod1.genShade(skies)).to be true
-        #   self.assertTrue(mod1.genShade(wins)).to be true
-        #   self.assertTrue(mod1.status).to be_zero
-        #   ctls = model.getShadingControls
-        #   self.assertTrue(ctls.size).to eq(2)
-        #
-        #   ctls.each do |ctl|
-        #     self.assertTrue(ctl.shadingType).to eq("InteriorShade")
-        #     type = "OnIfHighOutdoorAirTempAndHighSolarOnWindow"
-        #     self.assertTrue(ctl.shadingControlType).to eq(type)
-        #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint1).to be true
-        #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint2).to be true
-        #     self.assertTrue(ctl.isControlTypeValueAllowingSchedule).to be true
-        #     self.assertTrue(ctl.isControlTypeValueRequiringSchedule).to be false
-        #     spt1 = ctl.setpoint
-        #     spt2 = ctl.setpoint2
-        #     self.assertTrue(spt1).to_not be_empty
-        #     self.assertTrue(spt2).to_not be_empty
-        #     spt1 = spt1.get
-        #     spt2 = spt2.get
-        #     self.assertTrue(spt1).to be_within(TOL).of(18)
-        #     self.assertTrue(spt2).to be_within(TOL).of(100)
-        #     self.assertTrue(ctl.multipleSurfaceControlType).to eq("Group")
-        #
-        #     ctl.subSurfaces.each do |sub|
-        #       surface = sub.surface
-        #       self.assertTrue(surface).to_not be_empty
-        #       surface = surface.get
-        #       self.assertTrue([slanted, tilted]).to include(surface)
-        #     end
-        #   end
-        # end
-        #
-        # file = File.join(__dir__, "files/osms/out/seb_ext5.osm")
-        # model.save(file, true)
-        self.assertEqual(o.clean(), DBG)
-        del(model)
+    # def test36_roller_shades(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+    #
+    #     version = int("".join(openstudio.openStudioVersion().split(".")))
+    #     translator = openstudio.osversion.VersionTranslator()
+    #
+    #     path   = openstudio.path("./tests/files/osms/out/seb2.osm")
+    #     model  = translator.loadModel(path)
+    #     self.assertTrue(model)
+    #     model  = model.get()
+    #     spaces = model.getSpaces()
+    #
+    #     # file   = File.join(__dir__, "files/osms/out/seb_ext4.osm")
+    #     # path   = OpenStudio::Path.new(file)
+    #     # model  = translator.loadModel(path)
+    #     # self.assertTrue(model).to_not be_empty
+    #     # model  = model.get
+    #     # spaces = model.getSpaces
+    #
+    #     # slanted = osut.facets(spaces, "Outdoors", "RoofCeiling", ["top", "north"])
+    #     # self.assertEqual(len(slanted), 1)
+    #
+    #     # slanted   = slanted.first
+    #     # self.assertTrue(slanted.nameString).to eq("Openarea slanted roof")
+    #     # skylights = slanted.subSurfaces
+    #     #
+    #     # tilted  = mod1.facets(spaces, "Outdoors", "Wall", :bottom)
+    #     # self.assertTrue(tilted.size).to eq(1)
+    #     # tilted  = tilted.first
+    #     # self.assertTrue(tilted.nameString).to eq("Openarea tilted wall")
+    #     # windows = tilted.subSurfaces
+    #     #
+    #     # # 2x control groups:
+    #     # #   - 3x windows as a single control group
+    #     # #   - 3x skylight as another single control group
+    #     # skies = OpenStudio::Model::SubSurfaceVector.new
+    #     # wins  = OpenStudio::Model::SubSurfaceVector.new
+    #     # skylights.each { |sub| skies << sub }
+    #     # windows.each   { |sub| wins  << sub }
+    #     #
+    #     # if OpenStudio.openStudioVersion.split(".").join.to_i < 321
+    #     #   self.assertTrue(mod1.genShade(skies)).to be false
+    #     #   self.assertTrue(mod1.status).to be_zero
+    #     # else
+    #     #   self.assertTrue(mod1.genShade(skies)).to be true
+    #     #   self.assertTrue(mod1.genShade(wins)).to be true
+    #     #   self.assertTrue(mod1.status).to be_zero
+    #     #   ctls = model.getShadingControls
+    #     #   self.assertTrue(ctls.size).to eq(2)
+    #     #
+    #     #   ctls.each do |ctl|
+    #     #     self.assertTrue(ctl.shadingType).to eq("InteriorShade")
+    #     #     type = "OnIfHighOutdoorAirTempAndHighSolarOnWindow"
+    #     #     self.assertTrue(ctl.shadingControlType).to eq(type)
+    #     #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint1).to be true
+    #     #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint2).to be true
+    #     #     self.assertTrue(ctl.isControlTypeValueAllowingSchedule).to be true
+    #     #     self.assertTrue(ctl.isControlTypeValueRequiringSchedule).to be false
+    #     #     spt1 = ctl.setpoint
+    #     #     spt2 = ctl.setpoint2
+    #     #     self.assertTrue(spt1).to_not be_empty
+    #     #     self.assertTrue(spt2).to_not be_empty
+    #     #     spt1 = spt1.get
+    #     #     spt2 = spt2.get
+    #     #     self.assertTrue(spt1).to be_within(TOL).of(18)
+    #     #     self.assertTrue(spt2).to be_within(TOL).of(100)
+    #     #     self.assertTrue(ctl.multipleSurfaceControlType).to eq("Group")
+    #     #
+    #     #     ctl.subSurfaces.each do |sub|
+    #     #       surface = sub.surface
+    #     #       self.assertTrue(surface).to_not be_empty
+    #     #       surface = surface.get
+    #     #       self.assertTrue([slanted, tilted]).to include(surface)
+    #     #     end
+    #     #   end
+    #     # end
+    #     #
+    #     # file = File.join(__dir__, "files/osms/out/seb_ext5.osm")
+    #     # model.save(file, true)
+    #     self.assertEqual(o.clean(), DBG)
+    #     del(model)
 
 if __name__ == "__main__":
     unittest.main()
