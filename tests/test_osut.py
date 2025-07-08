@@ -2268,8 +2268,78 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         del(model)
 
-    # def test22_model_transformation(self):
-    #
+    def test22_model_transformation(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+        translator = openstudio.osversion.VersionTranslator()
+
+        # Successful test.
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        for space in model.getSpaces():
+            tr = osut.transforms(space)
+            self.assertTrue(isinstance(tr, dict))
+            self.assertTrue("t" in tr)
+            self.assertTrue("r" in tr)
+            self.assertTrue(isinstance(tr["t"], openstudio.Transformation))
+            self.assertAlmostEqual(tr["r"], 0, places=2)
+
+        # Invalid input test.
+        self.assertEqual(o.status(), 0)
+        m1 = "'group' NoneType? expecting PlanarSurfaceGroup (osut.transforms)"
+        tr = osut.transforms(None)
+        self.assertTrue(isinstance(tr, dict))
+        self.assertTrue("t" in tr)
+        self.assertTrue("r" in tr)
+        self.assertFalse(tr["t"])
+        self.assertFalse(tr["r"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Realignment of flat surfaces.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(  1,  4,  0))
+        vtx.append(openstudio.Point3d(  2,  2,  0))
+        vtx.append(openstudio.Point3d(  6,  4,  0))
+        vtx.append(openstudio.Point3d(  5,  6,  0))
+
+        origin  = vtx[1]
+        hyp     = (origin - vtx[0]).length()
+        hyp2    = (origin - vtx[2]).length()
+        right   = openstudio.Point3d(origin.x()+10, origin.y(), origin.z()   )
+        zenith  = openstudio.Point3d(origin.x(),    origin.y(), origin.z()+10)
+        seg     = vtx[2] - origin
+        axis    = zenith - origin
+        droite  = right  - origin
+        radians = openstudio.getAngle(droite, seg)
+        degrees = openstudio.radToDeg(radians)
+        self.assertAlmostEqual(degrees, 26.565, places=3)
+
+        r = openstudio.Transformation.rotation(origin, axis, radians)
+        a = r.inverse() * vtx
+
+        self.assertTrue(osut.is_same(a[1], vtx[1]))
+        self.assertAlmostEqual(a[0].x() - a[1].x(), 0)
+        self.assertAlmostEqual(a[2].x() - a[1].x(), hyp2)
+        self.assertAlmostEqual(a[3].x() - a[2].x(), 0)
+        self.assertAlmostEqual(a[0].y() - a[1].y(), hyp)
+        self.assertAlmostEqual(a[2].y() - a[1].y(), 0)
+        self.assertAlmostEqual(a[3].y() - a[1].y(), hyp)
+
+        pts = r * a
+        self.assertTrue(osut.is_same(pts, vtx))
+
+        # ... to be completed later.
+
     # def test23_fits_overlaps(self):
     #
     # def test24_triangulation(self):

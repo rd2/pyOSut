@@ -889,7 +889,7 @@ def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
     else:
         return oslg.invalid("surface type", mth, 5, CN.DBG, False)
 
-    if not c: return False
+    if c is None: return False
 
     if type in t1:
         if type == "roofceiling":
@@ -1554,20 +1554,20 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 if coil.heatingControlTemperatureSchedule():
                     sched = coil.heatingControlTemperatureSchedule().get()
 
-        if not sched: continue
+        if sched is None: continue
 
         if sched.to_ScheduleRuleset():
             sched = sched.to_ScheduleRuleset().get()
             maximum = scheduleRulesetMinMax(sched)["max"]
 
             if maximum:
-                if not res["spt"] or res["spt"] < maximum:
+                if res["spt"] is None or res["spt"] < maximum:
                     res["spt"] = maximum
 
             dd = sched.winterDesignDaySchedule()
 
             if dd.values():
-                if not res["spt"] or res["spt"] < max(dd.values()):
+                if res["spt"] is None or res["spt"] < max(dd.values()):
                     res["spt"] = max(dd.values())
 
         if sched.to_ScheduleConstant():
@@ -1575,7 +1575,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
             maximum = scheduleConstantMinMax(sched)["max"]
 
             if maximum:
-                if not res["spt"] or res["spt"] < maximum:
+                if res["spt"] is None or res["spt"] < maximum:
                     res["spt"] = maximum
 
         if sched.to_ScheduleCompact():
@@ -1583,7 +1583,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
             maximum = scheduleCompactMinMax(sched)["max"]
 
             if maximum:
-                if not res["spt"] or res["spt"] < maximum:
+                if res["spt"] is None or res["spt"] < maximum:
                     res["spt"] = maximum
 
         if sched.to_ScheduleInterval():
@@ -1591,7 +1591,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
             maximum = scheduleIntervalMinMax(sched)["max"]
 
             if maximum:
-                if not res["spt"] or res["spt"] < maximum:
+                if res["spt"] is None or res["spt"] < maximum:
                     res["spt"] = maximum
 
     if not zone.thermostat(): return res
@@ -1616,13 +1616,13 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 maximum = scheduleRulesetMinMax(sched)["max"]
 
                 if maximum:
-                    if not res["spt"] or res["spt"] < maximum:
+                    if res["spt"] is None or res["spt"] < maximum:
                         res["spt"] = maximum
 
                 dd = sched.winterDesignDaySchedule()
 
                 if dd.values():
-                    if not res["spt"] or res["spt"] < max(dd.values()):
+                    if res["spt"] is None or res["spt"] < max(dd.values()):
                         res["spt"] = max(dd.values())
 
             if sched.to_ScheduleConstant():
@@ -1630,7 +1630,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 maximum = scheduleConstantMinMax(sched)["max"]
 
                 if maximum:
-                    if not res["spt"] or res["spt"] < maximum:
+                    if res["spt"] is None or res["spt"] < maximum:
                         res["spt"] = maximum
 
             if sched.to_ScheduleCompact():
@@ -1638,7 +1638,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 maximum = scheduleCompactMinMax(sched)["max"]
 
                 if maximum:
-                    if not res["spt"] or res["spt"] < maximum:
+                    if res["spt"] is None or res["spt"] < maximum:
                         res["spt"] = maximum
 
             if sched.to_ScheduleInterval():
@@ -1646,7 +1646,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 maximum = scheduleIntervalMinMax(sched)["max"]
 
                 if maximum:
-                    if not res["spt"] or res["spt"] < maximum:
+                    if res["spt"] is None or res["spt"] < maximum:
                         res["spt"] = maximum
 
             if sched.to_ScheduleYear():
@@ -1657,7 +1657,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                         dd = week.winterDesignDaySchedule().get()
 
                         if dd.values():
-                            if not res["spt"] or res["spt"] < max(dd.values()):
+                            if res["spt"] is None or res["spt"] < max(dd.values()):
                                 res["spt"] = max(dd.values())
     return res
 
@@ -1734,20 +1734,20 @@ def minCoolScheduledSetpoint(zone=None):
                 if coil.coolingControlTemperatureSchedule():
                     sched = coil.coolingControlTemperatureSchedule().get()
 
-        if not sched: continue
+        if sched is None: continue
 
         if sched.to_ScheduleRuleset():
             sched = sched.to_ScheduleRuleset().get()
             minimum = scheduleRulesetMinMax(sched)["min"]
 
             if minimum:
-                if not res["spt"] or res["spt"] > minimum:
+                if res["spt"] is None or res["spt"] > minimum:
                     res["spt"] = minimum
 
             dd = sched.summerDesignDaySchedule()
 
             if dd.values():
-                if not res["spt"] or res["spt"] > min(dd.values()):
+                if res["spt"] is None or res["spt"] > min(dd.values()):
                     res["spt"] = min(dd.values())
 
         if sched.to_ScheduleConstant():
@@ -1755,7 +1755,7 @@ def minCoolScheduledSetpoint(zone=None):
             minimum = scheduleConstantMinMax(sched)["min"]
 
             if minimum:
-                if not res["spt"] or res["spt"] > minimum:
+                if res["spt"] is None or res["spt"] > minimum:
                     res["spt"] = minimum
 
         if sched.to_ScheduleCompact():
@@ -1763,7 +1763,7 @@ def minCoolScheduledSetpoint(zone=None):
             minimum = scheduleCompactMinMax(sched)["min"]
 
             if minimum:
-                if not res["spt"] or res["spt"] > minimum:
+                if res["spt"] is None or res["spt"] > minimum:
                     res["spt"] = minimum
 
         if sched.to_ScheduleInterval():
@@ -1771,7 +1771,7 @@ def minCoolScheduledSetpoint(zone=None):
             minimum = scheduleIntervalMinMax(sched)["min"]
 
             if minimum:
-                if not res["spt"] or res["spt"] > minimum:
+                if res["spt"] is None or res["spt"] > minimum:
                     res["spt"] = minimum
 
     if not zone.thermostat(): return res
@@ -1797,13 +1797,13 @@ def minCoolScheduledSetpoint(zone=None):
                 minimum = scheduleRulesetMinMax(sched)["min"]
 
                 if minimum:
-                    if not res["spt"] or res["spt"] > minimum:
+                    if res["spt"] is None or res["spt"] > minimum:
                         res["spt"] = minimum
 
                 dd = sched.summerDesignDaySchedule()
 
                 if dd.values():
-                    if not res["spt"] or res["spt"] > min(dd.values()):
+                    if res["spt"] is None or res["spt"] > min(dd.values()):
                         res["spt"] = min(dd.values())
 
             if sched.to_ScheduleConstant():
@@ -1811,7 +1811,7 @@ def minCoolScheduledSetpoint(zone=None):
                 minimum = scheduleConstantMinMax(sched)[:min]
 
                 if minimum:
-                    if not res["spt"] or res["spt"] > minimum:
+                    if res["spt"] is None or res["spt"] > minimum:
                         res["spt"] = minimum
 
             if sched.to_ScheduleCompact():
@@ -1819,7 +1819,7 @@ def minCoolScheduledSetpoint(zone=None):
                 minimum = scheduleCompactMinMax(sched)["min"]
 
                 if minimum:
-                    if not res["spt"] or res["spt"] > minimum:
+                    if res["spt"] is None or res["spt"] > minimum:
                         res["spt"] = minimum
 
             if sched.to_ScheduleInterval():
@@ -1827,7 +1827,7 @@ def minCoolScheduledSetpoint(zone=None):
                 minimum = scheduleIntervalMinMax(sched)["min"]
 
                 if minimum:
-                    if not res["spt"] or res["spt"] > minimum:
+                    if res["spt"] is None or res["spt"] > minimum:
                         res["spt"] = minimum
 
             if sched.to_ScheduleYear():
@@ -1838,7 +1838,7 @@ def minCoolScheduledSetpoint(zone=None):
                         dd = week.summerDesignDaySchedule().get()
 
                         if dd.values():
-                            if not res["spt"] or res["spt"] < min(dd.values()):
+                            if res["spt"] is None or res["spt"] < min(dd.values()):
                                 res["spt"] = min(dd.values())
 
     return res
@@ -2098,7 +2098,7 @@ def setpoints(space=None):
             cnd = None
 
     # 2. Check instead OSut's INDIRECTLYCONDITIONED (parent space) link.
-    if not cnd:
+    if cnd is None:
         id = space.additionalProperties().getFeatureAsString(tg2)
 
         if id:
@@ -2273,7 +2273,7 @@ def availabilitySchedule(model=None, avl=""):
 
         limits = l
 
-    if not limits:
+    if limits is None:
         limits = openstudio.model.ScheduleTypeLimits(model)
         limits.setName("HVAC Operation ScheduleTypeLimits")
         limits.setLowerLimitValue(0)
@@ -2418,7 +2418,7 @@ def transforms(group=None) -> dict:
     res = dict(t=None, r=None)
     cl  = openstudio.model.PlanarSurfaceGroup
 
-    if isinstance(group, cl):
+    if not isinstance(group, cl):
         return oslg.mismatch("group", group, cl, mth, CN.DBG, res)
 
     mdl = group.model()
@@ -2555,25 +2555,23 @@ def is_same(s1=None, s2=None, indexed=True) -> bool:
     if not isinstance(indexed, bool): indexed = True
 
     if indexed:
-        xOK = abs(s1[0].x() - s2[0].x()) < CN.TOL
-        yOK = abs(s1[0].y() - s2[0].y()) < CN.TOL
-        zOK = abs(s1[0].z() - s2[0].z()) < CN.TOL
-
-        if xOK and yOK and zOK and len(s1) == 1:
-            return True
+        if len(s1) == 1:
+            if abs(s1[0].x() - s2[0].x()) > CN.TOL: return False
+            if abs(s1[0].y() - s2[0].y()) > CN.TOL: return False
+            if abs(s1[0].z() - s2[0].z()) > CN.TOL: return False
         else:
             indx = None
 
             for i, pt in enumerate(s2):
-                if indx: continue
+                if indx: break
 
-                xOK = abs(s1[0].x() - s2[i].x()) < CN.TOL
-                yOK = abs(s1[0].y() - s2[i].y()) < CN.TOL
-                zOK = abs(s1[0].z() - s2[i].z()) < CN.TOL
+                if abs(s1[0].x() - s2[i].x()) > CN.TOL: continue
+                if abs(s1[0].y() - s2[i].y()) > CN.TOL: continue
+                if abs(s1[0].z() - s2[i].z()) > CN.TOL: continue
 
-                if xOK and yOK and zOK: indx = i
+                indx = i
 
-            if not indx: return False
+            if indx is None: return False
 
             s2 = collections.deque(s2)
             s2.rotate(indx)
@@ -2581,11 +2579,9 @@ def is_same(s1=None, s2=None, indexed=True) -> bool:
 
     # openstudio.isAlmostEqual3dPt(p1, p2, TOL) # ... from v350 onwards.
     for i in range(len(s1)):
-        xOK = abs(s1[i].x() - s2[i].x()) < CN.TOL
-        yOK = abs(s1[i].y() - s2[i].y()) < CN.TOL
-        zOK = abs(s1[i].z() - s2[i].z()) < CN.TOL
-
-        if not xOK or not yOK or not zOK: return False
+        if abs(s1[i].x() - s2[i].x()) > CN.TOL: return False
+        if abs(s1[i].y() - s2[i].y()) > CN.TOL: return False
+        if abs(s1[i].z() - s2[i].z()) > CN.TOL: return false
 
     return True
 
