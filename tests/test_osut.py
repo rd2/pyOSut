@@ -1769,6 +1769,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], msg)
         self.assertEqual(o.clean(), DBG)
+
         del(model)
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
@@ -1785,6 +1786,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], msg)
         self.assertEqual(o.clean(), DBG)
+
         del(model)
 
     def test19_vestibules(self):
@@ -1818,6 +1820,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(prop.get())
         self.assertTrue(osut.is_vestibule(entry))
         self.assertEqual(o.status(), 0)
+
+        del(model)
 
     def test20_setpoints_plenums_attics(self):
         o = osut.oslg
@@ -2067,7 +2071,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = translator.loadModel(path)
         self.assertTrue(model)
         model = model.get()
-        mdl   = openstudio.model.Model()
 
         year = model.yearDescription()
         self.assertTrue(year)
@@ -2267,256 +2270,384 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertEqual(int(day_schedule.getValue(am01)), 0)
             self.assertEqual(int(day_schedule.getValue(pm11)), 0)
 
+        del(model)
 
     # def test22_model_transformation(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test23_fits_overlaps(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test24_triangulation(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test25_segments_triads_orientation(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test26_ulc_blc(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test27_polygon_attributes(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test28_subsurface_insertions(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test29_surface_width_height(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test30_wwr_insertions(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test31_convexity(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test32_outdoor_roofs(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test33_leader_line_anchors_inserts(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-
+    #
     # def test34_generated_skylight_wells(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
 
-    # def test35_facet_retrieval(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-    #
-    #     version = int("".join(openstudio.openStudioVersion().split(".")))
-    #     translator = openstudio.osversion.VersionTranslator()
-    #
-    #     path   = openstudio.path("./tests/files/osms/out/seb2.osm")
-    #     model  = translator.loadModel(path)
-    #     self.assertTrue(model)
-    #     model  = model.get()
-    #     spaces = model.getSpaces()
-    #     surfs  = model.getSurfaces()
-    #     subs   = model.getSubSurfaces()
-    #     self.assertEqual(len(surfs), 56)
-    #     self.assertEqual(len(subs), 8)
-    #
-    #     # The solution is similar to:
-    #     #   OpenStudio::Model::Space::findSurfaces(minDegreesFromNorth,
-    #     #                                          maxDegreesFromNorth,
-    #     #                                          minDegreesTilt,
-    #     #                                          maxDegreesTilt,
-    #     #                                          tol)
-    #     #   https://s3.amazonaws.com/openstudio-sdk-documentation/cpp/
-    #     #   OpenStudio-3.6.1-doc/model/html/classopenstudio_1_1model_1_1_space.html
-    #     #   #a0cf3c265ac314c1c846ee4962e852a3e
-    #     #
-    #     # ... yet it offers filters, e.g. surface type and boundary conditions.
-    #     windows    = osut.facets(spaces, "Outdoors", "FixedWindow")
-    #     skylights  = osut.facets(spaces, "Outdoors", "Skylight")
-    #     walls      = osut.facets(spaces, "Outdoors", "Wall")
-    #     northsouth = osut.facets(spaces, "Outdoors", "Wall", ["north", "south"])
-    #     northeast  = osut.facets(spaces, "Outdoors", "Wall", ["north", "east"])
-    #     north      = osut.facets(spaces, "Outdoors", "Wall", "north")
-    #     floors1a   = osut.facets(spaces, "Ground", "Floor", "bottom")
-    #     floors1b   = osut.facets(spaces, "Surface", "Floor") # plenum
-    #     roofs1     = osut.facets(spaces, "Outdoors", "RoofCeiling", "top")
-    #     roofs2     = osut.facets(spaces, "Outdoors", "RoofCeiling", "foo")
-    #
-    #     self.assertEqual(len(windows), 8)
-    #     self.assertEqual(len(skylights), 0)
-    #     self.assertEqual(len(walls), 26)
-    #     self.assertFalse(northsouth)
-    #     self.assertEqual(len(northeast), 8)
-    #     self.assertEqual(len(north), 14)
-    #     self.assertEqual(len(floors1a), 4)
-    #     self.assertEqual(len(floors1b), 4)
-    #     self.assertEqual(len(roofs1), 4)
-    #     self.assertFalse(roofs2)
-    #
-    #     # Concise variants, same output. In the SEB model, floors face "Ground".
-    #     floors2 = osut.facets(spaces, "Ground", "Floor")
-    #     floors3 = osut.facets(spaces, "Ground")
-    #     roofs3  = osut.facets(spaces, "Outdoors", "RoofCeiling")
-    #     self.assertEqual(floors2, floors1a)
-    #     self.assertEqual(floors3, floors1a)
-    #     self.assertEqual(roofs3, roofs1)
-    #
-    #     # Dropping filters, 'envelope' includes all above-grade envelope.
-    #     nb       = len(walls) + len(roofs3) + len(windows) + len(skylights)
-    #     floors4  = osut.facets(spaces, "ALL", "Floor")
-    #     envelope = osut.facets(spaces, "Outdoors", "ALL")
-    #
-    #     for fl in floors1a: self.assertTrue(fl in floors4)
-    #     for fl in floors1b: self.assertTrue(fl in floors4)
-    #     self.assertEqual(len(envelope), nb)
-    #
-    #     # Without arguments, the method returns ALL surfaces and subsurfaces.
-    #     self.assertEqual(len(osut.facets(spaces)), len(surfs) + len(subs))
+    def test35_facet_retrieval(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
 
-    # def test36_roller_shades(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
-    #
-    #     version = int("".join(openstudio.openStudioVersion().split(".")))
-    #     translator = openstudio.osversion.VersionTranslator()
-    #
-    #     path   = openstudio.path("./tests/files/osms/out/seb2.osm")
-    #     model  = translator.loadModel(path)
-    #     self.assertTrue(model)
-    #     model  = model.get()
-    #     spaces = model.getSpaces()
-    #
-    #     # file   = File.join(__dir__, "files/osms/out/seb_ext4.osm")
-    #     # path   = OpenStudio::Path.new(file)
-    #     # model  = translator.loadModel(path)
-    #     # self.assertTrue(model).to_not be_empty
-    #     # model  = model.get
-    #     # spaces = model.getSpaces
-    #
-    #     # slanted = osut.facets(spaces, "Outdoors", "RoofCeiling", ["top", "north"])
-    #     # self.assertEqual(len(slanted), 1)
-    #
-    #     # slanted   = slanted.first
-    #     # self.assertTrue(slanted.nameString).to eq("Openarea slanted roof")
-    #     # skylights = slanted.subSurfaces
-    #     #
-    #     # tilted  = mod1.facets(spaces, "Outdoors", "Wall", :bottom)
-    #     # self.assertTrue(tilted.size).to eq(1)
-    #     # tilted  = tilted.first
-    #     # self.assertTrue(tilted.nameString).to eq("Openarea tilted wall")
-    #     # windows = tilted.subSurfaces
-    #     #
-    #     # # 2x control groups:
-    #     # #   - 3x windows as a single control group
-    #     # #   - 3x skylight as another single control group
-    #     # skies = OpenStudio::Model::SubSurfaceVector.new
-    #     # wins  = OpenStudio::Model::SubSurfaceVector.new
-    #     # skylights.each { |sub| skies << sub }
-    #     # windows.each   { |sub| wins  << sub }
-    #     #
-    #     # if OpenStudio.openStudioVersion.split(".").join.to_i < 321
-    #     #   self.assertTrue(mod1.genShade(skies)).to be false
-    #     #   self.assertTrue(mod1.status).to be_zero
-    #     # else
-    #     #   self.assertTrue(mod1.genShade(skies)).to be true
-    #     #   self.assertTrue(mod1.genShade(wins)).to be true
-    #     #   self.assertTrue(mod1.status).to be_zero
-    #     #   ctls = model.getShadingControls
-    #     #   self.assertTrue(ctls.size).to eq(2)
-    #     #
-    #     #   ctls.each do |ctl|
-    #     #     self.assertTrue(ctl.shadingType).to eq("InteriorShade")
-    #     #     type = "OnIfHighOutdoorAirTempAndHighSolarOnWindow"
-    #     #     self.assertTrue(ctl.shadingControlType).to eq(type)
-    #     #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint1).to be true
-    #     #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint2).to be true
-    #     #     self.assertTrue(ctl.isControlTypeValueAllowingSchedule).to be true
-    #     #     self.assertTrue(ctl.isControlTypeValueRequiringSchedule).to be false
-    #     #     spt1 = ctl.setpoint
-    #     #     spt2 = ctl.setpoint2
-    #     #     self.assertTrue(spt1).to_not be_empty
-    #     #     self.assertTrue(spt2).to_not be_empty
-    #     #     spt1 = spt1.get
-    #     #     spt2 = spt2.get
-    #     #     self.assertTrue(spt1).to be_within(TOL).of(18)
-    #     #     self.assertTrue(spt2).to be_within(TOL).of(100)
-    #     #     self.assertTrue(ctl.multipleSurfaceControlType).to eq("Group")
-    #     #
-    #     #     ctl.subSurfaces.each do |sub|
-    #     #       surface = sub.surface
-    #     #       self.assertTrue(surface).to_not be_empty
-    #     #       surface = surface.get
-    #     #       self.assertTrue([slanted, tilted]).to include(surface)
-    #     #     end
-    #     #   end
-    #     # end
-    #     #
-    #     # file = File.join(__dir__, "files/osms/out/seb_ext5.osm")
-    #     # model.save(file, true)
-    #     self.assertEqual(o.clean(), DBG)
-    #     del(model)
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path   = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model  = translator.loadModel(path)
+        self.assertTrue(model)
+        model  = model.get()
+        spaces = model.getSpaces()
+        surfs  = model.getSurfaces()
+        subs   = model.getSubSurfaces()
+        self.assertEqual(len(surfs), 56)
+        self.assertEqual(len(subs), 8)
+
+        # The solution is similar to:
+        #   OpenStudio::Model::Space::findSurfaces(minDegreesFromNorth,
+        #                                          maxDegreesFromNorth,
+        #                                          minDegreesTilt,
+        #                                          maxDegreesTilt,
+        #                                          tol)
+        #   https://s3.amazonaws.com/openstudio-sdk-documentation/cpp/
+        #   OpenStudio-3.6.1-doc/model/html/classopenstudio_1_1model_1_1_space.html
+        #   #a0cf3c265ac314c1c846ee4962e852a3e
+        #
+        # ... yet it offers filters, e.g. surface type and boundary conditions.
+        windows    = osut.facets(spaces, "Outdoors", "FixedWindow")
+        skylights  = osut.facets(spaces, "Outdoors", "Skylight")
+        walls      = osut.facets(spaces, "Outdoors", "Wall")
+        northsouth = osut.facets(spaces, "Outdoors", "Wall", ["north", "south"])
+        northeast  = osut.facets(spaces, "Outdoors", "Wall", ["north", "east"])
+        north      = osut.facets(spaces, "Outdoors", "Wall", "north")
+        floors1a   = osut.facets(spaces, "Ground", "Floor", "bottom")
+        floors1b   = osut.facets(spaces, "Surface", "Floor") # plenum
+        roofs1     = osut.facets(spaces, "Outdoors", "RoofCeiling", "top")
+        roofs2     = osut.facets(spaces, "Outdoors", "RoofCeiling", "foo")
+
+        self.assertEqual(len(windows), 8)
+        self.assertEqual(len(skylights), 0)
+        self.assertEqual(len(walls), 26)
+        self.assertFalse(northsouth)
+        self.assertEqual(len(northeast), 8)
+        self.assertEqual(len(north), 14)
+        self.assertEqual(len(floors1a), 4)
+        self.assertEqual(len(floors1b), 4)
+        self.assertEqual(len(roofs1), 4)
+        self.assertFalse(roofs2)
+
+        # Concise variants, same output. In the SEB model, floors face "Ground".
+        floors2 = osut.facets(spaces, "Ground", "Floor")
+        floors3 = osut.facets(spaces, "Ground")
+        roofs3  = osut.facets(spaces, "Outdoors", "RoofCeiling")
+        self.assertEqual(floors2, floors1a)
+        self.assertEqual(floors3, floors1a)
+        self.assertEqual(roofs3, roofs1)
+
+        # Dropping filters, 'envelope' includes all above-grade envelope.
+        nb       = len(walls) + len(roofs3) + len(windows) + len(skylights)
+        floors4  = osut.facets(spaces, "ALL", "Floor")
+        envelope = osut.facets(spaces, "Outdoors", "ALL")
+
+        for fl in floors1a: self.assertTrue(fl in floors4)
+        for fl in floors1b: self.assertTrue(fl in floors4)
+        self.assertEqual(len(envelope), nb)
+
+        # Without arguments, the method returns ALL surfaces and subsurfaces.
+        self.assertEqual(len(osut.facets(spaces)), len(surfs) + len(subs))
+
+        del(model)
+
+    def test36_slab_generation(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+        model = openstudio.model.Model()
+
+        x0 = 1
+        y0 = 2
+        z0 = 3
+        w1 = 4
+        w2 = w1 * 2
+        d1 = 5
+        d2 = d1 * 2
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # 1x valid 'floor' plate.
+        #        ____
+        #       |    |
+        #       |    |
+        #       |  1 |
+        #       |____|
+        #
+        plates = []
+        plates.append(dict(x=x0, y=y0, dx=w1, dy=d2)) # bottom-left XY origin
+        slab = osut.genSlab(plates, z0)
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertEqual(len(slab), 4)
+
+        surface = openstudio.model.Surface(slab, model)
+        self.assertTrue(isinstance(surface, openstudio.model.Surface))
+        self.assertEqual(len(surface.vertices()), 4)
+        self.assertAlmostEqual(surface.grossArea(),        2 * 20, places=2)
+        self.assertAlmostEqual(surface.vertices()[0].x(), x0 + w1, places=2)
+        self.assertAlmostEqual(surface.vertices()[0].y(), y0 + d2, places=2)
+        self.assertAlmostEqual(surface.vertices()[0].z(),      z0, places=2)
+        self.assertAlmostEqual(surface.vertices()[2].x(),      x0, places=2)
+        self.assertAlmostEqual(surface.vertices()[2].y(),      y0, places=2)
+        self.assertAlmostEqual(surface.vertices()[2].z(),      z0, places=2)
+        self.assertAlmostEqual(surface.vertices()[3].x(),      x0, places=2)
+        self.assertAlmostEqual(surface.vertices()[3].y(), y0 + d2, places=2)
+        self.assertAlmostEqual(surface.vertices()[3].z(),      z0, places=2)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # 2x valid 'floor' plates.
+        #        ____ ____
+        #       |    |  2 |
+        #       |    |____|
+        #       |  1 |
+        #       |____|
+        #
+        plates = []
+        plates.append(dict(x=x0,    y=y0,    dx=w1, dy=d2))
+        plates.append(dict(x=x0+w1, y=y0+d1, dx=w1, dy=d1))
+
+        slab = osut.genSlab(plates, z0)
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertEqual(len(slab), 6)
+
+        surface = openstudio.model.Surface(slab, model)
+        self.assertTrue(isinstance(surface, openstudio.model.Surface))
+        self.assertEqual(len(surface.vertices()), 6)
+        self.assertAlmostEqual(surface.grossArea(), 3 * 20, places=2)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # 3x valid 'floor' plates.
+        #        ____ ____
+        #       |    |  2 |
+        #   ____|    |____|
+        #  |   3|  1 |
+        #  |____|____|
+        #
+        plates = []
+        plates.append(dict(x=x0,    y=y0,    dx=w1, dy=d2))
+        plates.append(dict(x=x0+w1, y=y0+d1, dx=w1, dy=d1))
+        plates.append(dict(x=x0-w1, y=y0,    dx=w1, dy=d1)) # X origin < 0
+
+        slab = osut.genSlab(plates, z0)
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertEqual(len(slab), 8)
+
+        surface = openstudio.model.Surface(slab, model)
+        self.assertTrue(isinstance(surface, openstudio.model.Surface))
+        self.assertEqual(len(surface.vertices()), 8)
+        self.assertAlmostEqual(surface.grossArea(), 4 * 20, places=2)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # 3x 'floor' plates + 1x unconnected 'plate'.
+        #        ____ ____   ____
+        #       |    |  2 | |  4 |
+        #   ____|    |____| |____|
+        #  |   3|  1 |
+        #  |____|____|
+        #
+        plates = []
+        plates.append(dict(x=x0,      y=y0,    dx=w1, dy=d2)) # index 0, #1
+        plates.append(dict(x=x0+w1,   y=y0+d1, dx=w1, dy=d1)) # index 1, #2
+        plates.append(dict(x=x0-w1,   y=y0,    dx=w1, dy=d1)) # index 2, #3
+        plates.append(dict(x=x0+w2+1, y=y0+d1, dx=w1, dy=d1)) # index 3, #4
+
+        slab = osut.genSlab(plates, z0)
+        self.assertTrue(o.is_error())
+        msg = o.logs()[0]["message"]
+        self.assertEqual(msg, "Invalid 'plate # 4 (index 3)' (osut.genSlab)")
+        self.assertEqual(o.clean(), DBG)
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertFalse(slab)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # 3x 'floor' plates + 1x overlapping 'plate'.
+        #        ____ ____
+        #       |    |  2 |__
+        #   ____|    |____| 4|
+        #  |   3|  1 |  |____|
+        #  |____|____|
+        #
+        plates = []
+        plates.append(dict(x=x0,      y=y0,    dx=w1, dy=d2))
+        plates.append(dict(x=x0+w1,   y=y0+d1, dx=w1, dy=d1))
+        plates.append(dict(x=x0-w1,   y=y0,    dx=w1, dy=d1))
+        plates.append(dict(x=x0+w2-1, y=y0+1,  dx=w1, dy=d1))
+
+        slab = osut.genSlab(plates, z0)
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertEqual(len(slab), 12)
+
+        surface = openstudio.model.Surface(slab, model)
+        self.assertTrue(isinstance(surface, openstudio.model.Surface))
+        self.assertEqual(len(surface.vertices()), 12)
+        self.assertAlmostEqual(surface.grossArea(), 5 * 20 - 1, places=2)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Same as previous, yet overlapping 'plate' has a negative dX while X
+        # origin is set at right (not left) corner.
+        #        ____ ____
+        #       |    |  2 |__
+        #   ____|    |____| 4|
+        #  |   3|  1 |  |____|
+        #  |____|____|
+        #
+        plates = []
+        plates.append(dict(x=x0,        y=y0,    dx= w1, dy=d2))
+        plates.append(dict(x=x0+w1,     y=y0+d1, dx= w1, dy=d1))
+        plates.append(dict(x=x0-w1,     y=y0,    dx= w1, dy=d1))
+        plates.append(dict(x=x0+3*w1-1, y=y0+1,  dx=-w1, dy=d1))
+
+        slab = osut.genSlab(plates, z0)
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertEqual(len(slab), 12)
+
+        surface = openstudio.model.Surface(slab, model)
+        self.assertTrue(isinstance(surface, openstudio.model.Surface))
+        self.assertEqual(len(surface.vertices()), 12)
+        self.assertAlmostEqual(surface.grossArea(), 5 * 20 - 1, places=2)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Same as previous, yet overlapping 'plate' has both negative dX & dY,
+        # while XY origin is set at top-right (not bottom-left) corner.
+        #        ____ ____
+        #       |    |  2 |__
+        #   ____|    |____| 4|
+        #  |   3|  1 |  |____|
+        #  |____|____|
+        #
+        plates = []
+        plates.append(dict(x=x0,        y=y0,      dx= w1, dy= d2))
+        plates.append(dict(x=x0+w1,     y=y0+d1,   dx= w1, dy= d1))
+        plates.append(dict(x=x0-w1,     y=y0,      dx= w1, dy= d1))
+        plates.append(dict(x=x0+3*w1-1, y=y0+1+d1, dx=-w1, dy=-d1))
+
+        slab = osut.genSlab(plates, z0)
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertEqual(len(slab), 12)
+
+        surface = openstudio.model.Surface(slab, model)
+        self.assertTrue(isinstance(surface, openstudio.model.Surface))
+        self.assertEqual(len(surface.vertices()), 12)
+        self.assertAlmostEqual(surface.grossArea(), 5 * 20 - 1, places=2)
+
+        self.assertEqual(o.status(), 0)
+        del(model)
+
+    def test37_roller_shades(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path   = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model  = translator.loadModel(path)
+        self.assertTrue(model)
+        model  = model.get()
+        spaces = model.getSpaces()
+
+        # file   = File.join(__dir__, "files/osms/out/seb_ext4.osm")
+        # path   = OpenStudio::Path.new(file)
+        # model  = translator.loadModel(path)
+        # self.assertTrue(model).to_not be_empty
+        # model  = model.get
+        # spaces = model.getSpaces
+
+        # slanted = osut.facets(spaces, "Outdoors", "RoofCeiling", ["top", "north"])
+        # self.assertEqual(len(slanted), 1)
+
+        # slanted   = slanted.first
+        # self.assertTrue(slanted.nameString).to eq("Openarea slanted roof")
+        # skylights = slanted.subSurfaces
+        #
+        # tilted  = mod1.facets(spaces, "Outdoors", "Wall", :bottom)
+        # self.assertTrue(tilted.size).to eq(1)
+        # tilted  = tilted.first
+        # self.assertTrue(tilted.nameString).to eq("Openarea tilted wall")
+        # windows = tilted.subSurfaces
+        #
+        # # 2x control groups:
+        # #   - 3x windows as a single control group
+        # #   - 3x skylight as another single control group
+        # skies = OpenStudio::Model::SubSurfaceVector.new
+        # wins  = OpenStudio::Model::SubSurfaceVector.new
+        # skylights.each { |sub| skies << sub }
+        # windows.each   { |sub| wins  << sub }
+        #
+        # if OpenStudio.openStudioVersion.split(".").join.to_i < 321
+        #   self.assertTrue(mod1.genShade(skies)).to be false
+        #   self.assertTrue(mod1.status).to be_zero
+        # else
+        #   self.assertTrue(mod1.genShade(skies)).to be true
+        #   self.assertTrue(mod1.genShade(wins)).to be true
+        #   self.assertTrue(mod1.status).to be_zero
+        #   ctls = model.getShadingControls
+        #   self.assertTrue(ctls.size).to eq(2)
+        #
+        #   ctls.each do |ctl|
+        #     self.assertTrue(ctl.shadingType).to eq("InteriorShade")
+        #     type = "OnIfHighOutdoorAirTempAndHighSolarOnWindow"
+        #     self.assertTrue(ctl.shadingControlType).to eq(type)
+        #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint1).to be true
+        #     self.assertTrue(ctl.isControlTypeValueNeedingSetpoint2).to be true
+        #     self.assertTrue(ctl.isControlTypeValueAllowingSchedule).to be true
+        #     self.assertTrue(ctl.isControlTypeValueRequiringSchedule).to be false
+        #     spt1 = ctl.setpoint
+        #     spt2 = ctl.setpoint2
+        #     self.assertTrue(spt1).to_not be_empty
+        #     self.assertTrue(spt2).to_not be_empty
+        #     spt1 = spt1.get
+        #     spt2 = spt2.get
+        #     self.assertTrue(spt1).to be_within(TOL).of(18)
+        #     self.assertTrue(spt2).to be_within(TOL).of(100)
+        #     self.assertTrue(ctl.multipleSurfaceControlType).to eq("Group")
+        #
+        #     ctl.subSurfaces.each do |sub|
+        #       surface = sub.surface
+        #       self.assertTrue(surface).to_not be_empty
+        #       surface = surface.get
+        #       self.assertTrue([slanted, tilted]).to include(surface)
+        #     end
+        #   end
+        # end
+        #
+        # file = File.join(__dir__, "files/osms/out/seb_ext5.osm")
+        # model.save(file, true)
+        self.assertEqual(o.clean(), DBG)
+
+        del(model)
 
 if __name__ == "__main__":
     unittest.main()

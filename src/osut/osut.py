@@ -2647,3 +2647,117 @@ def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
                     faces.append(sub)
 
     return faces
+
+
+def genSlab(pltz=[], z=0):
+    """Generates an OpenStudio 3D point vector of a composite floor "slab", a
+    'union' of multiple rectangular, horizontal floor "plates". Each plate
+    must either share an edge with (or encompass or overlap) any of the
+    preceding plates in the array. The generated slab may not be convex.
+
+    Args:
+        pltz (list):
+            Collection of individual floor plates (dicts), each holding:
+            - "x" (float): Left corner of plate origin (bird's eye view).
+            - "y" (float): Bottom corner of plate origin (bird's eye view).
+            - "dx" (float): Plate width (bird's eye view).
+            - "dy" (float): Plate depth (bird's eye view)
+            - "z" (float): Z-axis coordinate.
+
+    Returns:
+        openstudio.point3dVector: Slab vertices (see logs if empty).
+    """
+    mth = "osut.genSlab"
+    slb = openstudio.Point3dVector()
+    bkp = openstudio.Point3dVector()
+
+    # Input validation.
+    if not isinstance(pltz, list):
+        return oslg.mismatch("plates", pltz, list, mth, CN.DBG, slb)
+
+    try:
+        z = float(z)
+    except:
+        return oslg.mismatch("Z", z, float, mth, CN.DBG, slb)
+
+    for i, plt in enumerate(pltz):
+        id = "plate # %d (index %d)" % (i+1, i)
+
+        if not isinstance(plt, dict):
+            return oslg.mismatch(id, plt, dict, mth, CN.DBG, slb)
+
+        if "x"  not in plt: return oslg.hashkey(id, plt,  "x", mth, CN.DBG, slb)
+        if "y"  not in plt: return oslg.hashkey(id, plt,  "y", mth, CN.DBG, slb)
+        if "dx" not in plt: return oslg.hashkey(id, plt, "dx", mth, CN.DBG, slb)
+        if "dy" not in plt: return oslg.hashkey(id, plt, "dy", mth, CN.DBG, slb)
+
+        x  = plt["x" ]
+        y  = plt["y" ]
+        dx = plt["dx"]
+        dy = plt["dy"]
+
+        try:
+            x = float(x)
+        except:
+            oslg.mismatch("%s X" % id, x, float, mth, CN.DBG, slb)
+
+        try:
+            y = float(y)
+        except:
+            oslg.mismatch("%s Y" % id, y, float, mth, CN.DBG, slb)
+
+        try:
+            dx = float(dx)
+        except:
+            oslg.mismatch("%s dX" % id, dx, float, mth, CN.DBG, slb)
+
+        try:
+            dy = float(dy)
+        except:
+            oslg.mismatch("%s dY" % id, dy, float, mth, CN.DBG, slb)
+
+        if abs(dx) < CN.TOL: return oslg.zero("%s dX" % id, mth, CN.ERR, slb)
+        if abs(dy) < CN.TOL: return oslg.zero("%s dY" % id, mth, CN.ERR, slb)
+
+    # Join plates.
+    for i, plt in enumerate(pltz):
+        id = "plate # %d (index %d)" % (i+1, i)
+
+        x  = plt["x" ]
+        y  = plt["y" ]
+        dx = plt["dx"]
+        dy = plt["dy"]
+
+        # Adjust X if dX < 0.
+        if dx < 0: x -= -dx
+        if dx < 0: dx = -dx
+
+        # Adjust Y if dY < 0.
+        if dy < 0: y -= -dy
+        if dy < 0: dy = -dy
+
+        vtx  = []
+        vtx.append(openstudio.Point3d(x + dx, y + dy, 0))
+        vtx.append(openstudio.Point3d(x + dx, y,      0))
+        vtx.append(openstudio.Point3d(x,      y,      0))
+        vtx.append(openstudio.Point3d(x,      y + dy, 0))
+
+        if slb:
+            slab = openstudio.join(slb, vtx, CN.TOL2)
+
+            if slab:
+                slb  = slab.get()
+            else:
+                return oslg.invalid(id, mth, 0, CN.ERR, bkp)
+        else:
+            slb = vtx
+
+    # Once joined, re-adjust Z-axis coordinates.
+    if abs(z) > CN.TOL:
+        vtx = openstudio.Point3dVector()
+
+        for pt in slb: vtx.append(openstudio.Point3d(pt.x(), pt.y(), z))
+
+        slb = vtx
+
+    return slb
