@@ -784,7 +784,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
             # Same vertex sequence? Should be in reverse order.
             for i, vtx in enumerate(adj.vertices()):
-                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
+                self.assertTrue(osut.is_same(vtx, s.vertices()[i]))
 
             self.assertEqual(adj.surfaceType(), "RoofCeiling")
             self.assertEqual(s.surfaceType(), "RoofCeiling")
@@ -798,7 +798,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             rvtx.reverse()
 
             for i, vtx in enumerate(rvtx):
-                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
+                self.assertTrue(osut.is_same(vtx, s.vertices()[i]))
 
         # After the fix.
         if version >= 350:

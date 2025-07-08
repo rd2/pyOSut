@@ -209,6 +209,51 @@ def uo() -> dict:
     return _uo
 
 
+def each_cons(it, n):
+    """A proxy for Ruby Enumerable's 'each_cons(n)' method.
+
+    Args:
+        it:
+            A sequence.
+        n (int):
+            The number of sequential items in sequence.
+
+    Returns:
+        tuple: n-sized sequenced items.
+
+    """
+    # see: docs.ruby-lang.org/en/3.2/Enumerable.html#method-i-each_cons
+    #
+    # James Wong's Python workaround implementation:
+    # stackoverflow.com/questions/5878403/python-equivalent-to-rubys-each-cons
+
+    # Convert as iterator.
+    it  = iter(it)
+    deq = collections.deque()
+
+    # Insert first n items to a list first.
+    for _ in range(n):
+        try:
+            deq.append(next(it))
+        except StopIteration:
+            for _ in range(n - len(deq)):
+                deq.append(None)
+            yield tuple(deq)
+            return
+
+    yield tuple(deq)
+
+    # Main loop.
+    while True:
+        try:
+            val = next(it)
+        except StopIteration:
+            return
+        deq.popleft()
+        deq.append(val)
+        yield tuple(deq)
+
+
 def genConstruction(model=None, specs=dict()):
     """Generates an OpenStudio multilayered construction, + materials if needed.
 
@@ -2395,7 +2440,7 @@ def trueNormal(s=None, r=0):
 
     Returns:
         openstudio.Vector3d: A surface's true normal vector.
-        None : If invalid input (see logs).
+        None: If invalid input (see logs).
 
     """
     mth = "osut.trueNormal"
@@ -2486,7 +2531,7 @@ def to_p3Dv(pts=None) -> openstudio.Point3dVector:
     return v
 
 
-def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
+def is_same(s1=None, s2=None, indexed=True) -> bool:
     """Returns True if 2 sets of OpenStudio 3D points are nearly equal.
 
     Args:
@@ -2543,6 +2588,269 @@ def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
         if not xOK or not yOK or not zOK: return False
 
     return True
+
+
+def holds(pts=None, p1=None) -> bool:
+    """Returns True if an OpenStudio 3D point is part of a set of 3D points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        p1 (openstudio.Point3d):
+            An OpenStudio 3D point.
+
+    Returns:
+        bool: Whether part of a set of 3D points.
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.holds"
+    pts = to_p3Dv(pts)
+    cl  = openstudio.Point3d
+
+    if not isinstance(p1, cl):
+        return oslg.mismatch("point", p1, cl, mth, CN.DBG, False)
+
+    for pt in pts:
+        if is_same_vtx(p1, pt): return True
+
+    return False
+
+
+def nearest(pts=None, p01=None):
+    """Returns the vector index of an OpenStudio 3D point nearest to a point of
+    reference, e.g. grid origin. If left unspecified, the method systematically
+    returns the bottom-left corner (BLC) of any horizontal set. If more than
+    one point fits the initial criteria, the method relies on deterministic
+    sorting through triangulation.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        p1 (openstudio.Point3d):
+            An OpenStudio 3D point of reference.
+
+    Returns:
+        int: Vector index of nearest point to point of reference.
+        None: If invalid input (see logs).
+
+    """
+    mth = "osut.nearest"
+    l   = 100
+    d01 = 10000
+    d02 = 0
+    d03 = 0
+    idx = None
+    pts = to_p3Dv(pts)
+    if not pts: return idx
+
+    p03 = openstudio.Point3d( l,-l,-l)
+    p02 = openstudio.Point3d( l, l, l)
+
+    if not p01: p01 = openstudio.Point3d(-l,-l,-l)
+
+    if not isinstance(p01, openstudio.Point3d):
+        return oslg.mismatch("point", p01, cl, mth)
+
+    for i, pt in enumerate(pts):
+        if is_same_vtx(pt, p01): return i
+
+    for i, pt in enumerate(pts):
+        length01 = (pt - p01).length()
+        length02 = (pt - p02).length()
+        length03 = (pt - p03).length()
+
+        if round(length01, 2) == round(d01, 2):
+            if round(length02, 2) == round(d02, 2):
+                if round(length03, 2) > round(d03, 2):
+                    idx = i
+                    d03 = length03
+            elif round(length02, 2) > round(d02, 2):
+                idx = i
+                d03 = length03
+                d02 = length02
+        elif round(length01, 2) < round(d01, 2):
+            idx = i
+            d01 = length01
+            d02 = length02
+            d03 = length03
+
+    return idx
+
+
+def farthest(pts=None, p01=None):
+    """Returns the vector index of an OpenStudio 3D point farthest from a point
+    of reference, e.g. grid origin. If left unspecified, the method
+    systematically returns the top-right corner (TRC) of any horizontal set. If
+    more than one point fits the initial criteria, the method relies on
+    deterministic sorting through triangulation.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        p1 (openstudio.Point3d):
+            An OpenStudio 3D point of reference.
+
+    Returns:
+        int: Vector index of farthest point from point of reference.
+        None: If invalid input (see logs).
+
+    """
+    mth = "osut.farthest"
+    l   = 100
+    d01 = 0
+    d02 = 10000
+    d03 = 10000
+    idx = None
+    pts = to_p3Dv(pts)
+    if not pts: return idx
+
+    p03 = openstudio.Point3d( l,-l,-l)
+    p02 = openstudio.Point3d( l, l, l)
+
+    if not p01: p01 = openstudio.Point3d(-l,-l,-l)
+
+    if not isinstance(p01, openstudio.Point3d):
+        return oslg.mismatch("point", p01, cl, mth)
+
+    for i, pt in enumerate(pts):
+        if is_same_vtx(pt, p01): continue
+
+        length01 = (pt - p01).length()
+        length02 = (pt - p02).length()
+        length03 = (pt - p03).length()
+
+        if round(length01, 2) == round(d01, 2):
+            if round(length02, 2) == round(d02, 2):
+                if round(length03, 2) < round(d03, 2):
+                    idx = i
+                    d03 = length03
+            elif round(length02, 2) < round(d02, 2):
+                idx = i
+                d03 = length03
+                d02 = length02
+        elif round(length01, 2) > round(d01, 2):
+            idx = i
+            d01 = length01
+            d02 = length02
+            d03 = length03
+
+    return idx
+
+
+def flatten(pts=None, axs="z", val=0) -> openstudio.Point3dVector:
+    """Flattens OpenStudio 3D points vs X, Y or Z axes.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        axs (str):
+            Selected "x", "y" or "z" axis.
+        val (float):
+            Axis value.
+
+    Returns:
+        openstudio.Point3dVector: flattened points (see logs if empty)
+    """
+    mth = "osut.flatten"
+    pts = to_p3Dv(pts)
+    v   = openstudio.Point3dVector()
+
+    try:
+        val = float(val)
+    except:
+        return oslg.mismatch("val", val, float, mth, CN.DBG, v)
+
+    try:
+        axs = str(axs)
+    except:
+        return oslg.mismatch("axis (XYZ?)", axs, str, mth, CN.DBG, v)
+
+    if axs.lower() == "x":
+        for pt in pts: v.append(openstudio.Point3d(val, pt.y(), pt.z()))
+    elif axs.lower() == "y":
+        for pt in pts: v.append(openstudio.Point3d(pt.x(), val, pt.z()))
+    elif axs.lower() == "z":
+        for pt in pts: v.append(openstudio.Point3d(pt.x(), pt.y(), val))
+    else:
+        return oslg.invalid("axis (XYZ?)", mth, 2, CN.DBG, v)
+
+    return v
+
+
+def shareXYZ(pts=None, axs="z", val=0) -> bool:
+    """Validates whether 3D points share X, Y or Z coordinates.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        axs (str):
+            Selected "x", "y" or "z" axis.
+        val (float):
+            Axis value.
+
+    Returns:
+        bool: If points share X, Y or Z coordinates.
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.shareXYZ"
+    pts = to_p3Dv(pts)
+    if not pts: return False
+
+    try:
+        val = float(val)
+    except:
+        return oslg.mismatch("val", val, float, mth, CN.DBG, False)
+
+    try:
+        axs = str(axs)
+    except:
+        return oslg.mismatch("axis (XYZ?)", axs, str, mth, CN.DBG, False)
+
+    if axs.lower() == "x":
+        for pt in pts:
+            if abs(pt.x() - val) > CN.TOL: return False
+    elif axs.lower() == "y":
+        for pt in pts:
+            if abs(pt.y() - val) > CN.TOL: return False
+    elif axs.lower() == "z":
+        for pt in pts:
+            if abs(pt.x() - val) > CN.TOL: return False
+    else:
+        return invalid("axis", mth, 2, CN.DBG, False)
+
+    return True
+
+
+def nextUp(pts=None, pt=None):
+    """Returns next sequential point in an OpenStudio 3D point vector.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        p1 (openstudio.Point3d):
+            An OpenStudio 3D point of reference.
+
+    Returns:
+        openstudio.Point3d: The next sequential 3D point.
+        None: If invalid inputs (see logs).
+
+    """
+    mth = "osut.nextUP"
+    pts = to_p3Dv(pts)
+    cl  = openstudio.Point3d
+
+    if not isinstance(pt, cl):
+        return oslg.mismatch("point", pt, cl, mth)
+
+    if len(pts) < 2:
+        return oslg.invalid("points (2+)", mth, 1, CN.WRN)
+
+    for pair in each_cons(pts, 2):
+        if is_same(pair[0], pt): return pair[-1]
+
+    return pts[0]
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
