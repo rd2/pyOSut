@@ -27,14 +27,10 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-sys.path.append("./src/osut")
-
-import os
 import math
 import unittest
 import openstudio
-import osut
+from src.osut import osut
 
 DBG  = osut.CN.DBG
 INF  = osut.CN.INF
