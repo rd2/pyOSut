@@ -3,7 +3,7 @@ name = "osut"
 version = "0.6.0a1"
 description = "OpenStudio SDK utilities for Python"
 readme = "README.md"
-requires-python = ">=3.7.1"
+requires-python = ">=3.2"
 authors = [ {name = "Denis Bourgeois", email = "denis@rd2.ca"} ]
 maintainers = [ {name = "Denis Bourgeois", email = "denis@rd2.ca"} ]
 dependencies = [
@@ -13,7 +13,7 @@ dependencies = [
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 classifiers = [
-    "Programming Language :: Python :: 3.7.1",
+    "Programming Language :: Python :: 3.2",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Operating System :: OS Independent",
