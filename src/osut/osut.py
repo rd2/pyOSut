@@ -2334,7 +2334,7 @@ def availabilitySchedule(model=None, avl=""):
     schedule.defaultDaySchedule().setName(dft)
 
     if tag:
-        rule = openstudio.modelScheduleRule(schedule, sch)
+        rule = openstudio.model.ScheduleRule(schedule, sch)
         rule.setName(tag)
 
         if not rule.setStartDate(may01):
@@ -2345,7 +2345,7 @@ def availabilitySchedule(model=None, avl=""):
             oslg.log(ERR, "'%s': Can't set end date (%s)" % (tag, mth))
             return None
 
-        if not rule.setApplyAllDays(true):
+        if not rule.setApplyAllDays(True):
             oslg.log(ERR, "'%s': Can't apply to all days (%s)" % (tag, mth))
             return None
 

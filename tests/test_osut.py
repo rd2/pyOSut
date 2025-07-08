@@ -2053,12 +2053,220 @@ class TestOSutModuleMethods(unittest.TestCase):
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Consider adding LargeOffice model to test SDK's "isPlenum" ... @todo
 
-    # def test21_availability_schedules(self):
-    #     o = osut.oslg
-    #     self.assertEqual(o.status(), 0)
-    #     self.assertEqual(o.reset(DBG), DBG)
-    #     self.assertEqual(o.level(), DBG)
-    #     self.assertEqual(o.status(), 0)
+    def test21_availability_schedules(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        v = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+        mdl   = openstudio.model.Model()
+
+        year = model.yearDescription()
+        self.assertTrue(year)
+        year = year.get()
+
+        am01 = openstudio.Time(0, 1)
+        pm11 = openstudio.Time(0,23)
+
+        jan01 = year.makeDate(openstudio.MonthOfYear("Jan"),  1)
+        apr30 = year.makeDate(openstudio.MonthOfYear("Apr"), 30)
+        may01 = year.makeDate(openstudio.MonthOfYear("May"),  1)
+        oct31 = year.makeDate(openstudio.MonthOfYear("Oct"), 31)
+        nov01 = year.makeDate(openstudio.MonthOfYear("Nov"),  1)
+        dec31 = year.makeDate(openstudio.MonthOfYear("Dec"), 31)
+        self.assertTrue(isinstance(oct31, openstudio.Date))
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        sch = osut.availabilitySchedule(model) # ON (default)
+        self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
+        self.assertEqual(sch.nameString(), "ON Availability SchedRuleset")
+
+        limits = sch.scheduleTypeLimits()
+        self.assertTrue(limits)
+        limits = limits.get()
+        name = limits.nameString()
+        self.assertEqual(name, "HVAC Operation ScheduleTypeLimits")
+
+        default = sch.defaultDaySchedule()
+        self.assertEqual(default.nameString(), "ON Availability dftDaySched")
+        self.assertTrue(default.times())
+        self.assertTrue(default.values())
+        self.assertEqual(len(default.times()), 1)
+        self.assertEqual(len(default.values()), 1)
+        self.assertEqual(default.getValue(am01), 1)
+        self.assertEqual(default.getValue(pm11), 1)
+
+        self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
+        self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
+        self.assertTrue(sch.isHolidayScheduleDefaulted())
+        if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
+        if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
+        self.assertEqual(sch.summerDesignDaySchedule(), default)
+        self.assertEqual(sch.winterDesignDaySchedule(), default)
+        self.assertEqual(sch.holidaySchedule(), default)
+        if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
+        if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
+        self.assertFalse(sch.scheduleRules())
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        sch = osut.availabilitySchedule(model, "Off")
+        self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
+        name = sch.nameString()
+        self.assertEqual(name, "OFF Availability SchedRuleset")
+
+        limits = sch.scheduleTypeLimits()
+        self.assertTrue(limits)
+        limits = limits.get()
+        name = limits.nameString()
+        self.assertEqual(name, "HVAC Operation ScheduleTypeLimits")
+
+        default = sch.defaultDaySchedule()
+        self.assertEqual(default.nameString(), "OFF Availability dftDaySched")
+        self.assertTrue(default.times())
+        self.assertTrue(default.values())
+        self.assertEqual(len(default.times()), 1)
+        self.assertEqual(len(default.values()), 1)
+        self.assertEqual(int(default.getValue(am01)), 0)
+        self.assertEqual(int(default.getValue(pm11)), 0)
+
+        self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
+        self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
+        self.assertTrue(sch.isHolidayScheduleDefaulted())
+        if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
+        if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
+        self.assertEqual(sch.summerDesignDaySchedule(), default)
+        self.assertEqual(sch.winterDesignDaySchedule(), default)
+        self.assertEqual(sch.holidaySchedule(), default)
+        if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
+        if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
+        self.assertFalse(sch.scheduleRules())
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        sch = osut.availabilitySchedule(model, "Winter")
+        self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
+        self.assertEqual(sch.nameString(), "WINTER Availability SchedRuleset")
+
+        limits = sch.scheduleTypeLimits()
+        self.assertTrue(limits)
+        limits = limits.get()
+        name = "HVAC Operation ScheduleTypeLimits"
+        self.assertEqual(limits.nameString(), name)
+
+        default = sch.defaultDaySchedule()
+        name = "WINTER Availability dftDaySched"
+        self.assertEqual(default.nameString(), name)
+        self.assertTrue(default.times())
+        self.assertTrue(default.values())
+        self.assertEqual(len(default.times()), 1)
+        self.assertEqual(len(default.values()), 1)
+        self.assertEqual(int(default.getValue(am01)), 1)
+        self.assertEqual(int(default.getValue(pm11)), 1)
+
+        self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
+        self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
+        self.assertTrue(sch.isHolidayScheduleDefaulted())
+        if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
+        if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
+        self.assertEqual(sch.summerDesignDaySchedule(), default)
+        self.assertEqual(sch.winterDesignDaySchedule(), default)
+        self.assertEqual(sch.holidaySchedule(), default)
+        if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
+        if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
+        self.assertEqual(len(sch.scheduleRules()), 1)
+
+        for day_schedule in sch.getDaySchedules(jan01, apr30):
+            self.assertTrue(day_schedule.times())
+            self.assertTrue(day_schedule.values())
+            self.assertEqual(len(day_schedule.times()), 1)
+            self.assertEqual(len(day_schedule.values()), 1)
+            self.assertEqual(int(day_schedule.getValue(am01)), 1)
+            self.assertEqual(int(day_schedule.getValue(pm11)), 1)
+
+        for day_schedule in sch.getDaySchedules(may01, oct31):
+            self.assertTrue(day_schedule.times())
+            self.assertTrue(day_schedule.values())
+            self.assertEqual(len(day_schedule.times()), 1)
+            self.assertEqual(len(day_schedule.values()), 1)
+            self.assertEqual(int(day_schedule.getValue(am01)), 0)
+            self.assertEqual(int(day_schedule.getValue(pm11)), 0)
+
+        for day_schedule in sch.getDaySchedules(nov01, dec31):
+            self.assertTrue(day_schedule.times())
+            self.assertTrue(day_schedule.values())
+            self.assertEqual(len(day_schedule.times()), 1)
+            self.assertEqual(len(day_schedule.values()), 1)
+            self.assertEqual(int(day_schedule.getValue(am01)), 1)
+            self.assertEqual(int(day_schedule.getValue(pm11)), 1)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        another = osut.availabilitySchedule(model, "Winter")
+        self.assertEqual(another.nameString(), sch.nameString())
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        sch = osut.availabilitySchedule(model, "Summer")
+        self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
+        self.assertEqual(sch.nameString(), "SUMMER Availability SchedRuleset")
+
+        limits = sch.scheduleTypeLimits()
+        self.assertTrue(limits)
+        limits = limits.get()
+        name = "HVAC Operation ScheduleTypeLimits"
+        self.assertEqual(limits.nameString(), name)
+
+        default = sch.defaultDaySchedule()
+        name = "SUMMER Availability dftDaySched"
+        self.assertEqual(default.nameString(), name)
+        self.assertTrue(default.times())
+        self.assertTrue(default.values())
+        self.assertEqual(len(default.times()), 1)
+        self.assertEqual(len(default.values()), 1)
+        self.assertEqual(int(default.getValue(am01)), 0)
+        self.assertEqual(int(default.getValue(pm11)), 0)
+
+        self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
+        self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
+        self.assertTrue(sch.isHolidayScheduleDefaulted())
+        if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
+        if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
+        self.assertEqual(sch.summerDesignDaySchedule(), default)
+        self.assertEqual(sch.winterDesignDaySchedule(), default)
+        self.assertEqual(sch.holidaySchedule(), default)
+        if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
+        if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
+        self.assertEqual(len(sch.scheduleRules()), 1)
+
+        for day_schedule in sch.getDaySchedules(jan01, apr30):
+            self.assertTrue(day_schedule.times())
+            self.assertTrue(day_schedule.values())
+            self.assertEqual(len(day_schedule.times()), 1)
+            self.assertEqual(len(day_schedule.values()), 1)
+            self.assertEqual(int(day_schedule.getValue(am01)), 0)
+            self.assertEqual(int(day_schedule.getValue(pm11)), 0)
+
+        for day_schedule in sch.getDaySchedules(may01, oct31):
+            self.assertTrue(day_schedule.times())
+            self.assertTrue(day_schedule.values())
+            self.assertEqual(len(day_schedule.times()), 1)
+            self.assertEqual(len(day_schedule.values()), 1)
+            self.assertEqual(int(day_schedule.getValue(am01)), 1)
+            self.assertEqual(int(day_schedule.getValue(pm11)), 1)
+
+        for day_schedule in sch.getDaySchedules(nov01, dec31):
+            self.assertTrue(day_schedule.times())
+            self.assertTrue(day_schedule.values())
+            self.assertEqual(len(day_schedule.times()), 1)
+            self.assertEqual(len(day_schedule.values()), 1)
+            self.assertEqual(int(day_schedule.getValue(am01)), 0)
+            self.assertEqual(int(day_schedule.getValue(pm11)), 0)
+
 
     # def test22_model_transformation(self):
     #     o = osut.oslg
