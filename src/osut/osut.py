@@ -2849,7 +2849,7 @@ def nextUp(pts=None, pt=None):
     return pts[0]
 
 
-def width(pts=None):
+def width(pts=None) -> float:
     """Returns 'width' of a set of OpenStudio 3D points.
 
     Args:
@@ -2869,7 +2869,7 @@ def width(pts=None):
     return dx
 
 
-def height(pts=None):
+def height(pts=None) -> float:
     """Returns 'width' of a set of OpenStudio 3D points.
 
     Args:
@@ -2891,6 +2891,217 @@ def height(pts=None):
     if abs(dz) > CN.TOL: return dz
 
     return dy
+
+
+def midpoint(p1=None, p2=None):
+    """Returns midpoint coordinates of a line segment.
+
+    Args:
+        p1 (openstudio.Point3d):
+            1st 3D point of a line segment.
+        p2 (openstudio.Point3d):
+            2nd 3D point of a line segment.
+
+    Returns:
+        openstudio.Point3d: Midpoint.
+        None: If invalid input (see logs).
+
+    """
+    mth = "osut.midpoint"
+    cl  = openstudio.Point3d
+
+    if not isinstance(p1, cl):
+        return oslg.mismatch("point 1", p1, cl, mth)
+    if not isinstance(p2, cl):
+        return oslg.mismatch("point 2", p1, cl, mth)
+    if are_same(p1, p2):
+        return oslg.invalid("same points", mth)
+
+    midX = p1.x() + (p2.x() - p1.x())/2
+    midY = p1.y() + (p2.y() - p1.y())/2
+    midZ = p1.z() + (p2.z() - p1.z())/2
+
+    return openstudio.Point3d(midX, midY, midZ)
+
+
+def verticalPlane(p1=None, p2=None):
+    """Returns a vertical 3D plane from 2x 3D points, right-hand rule. Input
+    points are considered last 2 (of 3) points forming the plane; the first
+    point is assumed zenithal. Input points cannot align vertically.
+
+    Args:
+        p1 (openstudio.Point3d):
+            1st 3D point of a line segment.
+        p2 (openstudio.Point3d):
+            2nd 3D point of a line segment.
+
+    Returns:
+        openstudio.Plane: A vertical 3D plane.
+        None: If invalid inputs.
+
+    """
+    mth = "osut.verticalPlane"
+    cl = openstudio.Point3d
+
+    if not isinstance(p1, cl):
+        return oslg.mismatch("point 1", p1, cl, mth)
+    if not isinstance(p2, cl):
+        return oslg.mismatch("point 2", p1, cl, mth)
+    if are_same(p1, p2):
+        return oslg.invalid("same points", mth)
+
+    if abs(p1.x() - p2.x()) < CN.TOL and abs(p1.y() - p2.y()) < CN.TOL:
+        return oslg.invalid("vertically aligned points", mth)
+
+    zenith = openstudio.Point3d(p1.x(), p1.y(), (p2 - p1).length())
+    points = openstudio.Point3dVector()
+    points.append(zenith)
+    points.append(p1)
+    points.append(p2)
+
+    return openstudio.Plane(points)
+
+
+def getUniques(pts=None, n=0) -> openstudio.Point3dVector:
+    """Returns unique OpenStudio 3D points from an OpenStudio 3D point vector.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        n (int):
+            Requested number of unique points (0 returns all).
+
+    Returns:
+        openstudio.Point3dVector: Unique points (see logs if empty).
+
+    """
+    mth = "osut.getUniques"
+    pts = to_p3Dv(pts)
+    v   = openstudio.Point3dVector()
+    if not pts: return v
+
+    try:
+        n = int(n)
+    except:
+        return oslg.mismatch("n unique points", n, int, mth, CN.DBG, v)
+
+    for pt in pts:
+        if not holds(v, pt): v.append(pt)
+
+    if abs(n) > len(v): n = 0
+    if n > 0: v = v[0:n]
+    if n < 0: v = v[n:]
+
+    return v
+
+
+def segments(pts=None) -> openstudio.Point3dVectorVector:
+    """Returns paired sequential points as (non-zero length) line segments
+    (similar to tuple pairs). If the set holds only 2x unique points, a single
+    segment is returned. Otherwise, the returned number of segments equals the
+    number of unique points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        openstudio.Point3dVectorVector: 3D point segments (see logs if empty).
+
+    """
+    mth = "osut.segments"
+    vv  = openstudio.Point3dVectorVector()
+    pts = getUniques(pts)
+    if len(pts) < 2: return vv
+
+    for i1, pt in enumerate(pts):
+        i2 = i1 + 1
+        if i2 == len(pts): i2 = 0
+        p2 = pts[i2]
+
+        line = openstudio.Point3dVector()
+        line.append(p1)
+        line.append(p2)
+        vv.append(line)
+        if len(pts) == 2: break
+
+    return vv
+
+
+def is_segment(pts=None):
+    """Determines if a set of 3D points if a valid segment.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: Whether set is a valid segment.
+        False: If invalid input (see logs).
+
+    """
+    pts = to_p3Dv(pts)
+    if len(pts) != 2: return False
+    if are_same(pts[0], pts[1]): return False
+
+    return True
+
+
+def triads(pts=None, co=False) -> openstudio.Point3dVectorVector:
+    """Returns points as (non-zero length) 'triads', i.e. 3x sequential points.
+    If the set holds less than 3x unique points, an empty triad is returned.
+    Otherwise, the returned number of triads equals the number of unique points.
+    If non-collinearity is requested, then the number of returned triads equals
+    the number of non-collinear points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        openStudio.Point3dVectorVector: 3D point triads (see logs if empty).
+
+    """
+    vv  = openstudio.Point3dVectorVector()
+    pts = getUniques(pts)
+    if len(pts) < 2: return vv
+
+    for i1, pts in enumerate(pts):
+        i2 = i1 + 1
+        if i2 == len(pts): i2 = 0
+        i3 = i2 + 1
+        if i3 == len(pts): i3 = 0
+        p2 = pts[i2]
+        p3 = pts[i3]
+
+        tri = openstudio.Point3dVector()
+        tri.append(p1)
+        tri.append(p2)
+        tri.append(p3)
+        vv.append(tri)
+
+    return vv
+
+
+def is_triad(pts=None):
+    """Determines if a set of 3D points if a valid 'triad'.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: Whether set is a valid 'triad', i.e. trio of sequential 3D points.
+        False: If invalid input (see logs).
+
+    """
+    pts = to_p3Dv(pts)
+    if len(pts) != 3: return False
+    if are_same(pts[0], pts[1]): return False
+    if are_same(pts[0], pts[2]): return False
+    if are_same(pts[1], pts[2]): return False
+
+    return True
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
