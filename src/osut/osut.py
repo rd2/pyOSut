@@ -2531,7 +2531,7 @@ def to_p3Dv(pts=None) -> openstudio.Point3dVector:
     return v
 
 
-def is_same(s1=None, s2=None, indexed=True) -> bool:
+def are_same(s1=None, s2=None, indexed=True) -> bool:
     """Returns True if 2 sets of OpenStudio 3D points are nearly equal.
 
     Args:
@@ -2608,7 +2608,7 @@ def holds(pts=None, p1=None) -> bool:
         return oslg.mismatch("point", p1, cl, mth, CN.DBG, False)
 
     for pt in pts:
-        if is_same_vtx(p1, pt): return True
+        if are_same_vtx(p1, pt): return True
 
     return False
 
@@ -2649,7 +2649,7 @@ def nearest(pts=None, p01=None):
         return oslg.mismatch("point", p01, cl, mth)
 
     for i, pt in enumerate(pts):
-        if is_same_vtx(pt, p01): return i
+        if are_same_vtx(pt, p01): return i
 
     for i, pt in enumerate(pts):
         length01 = (pt - p01).length()
@@ -2710,7 +2710,7 @@ def farthest(pts=None, p01=None):
         return oslg.mismatch("point", p01, cl, mth)
 
     for i, pt in enumerate(pts):
-        if is_same_vtx(pt, p01): continue
+        if are_same_vtx(pt, p01): continue
 
         length01 = (pt - p01).length()
         length02 = (pt - p02).length()
@@ -2844,9 +2844,53 @@ def nextUp(pts=None, pt=None):
         return oslg.invalid("points (2+)", mth, 1, CN.WRN)
 
     for pair in each_cons(pts, 2):
-        if is_same(pair[0], pt): return pair[-1]
+        if are_same(pair[0], pt): return pair[-1]
 
     return pts[0]
+
+
+def width(pts=None):
+    """Returns 'width' of a set of OpenStudio 3D points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        float: 'Width' along X-axis.
+        0.0: If invalid input (see logs).
+    """
+    pts = to_p3Dv(pts)
+    if len(pts) < 2: return 0
+
+    xs = [pt.x() for pt in pts]
+    dx = max(xs) - min(xs)
+
+    return dx
+
+
+def height(pts=None):
+    """Returns 'width' of a set of OpenStudio 3D points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        float: 'Height' along Z-axis, or Y-axis if points are flat.
+        0.0: If invalid input (see logs).
+    """
+    pts = to_p3Dv(pts)
+    if len(pts) < 2: return 0
+
+    zs = [pt.z() for pt in pts]
+    ys = [pt.y() for pt in pts]
+    dz = max(zs) - min(zs)
+    dy = max(ys) - min(ys)
+
+    if abs(dz) > CN.TOL: return dz
+
+    return dy
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:

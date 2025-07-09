@@ -784,7 +784,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
             # Same vertex sequence? Should be in reverse order.
             for i, vtx in enumerate(adj.vertices()):
-                self.assertTrue(osut.is_same(vtx, s.vertices()[i]))
+                self.assertTrue(osut.are_same(vtx, s.vertices()[i]))
 
             self.assertEqual(adj.surfaceType(), "RoofCeiling")
             self.assertEqual(s.surfaceType(), "RoofCeiling")
@@ -798,7 +798,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             rvtx.reverse()
 
             for i, vtx in enumerate(rvtx):
-                self.assertTrue(osut.is_same(vtx, s.vertices()[i]))
+                self.assertTrue(osut.are_same(vtx, s.vertices()[i]))
 
         # After the fix.
         if version >= 350:
@@ -2327,7 +2327,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         r = openstudio.Transformation.rotation(origin, axis, radians)
         a = r.inverse() * vtx
 
-        self.assertTrue(osut.is_same(a[1], vtx[1]))
+        self.assertTrue(osut.are_same(a[1], vtx[1]))
         self.assertAlmostEqual(a[0].x() - a[1].x(), 0)
         self.assertAlmostEqual(a[2].x() - a[1].x(), hyp2)
         self.assertAlmostEqual(a[3].x() - a[2].x(), 0)
@@ -2336,14 +2336,70 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(a[3].y() - a[1].y(), hyp)
 
         pts = r * a
-        self.assertTrue(osut.is_same(pts, vtx))
+        self.assertTrue(osut.are_same(pts, vtx))
 
         # ... to be completed later.
 
     # def test23_fits_overlaps(self):
-    #
-    # def test24_triangulation(self):
-    #
+
+    def test24_triangulation(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        holes = openstudio.Point3dVectorVector()
+
+        # Regular polygon, counterclockwise yet not UpperLeftCorner (ULC).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(20, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0,  0))
+
+        # Polygons must be 'aligned', and in a clockwise sequence.
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = list(t.inverse() * vtx)
+        a_vtx.reverse()
+        results = openstudio.computeTriangulation(a_vtx, holes)
+        self.assertEqual(len(results), 1)
+        vtx0 = list(results[0])
+        vtx0.reverse()
+        # for vt0 in vtx0: print(vt0) # == initial triangle, yet flat.
+        # [20, 10, 0]
+        # [ 0, 10, 0]
+        # [ 0,  0, 0]
+
+        vtx.append(openstudio.Point3d(20, 0,  0))
+        # vtx << OpenStudio::Point3d.new(20, 0,  0)
+        # t       = OpenStudio::Transformation.alignFace(vtx)
+        # a_vtx   = (t.inverse * vtx).reverse
+        # results = OpenStudio.computeTriangulation(a_vtx, holes)
+        # expect(results.size).to eq(2)
+        # results.each { |result| puts result }
+        # [ 0, 10, 0]
+        # [20, 10, 0]
+        # [20,  0, 0]
+        #
+        # [ 0,  0, 0]
+        # [ 0, 10, 0]
+        # [20,  0, 0]
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = list(t.inverse() * vtx)
+        a_vtx.reverse()
+        results = openstudio.computeTriangulation(a_vtx, holes)
+        self.assertEqual(len(results), 2)
+        vtx0 = list(results[0])
+        vtx1 = list(results[0])
+        # for vt0 in vtx0: print(vt0)
+        # [ 0, 10, 0]
+        # [20, 10, 0]
+        # [20,  0, 0]
+        # for vt1 in vtx1: print(vt1)
+        # [ 0, 10, 0]
+        # [20, 10, 0]
+        # [20,  0, 0]
+
     # def test25_segments_triads_orientation(self):
     #
     # def test26_ulc_blc(self):
@@ -2351,7 +2407,7 @@ class TestOSutModuleMethods(unittest.TestCase):
     # def test27_polygon_attributes(self):
     #
     # def test28_subsurface_insertions(self):
-    #
+    # 
     # def test29_surface_width_height(self):
     #
     # def test30_wwr_insertions(self):
