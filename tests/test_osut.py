@@ -784,7 +784,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
             # Same vertex sequence? Should be in reverse order.
             for i, vtx in enumerate(adj.vertices()):
-                self.assertTrue(osut.are_same(vtx, s.vertices()[i]))
+                self.assertTrue(osut.areSame(vtx, s.vertices()[i]))
 
             self.assertEqual(adj.surfaceType(), "RoofCeiling")
             self.assertEqual(s.surfaceType(), "RoofCeiling")
@@ -798,7 +798,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             rvtx.reverse()
 
             for i, vtx in enumerate(rvtx):
-                self.assertTrue(osut.are_same(vtx, s.vertices()[i]))
+                self.assertTrue(osut.areSame(vtx, s.vertices()[i]))
 
         # After the fix.
         if version >= 350:
@@ -1278,7 +1278,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        version = int("".join(openstudio.openStudioVersion().split(".")))
+        # version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
         path  = openstudio.path("./tests/files/osms/out/seb2.osm")
@@ -1299,7 +1299,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             if not s.outsideBoundaryCondition().lower() == "outdoors": continue
             if not s.surfaceType().lower() == "wall": continue
 
-            self.assertFalse(osut.is_spandrel(s))
+            self.assertFalse(osut.areSpandrels(s))
 
             if "smalloffice 1" in s.nameString().lower():
                 office_walls.append(s)
@@ -1314,12 +1314,19 @@ class TestOSutModuleMethods(unittest.TestCase):
         tag = "spandrel"
 
         for wall in (office_walls + plenum_walls):
+            # First, failed attempts:
+            self.assertTrue(wall.additionalProperties().setFeature(tag, "True"))
+            self.assertTrue(wall.additionalProperties().hasFeature(tag))
+            prop = wall.additionalProperties().getFeatureAsBoolean(tag)
+            self.assertFalse(prop)
+
+            # Successful attempts.
             self.assertTrue(wall.additionalProperties().setFeature(tag, True))
             self.assertTrue(wall.additionalProperties().hasFeature(tag))
             prop = wall.additionalProperties().getFeatureAsBoolean(tag)
             self.assertTrue(prop)
             self.assertTrue(prop.get())
-            self.assertTrue(osut.is_spandrel(wall))
+            self.assertTrue(osut.areSpandrels(wall))
 
         self.assertEqual(o.status(), 0)
 
@@ -1747,7 +1754,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        msg = "'model' str? expecting Model (osut.has_airLoopsHVAC)"
+        msg = "'model' str? expecting Model (osut.hasAirLoopsHVAC)"
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
@@ -1758,9 +1765,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = model.get()
 
         self.assertEqual(o.clean(), DBG)
-        self.assertTrue(osut.has_airLoopsHVAC(model))
+        self.assertTrue(osut.hasAirLoopsHVAC(model))
         self.assertEqual(o.status(), 0)
-        self.assertEqual(osut.has_airLoopsHVAC(""), False)
+        self.assertEqual(osut.hasAirLoopsHVAC(""), False)
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], msg)
@@ -1775,16 +1782,16 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = model.get()
 
         self.assertEqual(o.clean(), DBG)
-        self.assertFalse(osut.has_airLoopsHVAC(model))
+        self.assertFalse(osut.hasAirLoopsHVAC(model))
         self.assertEqual(o.status(), 0)
-        self.assertEqual(osut.has_airLoopsHVAC(""), False)
+        self.assertEqual(osut.hasAirLoopsHVAC(""), False)
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], msg)
         self.assertEqual(o.clean(), DBG)
 
         del(model)
-
+    
     def test19_vestibules(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
@@ -1792,7 +1799,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
         path  = openstudio.path("./tests/files/osms/out/seb2.osm")
@@ -1802,19 +1808,57 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         # Tag "Entry way 1" in SEB as a vestibule.
         tag   = "vestibule"
+        msg   = "Invalid 'vestibule' arg #1 (osut.areVestibules)"
         entry = model.getSpaceByName("Entry way 1")
         self.assertTrue(entry)
         entry = entry.get()
+        sptype = entry.spaceType()
+        self.assertTrue(sptype)
+        sptype = sptype.get()
+        self.assertFalse(sptype.standardsSpaceType())
         self.assertFalse(entry.additionalProperties().hasFeature(tag))
-        self.assertFalse(osut.is_vestibule(entry))
+        self.assertFalse(osut.areVestibules(entry))
         self.assertEqual(o.status(), 0)
+
+        # First, failed attempts:
+        self.assertTrue(sptype.setStandardsSpaceType("vestibool"))
+        self.assertFalse(osut.areVestibules(entry))
+        self.assertEqual(o.status(), 0)
+        sptype.resetStandardsSpaceType()
+
+        self.assertTrue(entry.additionalProperties().setFeature(tag, False))
+        self.assertTrue(entry.additionalProperties().hasFeature(tag))
+        prop = entry.additionalProperties().getFeatureAsBoolean(tag)
+        self.assertTrue(prop)
+        self.assertFalse(prop.get())
+        self.assertFalse(osut.areVestibules(entry))
+        self.assertTrue(entry.additionalProperties().resetFeature(tag))
+        self.assertEqual(o.status(), 0)
+
+        self.assertTrue(entry.additionalProperties().setFeature(tag, "True"))
+        self.assertTrue(entry.additionalProperties().hasFeature(tag))
+        prop = entry.additionalProperties().getFeatureAsBoolean(tag)
+        self.assertFalse(prop)
+        self.assertFalse(osut.areVestibules(entry))
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], msg)
+        self.assertTrue(o.clean(), DBG)
+        self.assertTrue(entry.additionalProperties().resetFeature(tag))
+
+        # Successful attempts.
+        self.assertTrue(sptype.setStandardsSpaceType("vestibule"))
+        self.assertTrue(osut.areVestibules(entry))
+        self.assertEqual(o.status(), 0)
+        sptype.resetStandardsSpaceType()
 
         self.assertTrue(entry.additionalProperties().setFeature(tag, True))
         self.assertTrue(entry.additionalProperties().hasFeature(tag))
         prop = entry.additionalProperties().getFeatureAsBoolean(tag)
         self.assertTrue(prop)
         self.assertTrue(prop.get())
-        self.assertTrue(osut.is_vestibule(entry))
+        self.assertTrue(osut.areVestibules(entry))
+        self.assertTrue(entry.additionalProperties().resetFeature(tag))
         self.assertEqual(o.status(), 0)
 
         del(model)
@@ -1828,23 +1872,23 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         cl1 = openstudio.model.Space
         cl2 = openstudio.model.Model
-        mt1 = "(osut.is_plenum)"
-        mt2 = "(osut.has_heatingTemperatureSetpoints)"
+        mt1 = "(osut.arePlenums)"
+        mt2 = "(osut.hasHeatingTemperatureSetpoints)"
         mt3 = "(osut.setpoints)"
-        ms1 = "'space' NoneType? expecting %s %s" % (cl1.__name__, mt1)
+        ms1 = "'set' NoneType? expecting list %s" % mt1
         ms2 = "'model' NoneType? expecting %s %s" % (cl2.__name__, mt2)
         ms3 = "'space' Nonetype? expecting %s %s" % (cl1.__name__, mt3)
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Stress tests.
         self.assertEqual(o.clean(), DBG)
-        self.assertFalse(osut.is_plenum(None))
+        self.assertFalse(osut.arePlenums(None))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], ms1)
         self.assertEqual(o.clean(), DBG)
 
-        self.assertFalse(osut.has_heatingTemperatureSetpoints(None))
+        self.assertFalse(osut.hasHeatingTemperatureSetpoints(None))
         self.assertTrue(o.is_debug())
         self.assertTrue(len(o.logs()), 1)
         self.assertTrue(o.logs()[0]["message"], ms2)
@@ -1884,8 +1928,8 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(heat["dual"])
             self.assertTrue(cool["dual"])
 
-            self.assertFalse(osut.is_plenum(space))
-            self.assertFalse(osut.is_unconditioned(space))
+            self.assertFalse(osut.arePlenums(space))
+            self.assertFalse(osut.isUnconditioned(space))
             self.assertAlmostEqual(spts["heating"], 22.11, places=2)
             self.assertAlmostEqual(spts["cooling"], 22.78, places=2)
             self.assertEqual(o.status(), 0)
@@ -1905,8 +1949,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         # "Plenum" spaceType triggers an INDIRECTLYCONDITIONED status; returns
         # defaulted setpoint temperatures.
         self.assertFalse(plenum.partofTotalFloorArea())
-        self.assertTrue(osut.is_plenum(plenum))
-        self.assertFalse(osut.is_unconditioned(plenum))
+        self.assertTrue(osut.arePlenums(plenum))
+        self.assertFalse(osut.isUnconditioned(plenum))
         self.assertAlmostEqual(stps["heating"], 21.00, places=2)
         self.assertAlmostEqual(stps["cooling"], 24.00, places=2)
         self.assertEqual(o.status(), 0)
@@ -1917,8 +1961,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         val  = "Open area 1"
         self.assertTrue(plenum.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(plenum)
-        self.assertTrue(osut.is_plenum(plenum))
-        self.assertFalse(osut.is_unconditioned(plenum))
+        self.assertTrue(osut.arePlenums(plenum))
+        self.assertFalse(osut.isUnconditioned(plenum))
         self.assertAlmostEqual(stps["heating"], 22.11, places=2)
         self.assertAlmostEqual(stps["cooling"], 22.78, places=2)
         self.assertEqual(o.status(), 0)
@@ -1928,8 +1972,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         key = "space_conditioning_category"
         val = "Unconditioned"
         self.assertTrue(plenum.additionalProperties().setFeature(key, val))
-        self.assertTrue(osut.is_plenum(plenum))
-        self.assertTrue(osut.is_unconditioned(plenum))
+        self.assertTrue(osut.arePlenums(plenum))
+        self.assertTrue(osut.isUnconditioned(plenum))
         self.assertFalse(osut.setpoints(plenum)["heating"])
         self.assertFalse(osut.setpoints(plenum)["cooling"])
         self.assertEqual(o.status(), 0)
@@ -1946,8 +1990,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         # some heating and some cooling, i.e. not strictly REFRIGERATED nor
         # SEMIHEATED.
         for space in model.getSpaces():
-            self.assertFalse(osut.is_refrigerated(space))
-            self.assertFalse(osut.is_semiheated(space))
+            self.assertFalse(osut.isRefrigerated(space))
+            self.assertFalse(osut.isSemiheated(space))
 
         del(model)
 
@@ -1977,8 +2021,8 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(cool["dual"])
 
             self.assertTrue(space.partofTotalFloorArea())
-            self.assertFalse(osut.is_plenum(space))
-            self.assertFalse(osut.is_unconditioned(space))
+            self.assertFalse(osut.arePlenums(space))
+            self.assertFalse(osut.isUnconditioned(space))
             self.assertAlmostEqual(stps["heating"], 21.11, places=2)
             self.assertAlmostEqual(stps["cooling"], 23.89, places=2)
 
@@ -1993,8 +2037,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(cool["spt"])
         self.assertFalse(heat["dual"])
         self.assertFalse(cool["dual"])
-        self.assertFalse(osut.is_plenum(attic))
-        self.assertTrue(osut.is_unconditioned(attic))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertTrue(osut.isUnconditioned(attic))
         self.assertFalse(attic.partofTotalFloorArea())
         self.assertEqual(o.status(), 0)
 
@@ -2003,8 +2047,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         val = "Core_ZN"
         self.assertTrue(attic.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(attic)
-        self.assertFalse(osut.is_plenum(attic))
-        self.assertFalse(osut.is_unconditioned(attic))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertFalse(osut.isUnconditioned(attic))
         self.assertAlmostEqual(stps["heating"], 21.11, places=2)
         self.assertAlmostEqual(stps["cooling"], 23.89, places=2)
         self.assertEqual(o.status(), 0)
@@ -2016,8 +2060,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         msg = "Invalid '%s:%s' (osut.setpoints)" % (key, val)
         self.assertTrue(attic.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(attic)
-        self.assertFalse(osut.is_plenum(attic))
-        self.assertTrue(osut.is_unconditioned(attic))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertTrue(osut.isUnconditioned(attic))
         self.assertFalse(stps["heating"])
         self.assertFalse(stps["cooling"])
         self.assertTrue(attic.additionalProperties().hasFeature(key))
@@ -2026,7 +2070,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(cnd.get(), val)
         self.assertTrue(o.is_error())
 
-        # 3x same error, as is_plenum/is_unconditioned call setpoints(attic).
+        # 3x same error, as arePlenums/isUnconditioned call setpoints(attic).
         self.assertEqual(len(o.logs()), 3)
         for l in o.logs(): self.assertEqual(l["message"], msg)
 
@@ -2036,10 +2080,10 @@ class TestOSutModuleMethods(unittest.TestCase):
         val = "Semiheated"
         self.assertTrue(attic.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(attic)
-        self.assertFalse(osut.is_plenum(attic))
-        self.assertFalse(osut.is_unconditioned(attic))
-        self.assertTrue(osut.is_semiheated(attic))
-        self.assertFalse(osut.is_refrigerated(attic))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertFalse(osut.isUnconditioned(attic))
+        self.assertTrue(osut.isSemiheated(attic))
+        self.assertFalse(osut.isRefrigerated(attic))
         self.assertAlmostEqual(stps["heating"], 14.00, places=2)
         self.assertFalse(stps["cooling"])
         self.assertEqual(o.status(), 0)
@@ -2053,296 +2097,296 @@ class TestOSutModuleMethods(unittest.TestCase):
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Consider adding LargeOffice model to test SDK's "isPlenum" ... @todo
 
-    def test21_availability_schedules(self):
-        o = osut.oslg
-        self.assertEqual(o.status(), 0)
-        self.assertEqual(o.reset(DBG), DBG)
-        self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
-
-        v = int("".join(openstudio.openStudioVersion().split(".")))
-        translator = openstudio.osversion.VersionTranslator()
-
-        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
-        model = translator.loadModel(path)
-        self.assertTrue(model)
-        model = model.get()
-
-        year = model.yearDescription()
-        self.assertTrue(year)
-        year = year.get()
-
-        am01 = openstudio.Time(0, 1)
-        pm11 = openstudio.Time(0,23)
-
-        jan01 = year.makeDate(openstudio.MonthOfYear("Jan"),  1)
-        apr30 = year.makeDate(openstudio.MonthOfYear("Apr"), 30)
-        may01 = year.makeDate(openstudio.MonthOfYear("May"),  1)
-        oct31 = year.makeDate(openstudio.MonthOfYear("Oct"), 31)
-        nov01 = year.makeDate(openstudio.MonthOfYear("Nov"),  1)
-        dec31 = year.makeDate(openstudio.MonthOfYear("Dec"), 31)
-        self.assertTrue(isinstance(oct31, openstudio.Date))
-
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
-        sch = osut.availabilitySchedule(model) # ON (default)
-        self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
-        self.assertEqual(sch.nameString(), "ON Availability SchedRuleset")
-
-        limits = sch.scheduleTypeLimits()
-        self.assertTrue(limits)
-        limits = limits.get()
-        name = limits.nameString()
-        self.assertEqual(name, "HVAC Operation ScheduleTypeLimits")
-
-        default = sch.defaultDaySchedule()
-        self.assertEqual(default.nameString(), "ON Availability dftDaySched")
-        self.assertTrue(default.times())
-        self.assertTrue(default.values())
-        self.assertEqual(len(default.times()), 1)
-        self.assertEqual(len(default.values()), 1)
-        self.assertEqual(default.getValue(am01), 1)
-        self.assertEqual(default.getValue(pm11), 1)
-
-        self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
-        self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
-        self.assertTrue(sch.isHolidayScheduleDefaulted())
-        if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
-        if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
-        self.assertEqual(sch.summerDesignDaySchedule(), default)
-        self.assertEqual(sch.winterDesignDaySchedule(), default)
-        self.assertEqual(sch.holidaySchedule(), default)
-        if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
-        if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
-        self.assertFalse(sch.scheduleRules())
-
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
-        sch = osut.availabilitySchedule(model, "Off")
-        self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
-        name = sch.nameString()
-        self.assertEqual(name, "OFF Availability SchedRuleset")
-
-        limits = sch.scheduleTypeLimits()
-        self.assertTrue(limits)
-        limits = limits.get()
-        name = limits.nameString()
-        self.assertEqual(name, "HVAC Operation ScheduleTypeLimits")
-
-        default = sch.defaultDaySchedule()
-        self.assertEqual(default.nameString(), "OFF Availability dftDaySched")
-        self.assertTrue(default.times())
-        self.assertTrue(default.values())
-        self.assertEqual(len(default.times()), 1)
-        self.assertEqual(len(default.values()), 1)
-        self.assertEqual(int(default.getValue(am01)), 0)
-        self.assertEqual(int(default.getValue(pm11)), 0)
-
-        self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
-        self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
-        self.assertTrue(sch.isHolidayScheduleDefaulted())
-        if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
-        if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
-        self.assertEqual(sch.summerDesignDaySchedule(), default)
-        self.assertEqual(sch.winterDesignDaySchedule(), default)
-        self.assertEqual(sch.holidaySchedule(), default)
-        if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
-        if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
-        self.assertFalse(sch.scheduleRules())
-
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
-        sch = osut.availabilitySchedule(model, "Winter")
-        self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
-        self.assertEqual(sch.nameString(), "WINTER Availability SchedRuleset")
-
-        limits = sch.scheduleTypeLimits()
-        self.assertTrue(limits)
-        limits = limits.get()
-        name = "HVAC Operation ScheduleTypeLimits"
-        self.assertEqual(limits.nameString(), name)
-
-        default = sch.defaultDaySchedule()
-        name = "WINTER Availability dftDaySched"
-        self.assertEqual(default.nameString(), name)
-        self.assertTrue(default.times())
-        self.assertTrue(default.values())
-        self.assertEqual(len(default.times()), 1)
-        self.assertEqual(len(default.values()), 1)
-        self.assertEqual(int(default.getValue(am01)), 1)
-        self.assertEqual(int(default.getValue(pm11)), 1)
-
-        self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
-        self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
-        self.assertTrue(sch.isHolidayScheduleDefaulted())
-        if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
-        if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
-        self.assertEqual(sch.summerDesignDaySchedule(), default)
-        self.assertEqual(sch.winterDesignDaySchedule(), default)
-        self.assertEqual(sch.holidaySchedule(), default)
-        if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
-        if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
-        self.assertEqual(len(sch.scheduleRules()), 1)
-
-        for day_schedule in sch.getDaySchedules(jan01, apr30):
-            self.assertTrue(day_schedule.times())
-            self.assertTrue(day_schedule.values())
-            self.assertEqual(len(day_schedule.times()), 1)
-            self.assertEqual(len(day_schedule.values()), 1)
-            self.assertEqual(int(day_schedule.getValue(am01)), 1)
-            self.assertEqual(int(day_schedule.getValue(pm11)), 1)
-
-        for day_schedule in sch.getDaySchedules(may01, oct31):
-            self.assertTrue(day_schedule.times())
-            self.assertTrue(day_schedule.values())
-            self.assertEqual(len(day_schedule.times()), 1)
-            self.assertEqual(len(day_schedule.values()), 1)
-            self.assertEqual(int(day_schedule.getValue(am01)), 0)
-            self.assertEqual(int(day_schedule.getValue(pm11)), 0)
-
-        for day_schedule in sch.getDaySchedules(nov01, dec31):
-            self.assertTrue(day_schedule.times())
-            self.assertTrue(day_schedule.values())
-            self.assertEqual(len(day_schedule.times()), 1)
-            self.assertEqual(len(day_schedule.values()), 1)
-            self.assertEqual(int(day_schedule.getValue(am01)), 1)
-            self.assertEqual(int(day_schedule.getValue(pm11)), 1)
-
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
-        another = osut.availabilitySchedule(model, "Winter")
-        self.assertEqual(another.nameString(), sch.nameString())
-
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
-        sch = osut.availabilitySchedule(model, "Summer")
-        self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
-        self.assertEqual(sch.nameString(), "SUMMER Availability SchedRuleset")
-
-        limits = sch.scheduleTypeLimits()
-        self.assertTrue(limits)
-        limits = limits.get()
-        name = "HVAC Operation ScheduleTypeLimits"
-        self.assertEqual(limits.nameString(), name)
-
-        default = sch.defaultDaySchedule()
-        name = "SUMMER Availability dftDaySched"
-        self.assertEqual(default.nameString(), name)
-        self.assertTrue(default.times())
-        self.assertTrue(default.values())
-        self.assertEqual(len(default.times()), 1)
-        self.assertEqual(len(default.values()), 1)
-        self.assertEqual(int(default.getValue(am01)), 0)
-        self.assertEqual(int(default.getValue(pm11)), 0)
-
-        self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
-        self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
-        self.assertTrue(sch.isHolidayScheduleDefaulted())
-        if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
-        if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
-        self.assertEqual(sch.summerDesignDaySchedule(), default)
-        self.assertEqual(sch.winterDesignDaySchedule(), default)
-        self.assertEqual(sch.holidaySchedule(), default)
-        if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
-        if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
-        self.assertEqual(len(sch.scheduleRules()), 1)
-
-        for day_schedule in sch.getDaySchedules(jan01, apr30):
-            self.assertTrue(day_schedule.times())
-            self.assertTrue(day_schedule.values())
-            self.assertEqual(len(day_schedule.times()), 1)
-            self.assertEqual(len(day_schedule.values()), 1)
-            self.assertEqual(int(day_schedule.getValue(am01)), 0)
-            self.assertEqual(int(day_schedule.getValue(pm11)), 0)
-
-        for day_schedule in sch.getDaySchedules(may01, oct31):
-            self.assertTrue(day_schedule.times())
-            self.assertTrue(day_schedule.values())
-            self.assertEqual(len(day_schedule.times()), 1)
-            self.assertEqual(len(day_schedule.values()), 1)
-            self.assertEqual(int(day_schedule.getValue(am01)), 1)
-            self.assertEqual(int(day_schedule.getValue(pm11)), 1)
-
-        for day_schedule in sch.getDaySchedules(nov01, dec31):
-            self.assertTrue(day_schedule.times())
-            self.assertTrue(day_schedule.values())
-            self.assertEqual(len(day_schedule.times()), 1)
-            self.assertEqual(len(day_schedule.values()), 1)
-            self.assertEqual(int(day_schedule.getValue(am01)), 0)
-            self.assertEqual(int(day_schedule.getValue(pm11)), 0)
-
-        del(model)
-
-    def test22_model_transformation(self):
-        o = osut.oslg
-        self.assertEqual(o.status(), 0)
-        self.assertEqual(o.reset(DBG), DBG)
-        self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
-        translator = openstudio.osversion.VersionTranslator()
-
-        # Successful test.
-        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
-        model = translator.loadModel(path)
-        self.assertTrue(model)
-        model = model.get()
-
-        for space in model.getSpaces():
-            tr = osut.transforms(space)
-            self.assertTrue(isinstance(tr, dict))
-            self.assertTrue("t" in tr)
-            self.assertTrue("r" in tr)
-            self.assertTrue(isinstance(tr["t"], openstudio.Transformation))
-            self.assertAlmostEqual(tr["r"], 0, places=2)
-
-        # Invalid input test.
-        self.assertEqual(o.status(), 0)
-        m1 = "'group' NoneType? expecting PlanarSurfaceGroup (osut.transforms)"
-        tr = osut.transforms(None)
-        self.assertTrue(isinstance(tr, dict))
-        self.assertTrue("t" in tr)
-        self.assertTrue("r" in tr)
-        self.assertFalse(tr["t"])
-        self.assertFalse(tr["r"])
-        self.assertTrue(o.is_debug())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m1)
-        self.assertEqual(o.clean(), DBG)
-
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
-        # Realignment of flat surfaces.
-        vtx = openstudio.Point3dVector()
-        vtx.append(openstudio.Point3d(  1,  4,  0))
-        vtx.append(openstudio.Point3d(  2,  2,  0))
-        vtx.append(openstudio.Point3d(  6,  4,  0))
-        vtx.append(openstudio.Point3d(  5,  6,  0))
-
-        origin  = vtx[1]
-        hyp     = (origin - vtx[0]).length()
-        hyp2    = (origin - vtx[2]).length()
-        right   = openstudio.Point3d(origin.x()+10, origin.y(), origin.z()   )
-        zenith  = openstudio.Point3d(origin.x(),    origin.y(), origin.z()+10)
-        seg     = vtx[2] - origin
-        axis    = zenith - origin
-        droite  = right  - origin
-        radians = openstudio.getAngle(droite, seg)
-        degrees = openstudio.radToDeg(radians)
-        self.assertAlmostEqual(degrees, 26.565, places=3)
-
-        r = openstudio.Transformation.rotation(origin, axis, radians)
-        a = r.inverse() * vtx
-
-        self.assertTrue(osut.are_same(a[1], vtx[1]))
-        self.assertAlmostEqual(a[0].x() - a[1].x(), 0)
-        self.assertAlmostEqual(a[2].x() - a[1].x(), hyp2)
-        self.assertAlmostEqual(a[3].x() - a[2].x(), 0)
-        self.assertAlmostEqual(a[0].y() - a[1].y(), hyp)
-        self.assertAlmostEqual(a[2].y() - a[1].y(), 0)
-        self.assertAlmostEqual(a[3].y() - a[1].y(), hyp)
-
-        pts = r * a
-        self.assertTrue(osut.are_same(pts, vtx))
-
-        # ... to be completed later.
+    # def test21_availability_schedules(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+    #
+    #     v = int("".join(openstudio.openStudioVersion().split(".")))
+    #     translator = openstudio.osversion.VersionTranslator()
+    #
+    #     path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+    #     model = translator.loadModel(path)
+    #     self.assertTrue(model)
+    #     model = model.get()
+    #
+    #     year = model.yearDescription()
+    #     self.assertTrue(year)
+    #     year = year.get()
+    #
+    #     am01 = openstudio.Time(0, 1)
+    #     pm11 = openstudio.Time(0,23)
+    #
+    #     jan01 = year.makeDate(openstudio.MonthOfYear("Jan"),  1)
+    #     apr30 = year.makeDate(openstudio.MonthOfYear("Apr"), 30)
+    #     may01 = year.makeDate(openstudio.MonthOfYear("May"),  1)
+    #     oct31 = year.makeDate(openstudio.MonthOfYear("Oct"), 31)
+    #     nov01 = year.makeDate(openstudio.MonthOfYear("Nov"),  1)
+    #     dec31 = year.makeDate(openstudio.MonthOfYear("Dec"), 31)
+    #     self.assertTrue(isinstance(oct31, openstudio.Date))
+    #
+    #     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    #     sch = osut.availabilitySchedule(model) # ON (default)
+    #     self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
+    #     self.assertEqual(sch.nameString(), "ON Availability SchedRuleset")
+    #
+    #     limits = sch.scheduleTypeLimits()
+    #     self.assertTrue(limits)
+    #     limits = limits.get()
+    #     name = limits.nameString()
+    #     self.assertEqual(name, "HVAC Operation ScheduleTypeLimits")
+    #
+    #     default = sch.defaultDaySchedule()
+    #     self.assertEqual(default.nameString(), "ON Availability dftDaySched")
+    #     self.assertTrue(default.times())
+    #     self.assertTrue(default.values())
+    #     self.assertEqual(len(default.times()), 1)
+    #     self.assertEqual(len(default.values()), 1)
+    #     self.assertEqual(default.getValue(am01), 1)
+    #     self.assertEqual(default.getValue(pm11), 1)
+    #
+    #     self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
+    #     self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
+    #     self.assertTrue(sch.isHolidayScheduleDefaulted())
+    #     if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
+    #     if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
+    #     self.assertEqual(sch.summerDesignDaySchedule(), default)
+    #     self.assertEqual(sch.winterDesignDaySchedule(), default)
+    #     self.assertEqual(sch.holidaySchedule(), default)
+    #     if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
+    #     if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
+    #     self.assertFalse(sch.scheduleRules())
+    #
+    #     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    #     sch = osut.availabilitySchedule(model, "Off")
+    #     self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
+    #     name = sch.nameString()
+    #     self.assertEqual(name, "OFF Availability SchedRuleset")
+    #
+    #     limits = sch.scheduleTypeLimits()
+    #     self.assertTrue(limits)
+    #     limits = limits.get()
+    #     name = limits.nameString()
+    #     self.assertEqual(name, "HVAC Operation ScheduleTypeLimits")
+    #
+    #     default = sch.defaultDaySchedule()
+    #     self.assertEqual(default.nameString(), "OFF Availability dftDaySched")
+    #     self.assertTrue(default.times())
+    #     self.assertTrue(default.values())
+    #     self.assertEqual(len(default.times()), 1)
+    #     self.assertEqual(len(default.values()), 1)
+    #     self.assertEqual(int(default.getValue(am01)), 0)
+    #     self.assertEqual(int(default.getValue(pm11)), 0)
+    #
+    #     self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
+    #     self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
+    #     self.assertTrue(sch.isHolidayScheduleDefaulted())
+    #     if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
+    #     if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
+    #     self.assertEqual(sch.summerDesignDaySchedule(), default)
+    #     self.assertEqual(sch.winterDesignDaySchedule(), default)
+    #     self.assertEqual(sch.holidaySchedule(), default)
+    #     if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
+    #     if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
+    #     self.assertFalse(sch.scheduleRules())
+    #
+    #     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    #     sch = osut.availabilitySchedule(model, "Winter")
+    #     self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
+    #     self.assertEqual(sch.nameString(), "WINTER Availability SchedRuleset")
+    #
+    #     limits = sch.scheduleTypeLimits()
+    #     self.assertTrue(limits)
+    #     limits = limits.get()
+    #     name = "HVAC Operation ScheduleTypeLimits"
+    #     self.assertEqual(limits.nameString(), name)
+    #
+    #     default = sch.defaultDaySchedule()
+    #     name = "WINTER Availability dftDaySched"
+    #     self.assertEqual(default.nameString(), name)
+    #     self.assertTrue(default.times())
+    #     self.assertTrue(default.values())
+    #     self.assertEqual(len(default.times()), 1)
+    #     self.assertEqual(len(default.values()), 1)
+    #     self.assertEqual(int(default.getValue(am01)), 1)
+    #     self.assertEqual(int(default.getValue(pm11)), 1)
+    #
+    #     self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
+    #     self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
+    #     self.assertTrue(sch.isHolidayScheduleDefaulted())
+    #     if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
+    #     if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
+    #     self.assertEqual(sch.summerDesignDaySchedule(), default)
+    #     self.assertEqual(sch.winterDesignDaySchedule(), default)
+    #     self.assertEqual(sch.holidaySchedule(), default)
+    #     if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
+    #     if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
+    #     self.assertEqual(len(sch.scheduleRules()), 1)
+    #
+    #     for day_schedule in sch.getDaySchedules(jan01, apr30):
+    #         self.assertTrue(day_schedule.times())
+    #         self.assertTrue(day_schedule.values())
+    #         self.assertEqual(len(day_schedule.times()), 1)
+    #         self.assertEqual(len(day_schedule.values()), 1)
+    #         self.assertEqual(int(day_schedule.getValue(am01)), 1)
+    #         self.assertEqual(int(day_schedule.getValue(pm11)), 1)
+    #
+    #     for day_schedule in sch.getDaySchedules(may01, oct31):
+    #         self.assertTrue(day_schedule.times())
+    #         self.assertTrue(day_schedule.values())
+    #         self.assertEqual(len(day_schedule.times()), 1)
+    #         self.assertEqual(len(day_schedule.values()), 1)
+    #         self.assertEqual(int(day_schedule.getValue(am01)), 0)
+    #         self.assertEqual(int(day_schedule.getValue(pm11)), 0)
+    #
+    #     for day_schedule in sch.getDaySchedules(nov01, dec31):
+    #         self.assertTrue(day_schedule.times())
+    #         self.assertTrue(day_schedule.values())
+    #         self.assertEqual(len(day_schedule.times()), 1)
+    #         self.assertEqual(len(day_schedule.values()), 1)
+    #         self.assertEqual(int(day_schedule.getValue(am01)), 1)
+    #         self.assertEqual(int(day_schedule.getValue(pm11)), 1)
+    #
+    #     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    #     another = osut.availabilitySchedule(model, "Winter")
+    #     self.assertEqual(another.nameString(), sch.nameString())
+    #
+    #     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    #     sch = osut.availabilitySchedule(model, "Summer")
+    #     self.assertTrue(isinstance(sch, openstudio.model.ScheduleRuleset))
+    #     self.assertEqual(sch.nameString(), "SUMMER Availability SchedRuleset")
+    #
+    #     limits = sch.scheduleTypeLimits()
+    #     self.assertTrue(limits)
+    #     limits = limits.get()
+    #     name = "HVAC Operation ScheduleTypeLimits"
+    #     self.assertEqual(limits.nameString(), name)
+    #
+    #     default = sch.defaultDaySchedule()
+    #     name = "SUMMER Availability dftDaySched"
+    #     self.assertEqual(default.nameString(), name)
+    #     self.assertTrue(default.times())
+    #     self.assertTrue(default.values())
+    #     self.assertEqual(len(default.times()), 1)
+    #     self.assertEqual(len(default.values()), 1)
+    #     self.assertEqual(int(default.getValue(am01)), 0)
+    #     self.assertEqual(int(default.getValue(pm11)), 0)
+    #
+    #     self.assertTrue(sch.isWinterDesignDayScheduleDefaulted())
+    #     self.assertTrue(sch.isSummerDesignDayScheduleDefaulted())
+    #     self.assertTrue(sch.isHolidayScheduleDefaulted())
+    #     if v >= 330: self.assertTrue(sch.isCustomDay1ScheduleDefaulted())
+    #     if v >= 330: self.assertTrue(sch.isCustomDay2ScheduleDefaulted())
+    #     self.assertEqual(sch.summerDesignDaySchedule(), default)
+    #     self.assertEqual(sch.winterDesignDaySchedule(), default)
+    #     self.assertEqual(sch.holidaySchedule(), default)
+    #     if v >= 330: self.assertEqual(sch.customDay1Schedule(), default)
+    #     if v >= 330: self.assertEqual(sch.customDay2Schedule(), default)
+    #     self.assertEqual(len(sch.scheduleRules()), 1)
+    #
+    #     for day_schedule in sch.getDaySchedules(jan01, apr30):
+    #         self.assertTrue(day_schedule.times())
+    #         self.assertTrue(day_schedule.values())
+    #         self.assertEqual(len(day_schedule.times()), 1)
+    #         self.assertEqual(len(day_schedule.values()), 1)
+    #         self.assertEqual(int(day_schedule.getValue(am01)), 0)
+    #         self.assertEqual(int(day_schedule.getValue(pm11)), 0)
+    #
+    #     for day_schedule in sch.getDaySchedules(may01, oct31):
+    #         self.assertTrue(day_schedule.times())
+    #         self.assertTrue(day_schedule.values())
+    #         self.assertEqual(len(day_schedule.times()), 1)
+    #         self.assertEqual(len(day_schedule.values()), 1)
+    #         self.assertEqual(int(day_schedule.getValue(am01)), 1)
+    #         self.assertEqual(int(day_schedule.getValue(pm11)), 1)
+    #
+    #     for day_schedule in sch.getDaySchedules(nov01, dec31):
+    #         self.assertTrue(day_schedule.times())
+    #         self.assertTrue(day_schedule.values())
+    #         self.assertEqual(len(day_schedule.times()), 1)
+    #         self.assertEqual(len(day_schedule.values()), 1)
+    #         self.assertEqual(int(day_schedule.getValue(am01)), 0)
+    #         self.assertEqual(int(day_schedule.getValue(pm11)), 0)
+    #
+    #     del(model)
+    #
+    # def test22_model_transformation(self):
+    #     o = osut.oslg
+    #     self.assertEqual(o.status(), 0)
+    #     self.assertEqual(o.reset(DBG), DBG)
+    #     self.assertEqual(o.level(), DBG)
+    #     self.assertEqual(o.status(), 0)
+    #     translator = openstudio.osversion.VersionTranslator()
+    #
+    #     # Successful test.
+    #     path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+    #     model = translator.loadModel(path)
+    #     self.assertTrue(model)
+    #     model = model.get()
+    #
+    #     for space in model.getSpaces():
+    #         tr = osut.transforms(space)
+    #         self.assertTrue(isinstance(tr, dict))
+    #         self.assertTrue("t" in tr)
+    #         self.assertTrue("r" in tr)
+    #         self.assertTrue(isinstance(tr["t"], openstudio.Transformation))
+    #         self.assertAlmostEqual(tr["r"], 0, places=2)
+    #
+    #     # Invalid input test.
+    #     self.assertEqual(o.status(), 0)
+    #     m1 = "'group' NoneType? expecting PlanarSurfaceGroup (osut.transforms)"
+    #     tr = osut.transforms(None)
+    #     self.assertTrue(isinstance(tr, dict))
+    #     self.assertTrue("t" in tr)
+    #     self.assertTrue("r" in tr)
+    #     self.assertFalse(tr["t"])
+    #     self.assertFalse(tr["r"])
+    #     self.assertTrue(o.is_debug())
+    #     self.assertEqual(len(o.logs()), 1)
+    #     self.assertEqual(o.logs()[0]["message"], m1)
+    #     self.assertEqual(o.clean(), DBG)
+    #
+    #     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    #     # Realignment of flat surfaces.
+    #     vtx = openstudio.Point3dVector()
+    #     vtx.append(openstudio.Point3d(  1,  4,  0))
+    #     vtx.append(openstudio.Point3d(  2,  2,  0))
+    #     vtx.append(openstudio.Point3d(  6,  4,  0))
+    #     vtx.append(openstudio.Point3d(  5,  6,  0))
+    #
+    #     origin  = vtx[1]
+    #     hyp     = (origin - vtx[0]).length()
+    #     hyp2    = (origin - vtx[2]).length()
+    #     right   = openstudio.Point3d(origin.x()+10, origin.y(), origin.z()   )
+    #     zenith  = openstudio.Point3d(origin.x(),    origin.y(), origin.z()+10)
+    #     seg     = vtx[2] - origin
+    #     axis    = zenith - origin
+    #     droite  = right  - origin
+    #     radians = openstudio.getAngle(droite, seg)
+    #     degrees = openstudio.radToDeg(radians)
+    #     self.assertAlmostEqual(degrees, 26.565, places=3)
+    #
+    #     r = openstudio.Transformation.rotation(origin, axis, radians)
+    #     a = r.inverse() * vtx
+    #
+    #     self.assertTrue(osut.areSame(a[1], vtx[1]))
+    #     self.assertAlmostEqual(a[0].x() - a[1].x(), 0)
+    #     self.assertAlmostEqual(a[2].x() - a[1].x(), hyp2)
+    #     self.assertAlmostEqual(a[3].x() - a[2].x(), 0)
+    #     self.assertAlmostEqual(a[0].y() - a[1].y(), hyp)
+    #     self.assertAlmostEqual(a[2].y() - a[1].y(), 0)
+    #     self.assertAlmostEqual(a[3].y() - a[1].y(), hyp)
+    #
+    #     pts = r * a
+    #     self.assertTrue(osut.areSame(pts, vtx))
+    #
+    #     # ... to be completed later.
 
     # def test23_fits_overlaps(self):
 
-    def test24_triangulation(self):
+    # def test24_triangulation(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
@@ -2407,7 +2451,7 @@ class TestOSutModuleMethods(unittest.TestCase):
     # def test27_polygon_attributes(self):
     #
     # def test28_subsurface_insertions(self):
-    # 
+    #
     # def test29_surface_width_height(self):
     #
     # def test30_wwr_insertions(self):
