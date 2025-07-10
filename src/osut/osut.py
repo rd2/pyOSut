@@ -2072,7 +2072,7 @@ def arePlenums(set=None):
                 if cool["dual"]: continue
 
         return False
-        
+
     return True
 
 
@@ -3195,95 +3195,6 @@ def isPointAlongSegments(p0=None, sgs=[]):
         if isPointAlongSegment(p0, sg): return True
 
     return False
-
-
-# Returns point of intersection of 2x 3D line segments.
-  #
-  # @param s1 [Set<OpenStudio::Point3d] 1st 3D line segment
-  # @param s2 [Set<OpenStudio::Point3d] 2nd 3D line segment
-  #
-  # @return [OpenStudio::Point3d] point of intersection of both lines
-  # @return [nil] if no intersection, equal, or invalid input (see logs)
-# def lineIntersection(s1 = [], s2 = [])
-#     s1  = getSegments(s1)
-#     s2  = getSegments(s2)
-#     return nil if s1.empty?
-#     return nil if s2.empty?
-#
-#     s1 = s1.first
-#     s2 = s2.first
-#
-#     # Matching segments?
-#     return nil if same?(s1, s2)
-#     return nil if same?(s1, s2.to_a.reverse)
-#
-#     a1 = s1[0]
-#     a2 = s1[1]
-#     b1 = s2[0]
-#     b2 = s2[1]
-#
-#     # Matching segment endpoints?
-#     return a1 if same?(a1, b1)
-#     return a2 if same?(a2, b1)
-#     return a1 if same?(a1, b2)
-#     return a2 if same?(a2, b2)
-#
-#     # Segment endpoint along opposite segment?
-#     return a1 if pointAlongSegments?(a1, s2)
-#     return a2 if pointAlongSegments?(a2, s2)
-#     return b1 if pointAlongSegments?(b1, s1)
-#     return b2 if pointAlongSegments?(b2, s1)
-#
-#     # Line segments as vectors. Skip if colinear.
-#     a   = a2 - a1
-#     b   = b2 - b1
-#     xab = a.cross(b)
-#     return nil if xab.length.round(4) < TOL2
-#
-#     # Link 1st point to other segment endpoints as vectors. Must be coplanar.
-#     a1b1  = b1 - a1
-#     a1b2  = b2 - a1
-#     xa1b1 = a.cross(a1b1)
-#     xa1b2 = a.cross(a1b2)
-#     xa1b1.normalize
-#     xa1b2.normalize
-#     xab.normalize
-#     return nil unless xab.cross(xa1b1).length.round(4) < TOL2
-#     return nil unless xab.cross(xa1b2).length.round(4) < TOL2
-#
-#     # Reset.
-#     xa1b1 = a.cross(a1b1)
-#     xa1b2 = a.cross(a1b2)
-#
-#     # Both segment endpoints can't be 'behind' point.
-#     return nil if a.dot(a1b1) < 0 && a.dot(a1b2) < 0
-#
-#     # Both in 'front' of point? Pick farthest from 'a'.
-#     if a.dot(a1b1) > 0 && a.dot(a1b2) > 0
-#       lxa1b1 = xa1b1.length
-#       lxa1b2 = xa1b2.length
-#
-#       c1 = lxa1b1.round(4) < lxa1b2.round(4) ? b1 : b2
-#     else
-#       c1 = a.dot(a1b1) > 0 ? b1 : b2
-#     end
-#
-#     c1a1  = a1 - c1
-#     xc1a1 = a.cross(c1a1)
-#     d1    = a1 + xc1a1
-#     n     = a.cross(xc1a1)
-#     dot   = b.dot(n)
-#     n     = n.reverseVector if dot < 0
-#     f     = c1a1.dot(n) / b.dot(n)
-#     p0    = c1 + scalar(b, f)
-#
-#     # Intersection can't be 'behind' point.
-#     return nil if a.dot(p0 - a1) < 0
-#
-#     # Ensure intersection is sandwiched between endpoints.
-#     return nil unless pointAlongSegments?(p0, s2) && pointAlongSegments?(p0, s1)
-#
-#     p0
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
