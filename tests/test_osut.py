@@ -2446,7 +2446,179 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     # def test25_segments_triads_orientation(self):
 
-    # def test26_ulc_blc(self):
+    def test26_ulc_blc(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Regular polygon, counterclockwise yet not UpperLeftCorner (ULC).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(20, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0,  0))
+        vtx.append(openstudio.Point3d(20, 0,  0))
+
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = t.inverse() * vtx
+
+        # 1. Native ULC reordering.
+        ulc_a_vtx = openstudio.reorderULC(a_vtx)
+        ulc_vtx = t * ulc_a_vtx
+        # for vt in ulc_vtx: print(vt)
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # [ 0, 0, 10]
+        # [ 0, 0,  0]
+        self.assertAlmostEqual(ulc_vtx[3].x(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[3].y(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[3].z(), 0, places=2)
+        # ... counterclockwise, yet ULC?
+
+        # 2. OSut ULC reordering.
+        ulc_a_vtx = osut.ulc(a_vtx)
+        blc_a_vtx = osut.blc(a_vtx)
+        ulc_vtx   = t * ulc_a_vtx
+        blc_vtx   = t * blc_a_vtx
+        self.assertAlmostEqual(ulc_vtx[1].x(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[1].y(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[1].z(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].x(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].y(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].z(), 0, places=2)
+        # for vt in ulc_vtx: print(vt)
+        # [ 0, 0, 10]
+        # [ 0, 0,  0]
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # for vt in blc_vtx: print(vt)
+        # [ 0, 0,  0]
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # [ 0, 0, 10]
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Same, yet (0,0,0) is at index == 0.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,  0))
+        vtx.append(openstudio.Point3d(20, 0,  0))
+        vtx.append(openstudio.Point3d(20, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0, 10))
+
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = t.inverse() * vtx
+
+        # 1. Native ULC reordering.
+        ulc_a_vtx = openstudio.reorderULC(a_vtx)
+        ulc_vtx   = t * ulc_a_vtx
+        # for vt in ulc_vtx: print(vt)
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # [ 0, 0, 10]
+        # [ 0, 0,  0] # ... consistent with first case.
+
+        # 2. OSut ULC reordering.
+        ulc_a_vtx = osut.ulc(a_vtx)
+        blc_a_vtx = osut.blc(a_vtx)
+        ulc_vtx   = t * ulc_a_vtx
+        blc_vtx   = t * blc_a_vtx
+        self.assertAlmostEqual(ulc_vtx[1].x(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[1].y(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[1].z(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].x(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].y(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].z(), 0, places=2)
+        # for vt in ulc_vtx: print(vt)
+        # [ 0, 0, 10]
+        # [ 0, 0,  0]
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # for vt in blc_vtx: print(vt)
+        # [ 0, 0,  0]
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # [ 0, 0, 10]
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Irregular polygon, no point at 0,0,0.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(18, 0, 10))
+        vtx.append(openstudio.Point3d( 2, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0,  6))
+        vtx.append(openstudio.Point3d( 0, 0,  4))
+        vtx.append(openstudio.Point3d( 2, 0,  0))
+        vtx.append(openstudio.Point3d(18, 0,  0))
+        vtx.append(openstudio.Point3d(20, 0,  4))
+        vtx.append(openstudio.Point3d(20, 0,  6))
+
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = t.inverse() * vtx
+
+        # 1. Native ULC reordering.
+        ulc_a_vtx = openstudio.reorderULC(a_vtx)
+        ulc_vtx   = t * ulc_a_vtx
+        # for vt in ulc_vtx: print(vt)
+        # [18, 0,  0]
+        # [20, 0,  4]
+        # [20, 0,  6]
+        # [18, 0, 10]
+        # [ 2, 0, 10]
+        # [ 0, 0,  6]
+        # [ 0, 0,  4]
+        # [ 2, 0,  0] ... consistent pattern with previous cases, yet ULC?
+
+        # 2. OSut ULC reordering.
+        ulc_a_vtx = osut.ulc(a_vtx)
+        blc_a_vtx = osut.blc(a_vtx)
+        iN = osut.nearest(ulc_a_vtx)
+        iF = osut.farthest(ulc_a_vtx)
+        self.assertEqual(iN, 2)
+        self.assertEqual(iF, 6)
+        ulc_vtx   = t * ulc_a_vtx
+        blc_vtx   = t * blc_a_vtx
+        self.assertTrue(osut.areSame(ulc_vtx[2], ulc_vtx[iN]))
+        self.assertTrue(osut.areSame(blc_vtx[1], ulc_vtx[iN]))
+        # for vt in ulc_vtx: print(vt)
+        # [ 0, 0,  6]
+        # [ 0, 0,  4]
+        # [ 2, 0,  0]
+        # [18, 0,  0]
+        # [20, 0,  4]
+        # [20, 0,  6]
+        # [18, 0, 10]
+        # [ 2, 0, 10]
+        # for vt in blc_vtx: print(vt)
+        # [ 0, 0,  4]
+        # [ 2, 0,  0]
+        # [18, 0,  0]
+        # [20, 0,  4]
+        # [20, 0,  6]
+        # [18, 0, 10]
+        # [ 2, 0, 10]
+        # [ 0, 0,  6]
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(70, 45,  0))
+        vtx.append(openstudio.Point3d( 0, 45,  0))
+        vtx.append(openstudio.Point3d( 0,  0,  0))
+        vtx.append(openstudio.Point3d(70,  0,  0))
+
+        ulc_vtx = osut.ulc(vtx)
+        blc_vtx = osut.blc(vtx)
+        self.assertEqual(o.status(), 0)
+        # for vt in ulc_vtx: print(vt)
+        # [ 0, 45, 0]
+        # [ 0,  0, 0]
+        # [70,  0, 0]
+        # [70, 45, 0]
+        # for vt in blc_vtx: print(vt)
+        # [ 0,  0, 0]
+        # [70,  0, 0]
+        # [70, 45, 0]
+        # [ 0, 45, 0]
 
     # def test27_polygon_attributes(self):
 
@@ -2461,7 +2633,7 @@ class TestOSutModuleMethods(unittest.TestCase):
     # def test32_outdoor_roofs(self):
 
     # def test33_leader_line_anchors_inserts(self):
-    
+
     # def test34_generated_skylight_wells(self):
 
     def test35_facet_retrieval(self):

@@ -2591,7 +2591,7 @@ def areSame(s1=None, s2=None, indexed=True) -> bool:
             if indx is None: return False
 
             s2 = collections.deque(s2)
-            s2.rotate(indx)
+            s2.rotate(-indx)
             s2 = list(s2)
 
     # openstudio.isAlmostEqual3dPt(p1, p2, TOL) # ... from v350 onwards.
@@ -2666,7 +2666,7 @@ def nearest(pts=None, p01=None):
         return oslg.mismatch("point", p01, cl, mth)
 
     for i, pt in enumerate(pts):
-        if areSame_vtx(pt, p01): return i
+        if areSame(pt, p01): return i
 
     for i, pt in enumerate(pts):
         length01 = (pt - p01).length()
@@ -2727,7 +2727,7 @@ def farthest(pts=None, p01=None):
         return oslg.mismatch("point", p01, cl, mth)
 
     for i, pt in enumerate(pts):
-        if areSame_vtx(pt, p01): continue
+        if areSame(pt, p01): continue
 
         length01 = (pt - p01).length()
         length02 = (pt - p02).length()
@@ -2829,7 +2829,7 @@ def shareXYZ(pts=None, axs="z", val=0) -> bool:
             if abs(pt.y() - val) > CN.TOL: return False
     elif axs.lower() == "z":
         for pt in pts:
-            if abs(pt.x() - val) > CN.TOL: return False
+            if abs(pt.z() - val) > CN.TOL: return False
     else:
         return invalid("axis", mth, 2, CN.DBG, False)
 
@@ -3195,6 +3195,250 @@ def isPointAlongSegments(p0=None, sgs=[]):
         if isPointAlongSegment(p0, sg): return True
 
     return False
+
+
+def lineIntersection(s1=[], s2=[]):
+    """Returns point of intersection of 2x 3D line segments.
+
+    Args:
+        s1 (openstudio.Point3dVectorVector):
+            1st 3D line segment.
+        s2 (openstudio.Point3dVectorVector):
+            2nd 3D line segment.
+
+    Returns:
+        openStudio.Point3d: Point of intersection of both lines.
+        None: If no intersection, or invalid input (see logs).
+
+    """
+    s1  = segments(s1)
+    s2  = segments(s2)
+    if not s1: return None
+    if not s2: return None
+
+    s1 = s1[0]
+    s2 = s2[0]
+
+    # Matching segments?
+    s2x = list(s2)
+    s2x.reverse()
+    if areSame(s1, s2x): return None
+    if areSame(s1, s2) : return None
+
+    a1 = s1[0]
+    a2 = s1[1]
+    b1 = s2[0]
+    b2 = s2[1]
+
+    # Matching segment endpoints?
+    if areSame(a1, b1): return a1
+    if areSame(a2, b1): return a2
+    if areSame(a1, b2): return a1
+    if areSame(a2, b2): return a2
+
+    # Segment endpoint along opposite segment?
+    if isPointAlongSegments(a1, s2): return a1
+    if isPointAlongSegments(a2, s2): return a2
+    if isPointAlongSegments(b1, s1): return b1
+    if isPointAlongSegments(b2, s1): return b2
+
+    # Line segments as vectors. Skip if colinear.
+    a   = a2 - a1
+    b   = b2 - b1
+    xab = a.cross(b)
+    if round(xab.length(), 4) < CN.TOL2: return None
+
+    # Link 1st point to other segment endpoints as vectors. Must be coplanar.
+    a1b1  = b1 - a1
+    a1b2  = b2 - a1
+    xa1b1 = a.cross(a1b1)
+    xa1b2 = a.cross(a1b2)
+    xa1b1.normalize()
+    xa1b2.normalize()
+    xab.normalize()
+    if round(xab.cross(xa1b1).length(), 4) > CN.TOL2: return None
+    if round(xab.cross(xa1b2).length(), 4) > CN.TOL2: return None
+
+    # Reset.
+    xa1b1 = a.cross(a1b1)
+    xa1b2 = a.cross(a1b2)
+
+    # Both segment endpoints can't be 'behind' point.
+    if a.dot(a1b1) < 0 and a.dot(a1b2) < 0: return None
+
+    # Both in 'front' of point? Pick farthest from 'a'.
+    if a.dot(a1b1) > 0 and a.dot(a1b2) > 0:
+        lxa1b1 = xa1b1.length()
+        lxa1b2 = xa1b2.length()
+
+        c1 = b1 if round(lxa1b1, 4) < round(lxa1b2, 4) else b2
+    else:
+        c1 = b1 if a.dot(a1b1) > 0 else b2
+
+    c1a1  = a1 - c1
+    xc1a1 = a.cross(c1a1)
+    d1    = a1 + xc1a1
+    n     = a.cross(xc1a1)
+    dot   = b.dot(n)
+    if dot < 0: n = n.reverseVector()
+    f     = c1a1.dot(n) / b.dot(n)
+    p0    = c1 + scalar(b, f)
+
+    # Intersection can't be 'behind' point.
+    if a.dot(p0 - a1) < 0: return None
+
+    # Ensure intersection is sandwiched between endpoints.
+    if not isPointAlongSegments(p0, s2): return None
+    if not isPointAlongSegments(p0, s1): return None
+
+    return p0
+
+
+def doesLineIntersect(l=[], s=[]):
+    """Validates whether a 3D line segment intersects 3D segments, e.g. polygon.
+
+    Args:
+        l (openstudio.Point3dVector):
+            A 3D line segment.
+        s (openstudio.Point3dVector):
+            3D segments.
+
+    Returns:
+        bool: Whether a 3D line intersects 3D segments.
+        False: If invalid input (see logs).
+
+    """
+    l = segments(l)
+    s = segments(s)
+    if not l: return None
+    if not s: return None
+
+    l = l[0]
+
+    for segment in s:
+        if lineIntersection(l, segment): return True
+
+    return False
+
+
+def isClockwise(pts=None):
+    """Validates whether OpenStudio 3D points are listed clockwise, assuming
+    points have been pre-'aligned' - not just flattened along XY (i.e. Z = 0).
+
+    Args:
+        pts:
+            Pre-aligned 3D points.
+
+    Returns:
+        bool: Whether sequence is clockwise.
+        False: If invalid input (see logs).
+
+    """
+    mth = "osut.isClockwise"
+    pts = to_p3Dv(pts)
+
+    if len(pts) < 3:
+        return oslg.invalid("3+ points", mth, 1, CN.DBG, False)
+    if not shareXYZ(pts, "z"):
+        return oslg.invalid("flat points", mth, 1, CN.DBG, False)
+
+    n = openstudio.getOutwardNormal(pts)
+
+    if not n:
+        return invalid("polygon", mth, 1, CN.DBG, False)
+    elif n.get().z() > 0:
+        return False
+
+    return True
+
+
+def ulc(pts=None):
+    """Returns OpenStudio 3D points (min 3x) conforming to an UpperLeftCorner
+    (ULC) convention. Points Z-axis values must be ~= 0. Points are returned
+    counterclockwise.
+
+    Args:
+        pts:
+            Pre-aligned 3D points.
+
+    Returns:
+        openstudio.Point3dVector: ULC points (see logs if empty).
+    """
+    mth = "osut.ulc"
+    v   = openstudio.Point3dVector()
+    pts = list(to_p3Dv(pts))
+
+    if len(pts) < 3:
+        return oslg.invalid("points (3+)", mth, 1, CN.DBG, v)
+    if not shareXYZ(pts, "z"):
+        return oslg.invalid("points (aligned)", mth, 1, CN.DBG, v)
+
+    # Ensure counterclockwise sequence.
+    if isClockwise(pts): pts.reverse()
+
+    minX = min([pt.x() for pt in pts])
+    i0   = nearest(pts)
+    p0   = pts[i0]
+
+    pts_x = [pt for pt in pts if round(pt.x(), 2) == round(minX, 2)]
+    pts_x.reverse()
+    p1 = pts_x[0]
+
+    for pt in pts_x:
+        if round((pt - p0).length(), 2) > round((p1 - p0).length(), 2): p1 = pt
+
+    i1  = pts.index(p1)
+    pts = collections.deque(pts)
+    pts.rotate(-i1)
+
+    return to_p3Dv(list(pts))
+
+
+def blc(pts=None):
+    """Returns OpenStudio 3D points (min 3x) conforming to an BottomLeftCorner
+    (BLC) convention. Points Z-axis values must be ~= 0. Points are returned
+    counterclockwise.
+
+    Args:
+        pts:
+            Pre-aligned 3D points.
+
+    Returns:
+        openstudio.Point3dVector: BLC points (see logs if empty).
+    """
+    mth = "osut.blc"
+    v   = openstudio.Point3dVector()
+    pts = list(to_p3Dv(pts))
+
+    if len(pts) < 3:
+        return oslg.invalid("points (3+)", mth, 1, CN.DBG, v)
+    if not shareXYZ(pts, "z"):
+        return oslg.invalid("points (aligned)", mth, 1, CN.DBG, v)
+
+    # Ensure counterclockwise sequence.
+    if isClockwise(pts): pts.reverse()
+
+    minX = min([pt.x() for pt in pts])
+    i0   = nearest(pts)
+    p0   = pts[i0]
+
+    pts_x = [pt for pt in pts if round(pt.x(), 2) == round(minX, 2)]
+    pts_x.reverse()
+    p1 = pts_x[0]
+
+    if p0 in pts_x:
+        pts = collections.deque(pts)
+        pts.rotate(-i0)
+        return to_p3Dv(list(pts))
+
+    for pt in pts_x:
+        if round((pt - p0).length(), 2) < round((p1 - p0).length(), 2): p1 = pt
+
+    i1  = pts.index(p1)
+    pts = collections.deque(pts)
+    pts.rotate(-i1)
+
+    return to_p3Dv(list(pts))
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
