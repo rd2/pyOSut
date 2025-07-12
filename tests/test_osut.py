@@ -27,14 +27,10 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-sys.path.append("./src/osut")
-
-import os
 import math
 import unittest
 import openstudio
-import osut
+from src.osut import osut
 
 DBG  = osut.CN.DBG
 INF  = osut.CN.INF
@@ -788,7 +784,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
             # Same vertex sequence? Should be in reverse order.
             for i, vtx in enumerate(adj.vertices()):
-                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
+                self.assertTrue(osut.areSame(vtx, s.vertices()[i]))
 
             self.assertEqual(adj.surfaceType(), "RoofCeiling")
             self.assertEqual(s.surfaceType(), "RoofCeiling")
@@ -802,7 +798,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             rvtx.reverse()
 
             for i, vtx in enumerate(rvtx):
-                self.assertTrue(osut.is_same_vtx(vtx, s.vertices()[i]))
+                self.assertTrue(osut.areSame(vtx, s.vertices()[i]))
 
         # After the fix.
         if version >= 350:
@@ -1282,7 +1278,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        version = int("".join(openstudio.openStudioVersion().split(".")))
+        # version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
         path  = openstudio.path("./tests/files/osms/out/seb2.osm")
@@ -1303,7 +1299,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             if not s.outsideBoundaryCondition().lower() == "outdoors": continue
             if not s.surfaceType().lower() == "wall": continue
 
-            self.assertFalse(osut.is_spandrel(s))
+            self.assertFalse(osut.areSpandrels(s))
 
             if "smalloffice 1" in s.nameString().lower():
                 office_walls.append(s)
@@ -1318,12 +1314,19 @@ class TestOSutModuleMethods(unittest.TestCase):
         tag = "spandrel"
 
         for wall in (office_walls + plenum_walls):
+            # First, failed attempts:
+            self.assertTrue(wall.additionalProperties().setFeature(tag, "True"))
+            self.assertTrue(wall.additionalProperties().hasFeature(tag))
+            prop = wall.additionalProperties().getFeatureAsBoolean(tag)
+            self.assertFalse(prop)
+
+            # Successful attempts.
             self.assertTrue(wall.additionalProperties().setFeature(tag, True))
             self.assertTrue(wall.additionalProperties().hasFeature(tag))
             prop = wall.additionalProperties().getFeatureAsBoolean(tag)
             self.assertTrue(prop)
             self.assertTrue(prop.get())
-            self.assertTrue(osut.is_spandrel(wall))
+            self.assertTrue(osut.areSpandrels(wall))
 
         self.assertEqual(o.status(), 0)
 
@@ -1751,7 +1754,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        msg = "'model' str? expecting Model (osut.has_airLoopsHVAC)"
+        msg = "'model' str? expecting Model (osut.hasAirLoopsHVAC)"
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
@@ -1762,9 +1765,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = model.get()
 
         self.assertEqual(o.clean(), DBG)
-        self.assertTrue(osut.has_airLoopsHVAC(model))
+        self.assertTrue(osut.hasAirLoopsHVAC(model))
         self.assertEqual(o.status(), 0)
-        self.assertEqual(osut.has_airLoopsHVAC(""), False)
+        self.assertEqual(osut.hasAirLoopsHVAC(""), False)
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], msg)
@@ -1779,9 +1782,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = model.get()
 
         self.assertEqual(o.clean(), DBG)
-        self.assertFalse(osut.has_airLoopsHVAC(model))
+        self.assertFalse(osut.hasAirLoopsHVAC(model))
         self.assertEqual(o.status(), 0)
-        self.assertEqual(osut.has_airLoopsHVAC(""), False)
+        self.assertEqual(osut.hasAirLoopsHVAC(""), False)
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], msg)
@@ -1796,7 +1799,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
         path  = openstudio.path("./tests/files/osms/out/seb2.osm")
@@ -1806,19 +1808,57 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         # Tag "Entry way 1" in SEB as a vestibule.
         tag   = "vestibule"
+        msg   = "Invalid 'vestibule' arg #1 (osut.areVestibules)"
         entry = model.getSpaceByName("Entry way 1")
         self.assertTrue(entry)
         entry = entry.get()
+        sptype = entry.spaceType()
+        self.assertTrue(sptype)
+        sptype = sptype.get()
+        self.assertFalse(sptype.standardsSpaceType())
         self.assertFalse(entry.additionalProperties().hasFeature(tag))
-        self.assertFalse(osut.is_vestibule(entry))
+        self.assertFalse(osut.areVestibules(entry))
         self.assertEqual(o.status(), 0)
+
+        # First, failed attempts:
+        self.assertTrue(sptype.setStandardsSpaceType("vestibool"))
+        self.assertFalse(osut.areVestibules(entry))
+        self.assertEqual(o.status(), 0)
+        sptype.resetStandardsSpaceType()
+
+        self.assertTrue(entry.additionalProperties().setFeature(tag, False))
+        self.assertTrue(entry.additionalProperties().hasFeature(tag))
+        prop = entry.additionalProperties().getFeatureAsBoolean(tag)
+        self.assertTrue(prop)
+        self.assertFalse(prop.get())
+        self.assertFalse(osut.areVestibules(entry))
+        self.assertTrue(entry.additionalProperties().resetFeature(tag))
+        self.assertEqual(o.status(), 0)
+
+        self.assertTrue(entry.additionalProperties().setFeature(tag, "True"))
+        self.assertTrue(entry.additionalProperties().hasFeature(tag))
+        prop = entry.additionalProperties().getFeatureAsBoolean(tag)
+        self.assertFalse(prop)
+        self.assertFalse(osut.areVestibules(entry))
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], msg)
+        self.assertTrue(o.clean(), DBG)
+        self.assertTrue(entry.additionalProperties().resetFeature(tag))
+
+        # Successful attempts.
+        self.assertTrue(sptype.setStandardsSpaceType("vestibule"))
+        self.assertTrue(osut.areVestibules(entry))
+        self.assertEqual(o.status(), 0)
+        sptype.resetStandardsSpaceType()
 
         self.assertTrue(entry.additionalProperties().setFeature(tag, True))
         self.assertTrue(entry.additionalProperties().hasFeature(tag))
         prop = entry.additionalProperties().getFeatureAsBoolean(tag)
         self.assertTrue(prop)
         self.assertTrue(prop.get())
-        self.assertTrue(osut.is_vestibule(entry))
+        self.assertTrue(osut.areVestibules(entry))
+        self.assertTrue(entry.additionalProperties().resetFeature(tag))
         self.assertEqual(o.status(), 0)
 
         del(model)
@@ -1832,23 +1872,23 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         cl1 = openstudio.model.Space
         cl2 = openstudio.model.Model
-        mt1 = "(osut.is_plenum)"
-        mt2 = "(osut.has_heatingTemperatureSetpoints)"
+        mt1 = "(osut.arePlenums)"
+        mt2 = "(osut.hasHeatingTemperatureSetpoints)"
         mt3 = "(osut.setpoints)"
-        ms1 = "'space' NoneType? expecting %s %s" % (cl1.__name__, mt1)
+        ms1 = "'set' NoneType? expecting list %s" % mt1
         ms2 = "'model' NoneType? expecting %s %s" % (cl2.__name__, mt2)
         ms3 = "'space' Nonetype? expecting %s %s" % (cl1.__name__, mt3)
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Stress tests.
         self.assertEqual(o.clean(), DBG)
-        self.assertFalse(osut.is_plenum(None))
+        self.assertFalse(osut.arePlenums(None))
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], ms1)
         self.assertEqual(o.clean(), DBG)
 
-        self.assertFalse(osut.has_heatingTemperatureSetpoints(None))
+        self.assertFalse(osut.hasHeatingTemperatureSetpoints(None))
         self.assertTrue(o.is_debug())
         self.assertTrue(len(o.logs()), 1)
         self.assertTrue(o.logs()[0]["message"], ms2)
@@ -1888,8 +1928,8 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(heat["dual"])
             self.assertTrue(cool["dual"])
 
-            self.assertFalse(osut.is_plenum(space))
-            self.assertFalse(osut.is_unconditioned(space))
+            self.assertFalse(osut.arePlenums(space))
+            self.assertFalse(osut.isUnconditioned(space))
             self.assertAlmostEqual(spts["heating"], 22.11, places=2)
             self.assertAlmostEqual(spts["cooling"], 22.78, places=2)
             self.assertEqual(o.status(), 0)
@@ -1909,8 +1949,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         # "Plenum" spaceType triggers an INDIRECTLYCONDITIONED status; returns
         # defaulted setpoint temperatures.
         self.assertFalse(plenum.partofTotalFloorArea())
-        self.assertTrue(osut.is_plenum(plenum))
-        self.assertFalse(osut.is_unconditioned(plenum))
+        self.assertTrue(osut.arePlenums(plenum))
+        self.assertFalse(osut.isUnconditioned(plenum))
         self.assertAlmostEqual(stps["heating"], 21.00, places=2)
         self.assertAlmostEqual(stps["cooling"], 24.00, places=2)
         self.assertEqual(o.status(), 0)
@@ -1921,8 +1961,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         val  = "Open area 1"
         self.assertTrue(plenum.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(plenum)
-        self.assertTrue(osut.is_plenum(plenum))
-        self.assertFalse(osut.is_unconditioned(plenum))
+        self.assertTrue(osut.arePlenums(plenum))
+        self.assertFalse(osut.isUnconditioned(plenum))
         self.assertAlmostEqual(stps["heating"], 22.11, places=2)
         self.assertAlmostEqual(stps["cooling"], 22.78, places=2)
         self.assertEqual(o.status(), 0)
@@ -1932,8 +1972,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         key = "space_conditioning_category"
         val = "Unconditioned"
         self.assertTrue(plenum.additionalProperties().setFeature(key, val))
-        self.assertTrue(osut.is_plenum(plenum))
-        self.assertTrue(osut.is_unconditioned(plenum))
+        self.assertTrue(osut.arePlenums(plenum))
+        self.assertTrue(osut.isUnconditioned(plenum))
         self.assertFalse(osut.setpoints(plenum)["heating"])
         self.assertFalse(osut.setpoints(plenum)["cooling"])
         self.assertEqual(o.status(), 0)
@@ -1950,8 +1990,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         # some heating and some cooling, i.e. not strictly REFRIGERATED nor
         # SEMIHEATED.
         for space in model.getSpaces():
-            self.assertFalse(osut.is_refrigerated(space))
-            self.assertFalse(osut.is_semiheated(space))
+            self.assertFalse(osut.isRefrigerated(space))
+            self.assertFalse(osut.isSemiheated(space))
 
         del(model)
 
@@ -1981,8 +2021,8 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(cool["dual"])
 
             self.assertTrue(space.partofTotalFloorArea())
-            self.assertFalse(osut.is_plenum(space))
-            self.assertFalse(osut.is_unconditioned(space))
+            self.assertFalse(osut.arePlenums(space))
+            self.assertFalse(osut.isUnconditioned(space))
             self.assertAlmostEqual(stps["heating"], 21.11, places=2)
             self.assertAlmostEqual(stps["cooling"], 23.89, places=2)
 
@@ -1997,8 +2037,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(cool["spt"])
         self.assertFalse(heat["dual"])
         self.assertFalse(cool["dual"])
-        self.assertFalse(osut.is_plenum(attic))
-        self.assertTrue(osut.is_unconditioned(attic))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertTrue(osut.isUnconditioned(attic))
         self.assertFalse(attic.partofTotalFloorArea())
         self.assertEqual(o.status(), 0)
 
@@ -2007,8 +2047,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         val = "Core_ZN"
         self.assertTrue(attic.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(attic)
-        self.assertFalse(osut.is_plenum(attic))
-        self.assertFalse(osut.is_unconditioned(attic))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertFalse(osut.isUnconditioned(attic))
         self.assertAlmostEqual(stps["heating"], 21.11, places=2)
         self.assertAlmostEqual(stps["cooling"], 23.89, places=2)
         self.assertEqual(o.status(), 0)
@@ -2020,8 +2060,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         msg = "Invalid '%s:%s' (osut.setpoints)" % (key, val)
         self.assertTrue(attic.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(attic)
-        self.assertFalse(osut.is_plenum(attic))
-        self.assertTrue(osut.is_unconditioned(attic))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertTrue(osut.isUnconditioned(attic))
         self.assertFalse(stps["heating"])
         self.assertFalse(stps["cooling"])
         self.assertTrue(attic.additionalProperties().hasFeature(key))
@@ -2030,7 +2070,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(cnd.get(), val)
         self.assertTrue(o.is_error())
 
-        # 3x same error, as is_plenum/is_unconditioned call setpoints(attic).
+        # 3x same error, as arePlenums/isUnconditioned call setpoints(attic).
         self.assertEqual(len(o.logs()), 3)
         for l in o.logs(): self.assertEqual(l["message"], msg)
 
@@ -2040,10 +2080,10 @@ class TestOSutModuleMethods(unittest.TestCase):
         val = "Semiheated"
         self.assertTrue(attic.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(attic)
-        self.assertFalse(osut.is_plenum(attic))
-        self.assertFalse(osut.is_unconditioned(attic))
-        self.assertTrue(osut.is_semiheated(attic))
-        self.assertFalse(osut.is_refrigerated(attic))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertFalse(osut.isUnconditioned(attic))
+        self.assertTrue(osut.isSemiheated(attic))
+        self.assertFalse(osut.isRefrigerated(attic))
         self.assertAlmostEqual(stps["heating"], 14.00, places=2)
         self.assertFalse(stps["cooling"])
         self.assertEqual(o.status(), 0)
@@ -2272,30 +2312,432 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         del(model)
 
-    # def test22_model_transformation(self):
-    #
+    def test22_model_transformation(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+        translator = openstudio.osversion.VersionTranslator()
+
+        # Successful test.
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        for space in model.getSpaces():
+            tr = osut.transforms(space)
+            self.assertTrue(isinstance(tr, dict))
+            self.assertTrue("t" in tr)
+            self.assertTrue("r" in tr)
+            self.assertTrue(isinstance(tr["t"], openstudio.Transformation))
+            self.assertAlmostEqual(tr["r"], 0, places=2)
+
+        # Invalid input test.
+        self.assertEqual(o.status(), 0)
+        m1 = "'group' NoneType? expecting PlanarSurfaceGroup (osut.transforms)"
+        tr = osut.transforms(None)
+        self.assertTrue(isinstance(tr, dict))
+        self.assertTrue("t" in tr)
+        self.assertTrue("r" in tr)
+        self.assertFalse(tr["t"])
+        self.assertFalse(tr["r"])
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertEqual(o.clean(), DBG)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Realignment of flat surfaces.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(  1,  4,  0))
+        vtx.append(openstudio.Point3d(  2,  2,  0))
+        vtx.append(openstudio.Point3d(  6,  4,  0))
+        vtx.append(openstudio.Point3d(  5,  6,  0))
+
+        origin  = vtx[1]
+        hyp     = (origin - vtx[0]).length()
+        hyp2    = (origin - vtx[2]).length()
+        right   = openstudio.Point3d(origin.x()+10, origin.y(), origin.z()   )
+        zenith  = openstudio.Point3d(origin.x(),    origin.y(), origin.z()+10)
+        seg     = vtx[2] - origin
+        axis    = zenith - origin
+        droite  = right  - origin
+        radians = openstudio.getAngle(droite, seg)
+        degrees = openstudio.radToDeg(radians)
+        self.assertAlmostEqual(degrees, 26.565, places=3)
+
+        r = openstudio.Transformation.rotation(origin, axis, radians)
+        a = r.inverse() * vtx
+
+        self.assertTrue(osut.areSame(a[1], vtx[1]))
+        self.assertAlmostEqual(a[0].x() - a[1].x(), 0)
+        self.assertAlmostEqual(a[2].x() - a[1].x(), hyp2)
+        self.assertAlmostEqual(a[3].x() - a[2].x(), 0)
+        self.assertAlmostEqual(a[0].y() - a[1].y(), hyp)
+        self.assertAlmostEqual(a[2].y() - a[1].y(), 0)
+        self.assertAlmostEqual(a[3].y() - a[1].y(), hyp)
+
+        pts = r * a
+        self.assertTrue(osut.areSame(pts, vtx))
+
+        # ... to be completed later.
+
     # def test23_fits_overlaps(self):
-    #
-    # def test24_triangulation(self):
-    #
-    # def test25_segments_triads_orientation(self):
-    #
-    # def test26_ulc_blc(self):
-    #
+
+    def test24_triangulation(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        holes = openstudio.Point3dVectorVector()
+
+        # Regular polygon, counterclockwise yet not UpperLeftCorner (ULC).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(20, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0,  0))
+
+        # Polygons must be 'aligned', and in a clockwise sequence.
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = list(t.inverse() * vtx)
+        a_vtx.reverse()
+        results = openstudio.computeTriangulation(a_vtx, holes)
+        self.assertEqual(len(results), 1)
+        vtx0 = list(results[0])
+        vtx0.reverse()
+        # for vt0 in vtx0: print(vt0) # == initial triangle, yet flat.
+        # [20, 10, 0]
+        # [ 0, 10, 0]
+        # [ 0,  0, 0]
+
+        vtx.append(openstudio.Point3d(20, 0,  0))
+        # vtx << OpenStudio::Point3d.new(20, 0,  0)
+        # t       = OpenStudio::Transformation.alignFace(vtx)
+        # a_vtx   = (t.inverse * vtx).reverse
+        # results = OpenStudio.computeTriangulation(a_vtx, holes)
+        # expect(results.size).to eq(2)
+        # results.each { |result| puts result }
+        # [ 0, 10, 0]
+        # [20, 10, 0]
+        # [20,  0, 0]
+        #
+        # [ 0,  0, 0]
+        # [ 0, 10, 0]
+        # [20,  0, 0]
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = list(t.inverse() * vtx)
+        a_vtx.reverse()
+        results = openstudio.computeTriangulation(a_vtx, holes)
+        self.assertEqual(len(results), 2)
+        vtx0 = list(results[0])
+        vtx1 = list(results[0])
+        # for vt0 in vtx0: print(vt0)
+        # [ 0, 10, 0]
+        # [20, 10, 0]
+        # [20,  0, 0]
+        # for vt1 in vtx1: print(vt1)
+        # [ 0, 10, 0]
+        # [20, 10, 0]
+        # [20,  0, 0]
+
+    def test25_segments_triads_orientation(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        # Enclosed polygon.
+        p0 = openstudio.Point3d(-5, -5, -5)
+        p1 = openstudio.Point3d( 5,  5, -5)
+        p2 = openstudio.Point3d(15, 15, -5)
+        p3 = openstudio.Point3d(15, 25, -5)
+
+        # Independent line segment.
+        p4 = openstudio.Point3d(10,-30, -5)
+        p5 = openstudio.Point3d(10, 10, -5)
+        p6 = openstudio.Point3d(10, 40, -5)
+
+        # Independent points.
+        p7 = openstudio.Point3d(14, 20, -5)
+        p8 = openstudio.Point3d(-9, -9, -5)
+
+        # Stress tests.
+        m1 = "Invalid '+n collinears' (osut.collinears)"
+        m2 = "Invalid '-n collinears' (osut.collinears)"
+
+        collinears = osut.collinears([p0, p1, p3, p8])
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8])
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], 3)
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], 1)
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], -1)
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p1))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], -2)
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], 6)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertTrue(o.clean(), DBG)
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], -6)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m2)
+        self.assertTrue(o.clean(), DBG)
+
+        # CASE a1: 2x end-to-end line segments (returns matching endpoints).
+        self.assertTrue(osut.doesLineIntersect([p0, p1], [p1, p2]))
+        pt = osut.lineIntersection([p0, p1], [p1, p2])
+        self.assertTrue(osut.areSame(pt, p1))
+        #
+        # # CASE a2: as a1, sequence of line segment endpoints doesn't matter.
+        self.assertTrue(osut.doesLineIntersect([p1, p0], [p1, p2]))
+        pt = osut.lineIntersection([p1, p0], [p1, p2])
+        self.assertTrue(osut.areSame(pt, p1))
+        #
+        # # CASE b1: 2x right-angle line segments, with 1x matching at corner.
+        self.assertTrue(osut.doesLineIntersect([p1, p2], [p1, p3]))
+        pt = osut.lineIntersection([p1, p2], [p2, p3])
+        self.assertTrue(osut.areSame(pt, p2))
+        #
+        # # CASE b2: as b1, sequence of segments doesn't matter.
+        self.assertTrue(osut.doesLineIntersect([p2, p3], [p1, p2]))
+        pt = osut.lineIntersection([p2, p3], [p1, p2])
+        self.assertTrue(osut.areSame(pt, p2))
+
+        # CASE c: 2x right-angle line segments, yet disconnected.
+        self.assertFalse(osut.doesLineIntersect([p0, p1], [p2, p3]))
+        pt = osut.lineIntersection([p0, p1], [p2, p3])
+        self.assertFalse(pt)
+
+        # CASE d: 2x connected line segments, acute angle.
+        self.assertTrue(osut.doesLineIntersect([p0, p2], [p3, p0]))
+        pt = osut.lineIntersection([p0, p2], [p3, p0])
+        self.assertTrue(osut.areSame(pt, p0))
+        #
+        # # CASE e1: 2x disconnected line segments, right angle.
+        self.assertTrue(osut.doesLineIntersect([p0, p2], [p4, p6]))
+        pt = osut.lineIntersection([p0, p2], [p4, p6])
+        self.assertTrue(osut.areSame(pt, p5))
+        #
+        # # CASE e2: as e1, sequence of line segment endpoints doesn't matter.
+        self.assertTrue(osut.doesLineIntersect([p0, p2], [p6, p4]))
+        pt = osut.lineIntersection([p0, p2], [p6, p4])
+        self.assertTrue(osut.areSame(pt, p5))
+
+
+    def test26_ulc_blc(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Regular polygon, counterclockwise yet not UpperLeftCorner (ULC).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(20, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0,  0))
+        vtx.append(openstudio.Point3d(20, 0,  0))
+
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = t.inverse() * vtx
+
+        # 1. Native ULC reordering.
+        ulc_a_vtx = openstudio.reorderULC(a_vtx)
+        ulc_vtx = t * ulc_a_vtx
+        # for vt in ulc_vtx: print(vt)
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # [ 0, 0, 10]
+        # [ 0, 0,  0]
+        self.assertAlmostEqual(ulc_vtx[3].x(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[3].y(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[3].z(), 0, places=2)
+        # ... counterclockwise, yet ULC?
+
+        # 2. OSut ULC reordering.
+        ulc_a_vtx = osut.ulc(a_vtx)
+        blc_a_vtx = osut.blc(a_vtx)
+        ulc_vtx   = t * ulc_a_vtx
+        blc_vtx   = t * blc_a_vtx
+        self.assertAlmostEqual(ulc_vtx[1].x(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[1].y(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[1].z(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].x(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].y(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].z(), 0, places=2)
+        # for vt in ulc_vtx: print(vt)
+        # [ 0, 0, 10]
+        # [ 0, 0,  0]
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # for vt in blc_vtx: print(vt)
+        # [ 0, 0,  0]
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # [ 0, 0, 10]
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Same, yet (0,0,0) is at index == 0.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,  0))
+        vtx.append(openstudio.Point3d(20, 0,  0))
+        vtx.append(openstudio.Point3d(20, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0, 10))
+
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = t.inverse() * vtx
+
+        # 1. Native ULC reordering.
+        ulc_a_vtx = openstudio.reorderULC(a_vtx)
+        ulc_vtx   = t * ulc_a_vtx
+        # for vt in ulc_vtx: print(vt)
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # [ 0, 0, 10]
+        # [ 0, 0,  0] # ... consistent with first case.
+
+        # 2. OSut ULC reordering.
+        ulc_a_vtx = osut.ulc(a_vtx)
+        blc_a_vtx = osut.blc(a_vtx)
+        ulc_vtx   = t * ulc_a_vtx
+        blc_vtx   = t * blc_a_vtx
+        self.assertAlmostEqual(ulc_vtx[1].x(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[1].y(), 0, places=2)
+        self.assertAlmostEqual(ulc_vtx[1].z(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].x(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].y(), 0, places=2)
+        self.assertAlmostEqual(blc_vtx[0].z(), 0, places=2)
+        # for vt in ulc_vtx: print(vt)
+        # [ 0, 0, 10]
+        # [ 0, 0,  0]
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # for vt in blc_vtx: print(vt)
+        # [ 0, 0,  0]
+        # [20, 0,  0]
+        # [20, 0, 10]
+        # [ 0, 0, 10]
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Irregular polygon, no point at 0,0,0.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(18, 0, 10))
+        vtx.append(openstudio.Point3d( 2, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0,  6))
+        vtx.append(openstudio.Point3d( 0, 0,  4))
+        vtx.append(openstudio.Point3d( 2, 0,  0))
+        vtx.append(openstudio.Point3d(18, 0,  0))
+        vtx.append(openstudio.Point3d(20, 0,  4))
+        vtx.append(openstudio.Point3d(20, 0,  6))
+
+        t = openstudio.Transformation.alignFace(vtx)
+        a_vtx = t.inverse() * vtx
+
+        # 1. Native ULC reordering.
+        ulc_a_vtx = openstudio.reorderULC(a_vtx)
+        ulc_vtx   = t * ulc_a_vtx
+        # for vt in ulc_vtx: print(vt)
+        # [18, 0,  0]
+        # [20, 0,  4]
+        # [20, 0,  6]
+        # [18, 0, 10]
+        # [ 2, 0, 10]
+        # [ 0, 0,  6]
+        # [ 0, 0,  4]
+        # [ 2, 0,  0] ... consistent pattern with previous cases, yet ULC?
+
+        # 2. OSut ULC reordering.
+        ulc_a_vtx = osut.ulc(a_vtx)
+        blc_a_vtx = osut.blc(a_vtx)
+        iN = osut.nearest(ulc_a_vtx)
+        iF = osut.farthest(ulc_a_vtx)
+        self.assertEqual(iN, 2)
+        self.assertEqual(iF, 6)
+        ulc_vtx   = t * ulc_a_vtx
+        blc_vtx   = t * blc_a_vtx
+        self.assertTrue(osut.areSame(ulc_vtx[2], ulc_vtx[iN]))
+        self.assertTrue(osut.areSame(blc_vtx[1], ulc_vtx[iN]))
+        # for vt in ulc_vtx: print(vt)
+        # [ 0, 0,  6]
+        # [ 0, 0,  4]
+        # [ 2, 0,  0]
+        # [18, 0,  0]
+        # [20, 0,  4]
+        # [20, 0,  6]
+        # [18, 0, 10]
+        # [ 2, 0, 10]
+        # for vt in blc_vtx: print(vt)
+        # [ 0, 0,  4]
+        # [ 2, 0,  0]
+        # [18, 0,  0]
+        # [20, 0,  4]
+        # [20, 0,  6]
+        # [18, 0, 10]
+        # [ 2, 0, 10]
+        # [ 0, 0,  6]
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(70, 45,  0))
+        vtx.append(openstudio.Point3d( 0, 45,  0))
+        vtx.append(openstudio.Point3d( 0,  0,  0))
+        vtx.append(openstudio.Point3d(70,  0,  0))
+
+        ulc_vtx = osut.ulc(vtx)
+        blc_vtx = osut.blc(vtx)
+        self.assertEqual(o.status(), 0)
+        # for vt in ulc_vtx: print(vt)
+        # [ 0, 45, 0]
+        # [ 0,  0, 0]
+        # [70,  0, 0]
+        # [70, 45, 0]
+        # for vt in blc_vtx: print(vt)
+        # [ 0,  0, 0]
+        # [70,  0, 0]
+        # [70, 45, 0]
+        # [ 0, 45, 0]
+
     # def test27_polygon_attributes(self):
-    #
+
     # def test28_subsurface_insertions(self):
-    #
+
     # def test29_surface_width_height(self):
-    #
+
     # def test30_wwr_insertions(self):
-    #
+
     # def test31_convexity(self):
-    #
+
     # def test32_outdoor_roofs(self):
-    #
+
     # def test33_leader_line_anchors_inserts(self):
-    #
+
     # def test34_generated_skylight_wells(self):
 
     def test35_facet_retrieval(self):

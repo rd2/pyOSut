@@ -209,6 +209,51 @@ def uo() -> dict:
     return _uo
 
 
+def each_cons(it, n):
+    """A proxy for Ruby enumerate's 'each_cons(n)' method.
+
+    Args:
+        it:
+            A sequence.
+        n (int):
+            The number of sequential items in sequence.
+
+    Returns:
+        tuple: n-sized sequenced items.
+
+    """
+    # see: docs.ruby-lang.org/en/3.2/enumerate.html#method-i-each_cons
+    #
+    # James Wong's Python workaround implementation:
+    # stackoverflow.com/questions/5878403/python-equivalent-to-rubys-each-cons
+
+    # Convert as iterator.
+    it  = iter(it)
+    deq = collections.deque()
+
+    # Insert first n items to a list first.
+    for _ in range(n):
+        try:
+            deq.append(next(it))
+        except StopIteration:
+            for _ in range(n - len(deq)):
+                deq.append(None)
+            yield tuple(deq)
+            return
+
+    yield tuple(deq)
+
+    # Main loop.
+    while True:
+        try:
+            val = next(it)
+        except StopIteration:
+            return
+        deq.popleft()
+        deq.append(val)
+        yield tuple(deq)
+
+
 def genConstruction(model=None, specs=dict()):
     """Generates an OpenStudio multilayered construction, + materials if needed.
 
@@ -844,7 +889,7 @@ def holdsConstruction(set=None, base=None, gr=False, ex=False, type=""):
     else:
         return oslg.invalid("surface type", mth, 5, CN.DBG, False)
 
-    if not c: return False
+    if c is None: return False
 
     if type in t1:
         if type == "roofceiling":
@@ -951,7 +996,7 @@ def defaultConstructionSet(s=None):
     return None
 
 
-def are_standardOpaqueLayers(lc=None) -> bool:
+def areStandardOpaqueLayers(lc=None) -> bool:
     """Validates if every material in a layered construction is standard/opaque.
 
     Args:
@@ -963,7 +1008,7 @@ def are_standardOpaqueLayers(lc=None) -> bool:
         False: If invalid inputs (see logs).
 
     """
-    mth = "osut.are_standardOpaqueLayers"
+    mth = "osut.areStandardOpaqueLayers"
     cl  = openstudio.model.LayeredConstruction
 
     if not isinstance(lc, cl):
@@ -993,7 +1038,7 @@ def thickness(lc=None) -> float:
 
     if not isinstance(lc, cl):
         return oslg.mismatch("lc", lc, cl, mth, CN.DBG, 0.0)
-    if not are_standardOpaqueLayers(lc):
+    if not areStandardOpaqueLayers(lc):
         oslg.log(CN.ERR, "holding non-StandardOpaqueMaterial(s) %s" % mth)
         return d
 
@@ -1180,44 +1225,49 @@ def insulatingLayer(lc=None) -> dict:
     return res
 
 
-def is_spandrel(s=None) -> bool:
-    """Validates whether opaque surface can be considered as a curtain wall
-    (or similar technology) spandrel, regardless of construction layers, by
-    looking up AdditionalProperties or its identifier.
+def areSpandrels(set=None) -> bool:
+    """Validates whether one or more opaque surface(s) can be considered as
+    curtain wall (or similar technology) spandrels, regardless of construction
+    layers, by looking up AdditionalProperties or identifiers.
 
     Args:
-        s (openstudio.model.Surface):
-            An opaque surface.
+        set (list):
+            One or more openstudio.model.Surface instances.
 
     Returns:
-        bool: Whether surface can be considered 'spandrel'.
+        bool: Whether surface(s) can be considered 'spandrels'.
         False: If invalid input (see logs).
     """
-    mth = "osut.is_spandrel"
+    mth = "osut.areSpandrels"
     cl  = openstudio.model.Surface
 
-    if not isinstance(s, cl):
-        return oslg.mismatch("surface", s, cl, mth, CN.DBG, False)
+    if isinstance(set, cl):
+        set = [set]
+    else:
+        try:
+            set = list(set)
+        except:
+            return oslg.mismatch("set", set, list, mth, CN.DBG, False)
 
-    # Prioritize AdditionalProperties route.
-    if s.additionalProperties().hasFeature("spandrel"):
-        val = s.additionalProperties().getFeatureAsBoolean("spandrel")
+    for i, s in enumerate(set):
+        if not isinstance(s, cl):
+            return oslg.mismatch("surface %d" % i, s, cl, mth, CN.DBG, False)
 
-        if not val:
-            return oslg.invalid("spandrel", mth, 1, CN.ERR, False)
+        if s.additionalProperties().hasFeature("spandrel"):
+            val = s.additionalProperties().getFeatureAsBoolean("spandrel")
 
-        val = val.get()
+            if val:
+                if val.get() is True: continue
+                else: return False
+            else:
+                oslg.invalid("spandrel %d" % i, mth, 1, CN.ERR)
 
-        if not isinstance(val, bool):
-            return invalid("spandrel bool", mth, 1, CN.ERR, False)
+        if "spandrel" not in s.nameString().lower(): return False
 
-        return val
-
-    # Fallback: check for 'spandrel' in surface name.
-    return "spandrel" in s.nameString().lower()
+    return True
 
 
-def is_fenestration(s=None) -> bool:
+def isFenestrated(s=None) -> bool:
     """Validates whether a sub surface is fenestrated.
 
     Args:
@@ -1229,7 +1279,7 @@ def is_fenestration(s=None) -> bool:
         False: If invalid input (see logs).
 
     """
-    mth = "osut.is_fenestration"
+    mth = "osut.isFenestrated"
     cl  = openstudio.model.SubSurface
 
     if not isinstance(s, cl):
@@ -1249,7 +1299,7 @@ def is_fenestration(s=None) -> bool:
     return True
 
 
-def has_airLoopsHVAC(model=None) -> bool:
+def hasAirLoopsHVAC(model=None) -> bool:
     """Validates if model has zones with HVAC air loops.
 
     Args:
@@ -1260,7 +1310,7 @@ def has_airLoopsHVAC(model=None) -> bool:
         bool: Whether model has HVAC air loops.
         False: If invalid input (see logs).
     """
-    mth = "osut.has_airLoopsHVAC"
+    mth = "osut.hasAirLoopsHVAC"
     cl  = openstudio.model.Model
 
     if not isinstance(model, cl):
@@ -1509,20 +1559,20 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 if coil.heatingControlTemperatureSchedule():
                     sched = coil.heatingControlTemperatureSchedule().get()
 
-        if not sched: continue
+        if sched is None: continue
 
         if sched.to_ScheduleRuleset():
             sched = sched.to_ScheduleRuleset().get()
             maximum = scheduleRulesetMinMax(sched)["max"]
 
             if maximum:
-                if not res["spt"] or res["spt"] < maximum:
+                if res["spt"] is None or res["spt"] < maximum:
                     res["spt"] = maximum
 
             dd = sched.winterDesignDaySchedule()
 
             if dd.values():
-                if not res["spt"] or res["spt"] < max(dd.values()):
+                if res["spt"] is None or res["spt"] < max(dd.values()):
                     res["spt"] = max(dd.values())
 
         if sched.to_ScheduleConstant():
@@ -1530,7 +1580,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
             maximum = scheduleConstantMinMax(sched)["max"]
 
             if maximum:
-                if not res["spt"] or res["spt"] < maximum:
+                if res["spt"] is None or res["spt"] < maximum:
                     res["spt"] = maximum
 
         if sched.to_ScheduleCompact():
@@ -1538,7 +1588,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
             maximum = scheduleCompactMinMax(sched)["max"]
 
             if maximum:
-                if not res["spt"] or res["spt"] < maximum:
+                if res["spt"] is None or res["spt"] < maximum:
                     res["spt"] = maximum
 
         if sched.to_ScheduleInterval():
@@ -1546,7 +1596,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
             maximum = scheduleIntervalMinMax(sched)["max"]
 
             if maximum:
-                if not res["spt"] or res["spt"] < maximum:
+                if res["spt"] is None or res["spt"] < maximum:
                     res["spt"] = maximum
 
     if not zone.thermostat(): return res
@@ -1571,13 +1621,13 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 maximum = scheduleRulesetMinMax(sched)["max"]
 
                 if maximum:
-                    if not res["spt"] or res["spt"] < maximum:
+                    if res["spt"] is None or res["spt"] < maximum:
                         res["spt"] = maximum
 
                 dd = sched.winterDesignDaySchedule()
 
                 if dd.values():
-                    if not res["spt"] or res["spt"] < max(dd.values()):
+                    if res["spt"] is None or res["spt"] < max(dd.values()):
                         res["spt"] = max(dd.values())
 
             if sched.to_ScheduleConstant():
@@ -1585,7 +1635,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 maximum = scheduleConstantMinMax(sched)["max"]
 
                 if maximum:
-                    if not res["spt"] or res["spt"] < maximum:
+                    if res["spt"] is None or res["spt"] < maximum:
                         res["spt"] = maximum
 
             if sched.to_ScheduleCompact():
@@ -1593,7 +1643,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 maximum = scheduleCompactMinMax(sched)["max"]
 
                 if maximum:
-                    if not res["spt"] or res["spt"] < maximum:
+                    if res["spt"] is None or res["spt"] < maximum:
                         res["spt"] = maximum
 
             if sched.to_ScheduleInterval():
@@ -1601,7 +1651,7 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                 maximum = scheduleIntervalMinMax(sched)["max"]
 
                 if maximum:
-                    if not res["spt"] or res["spt"] < maximum:
+                    if res["spt"] is None or res["spt"] < maximum:
                         res["spt"] = maximum
 
             if sched.to_ScheduleYear():
@@ -1612,12 +1662,12 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
                         dd = week.winterDesignDaySchedule().get()
 
                         if dd.values():
-                            if not res["spt"] or res["spt"] < max(dd.values()):
+                            if res["spt"] is None or res["spt"] < max(dd.values()):
                                 res["spt"] = max(dd.values())
     return res
 
 
-def has_heatingTemperatureSetpoints(model=None):
+def hasHeatingTemperatureSetpoints(model=None):
     """Confirms if model has zones with valid heating temperature setpoints.
 
     Args:
@@ -1628,7 +1678,7 @@ def has_heatingTemperatureSetpoints(model=None):
         bool: Whether model holds valid heating temperature setpoints.
         False: If invalid inputs (see logs).
     """
-    mth = "osut.has_heatingTemperatureSetpoints"
+    mth = "osut.hasHeatingTemperatureSetpoints"
     cl  = openstudio.model.Model
 
     if not isinstance(model, cl):
@@ -1689,20 +1739,20 @@ def minCoolScheduledSetpoint(zone=None):
                 if coil.coolingControlTemperatureSchedule():
                     sched = coil.coolingControlTemperatureSchedule().get()
 
-        if not sched: continue
+        if sched is None: continue
 
         if sched.to_ScheduleRuleset():
             sched = sched.to_ScheduleRuleset().get()
             minimum = scheduleRulesetMinMax(sched)["min"]
 
             if minimum:
-                if not res["spt"] or res["spt"] > minimum:
+                if res["spt"] is None or res["spt"] > minimum:
                     res["spt"] = minimum
 
             dd = sched.summerDesignDaySchedule()
 
             if dd.values():
-                if not res["spt"] or res["spt"] > min(dd.values()):
+                if res["spt"] is None or res["spt"] > min(dd.values()):
                     res["spt"] = min(dd.values())
 
         if sched.to_ScheduleConstant():
@@ -1710,7 +1760,7 @@ def minCoolScheduledSetpoint(zone=None):
             minimum = scheduleConstantMinMax(sched)["min"]
 
             if minimum:
-                if not res["spt"] or res["spt"] > minimum:
+                if res["spt"] is None or res["spt"] > minimum:
                     res["spt"] = minimum
 
         if sched.to_ScheduleCompact():
@@ -1718,7 +1768,7 @@ def minCoolScheduledSetpoint(zone=None):
             minimum = scheduleCompactMinMax(sched)["min"]
 
             if minimum:
-                if not res["spt"] or res["spt"] > minimum:
+                if res["spt"] is None or res["spt"] > minimum:
                     res["spt"] = minimum
 
         if sched.to_ScheduleInterval():
@@ -1726,7 +1776,7 @@ def minCoolScheduledSetpoint(zone=None):
             minimum = scheduleIntervalMinMax(sched)["min"]
 
             if minimum:
-                if not res["spt"] or res["spt"] > minimum:
+                if res["spt"] is None or res["spt"] > minimum:
                     res["spt"] = minimum
 
     if not zone.thermostat(): return res
@@ -1752,13 +1802,13 @@ def minCoolScheduledSetpoint(zone=None):
                 minimum = scheduleRulesetMinMax(sched)["min"]
 
                 if minimum:
-                    if not res["spt"] or res["spt"] > minimum:
+                    if res["spt"] is None or res["spt"] > minimum:
                         res["spt"] = minimum
 
                 dd = sched.summerDesignDaySchedule()
 
                 if dd.values():
-                    if not res["spt"] or res["spt"] > min(dd.values()):
+                    if res["spt"] is None or res["spt"] > min(dd.values()):
                         res["spt"] = min(dd.values())
 
             if sched.to_ScheduleConstant():
@@ -1766,7 +1816,7 @@ def minCoolScheduledSetpoint(zone=None):
                 minimum = scheduleConstantMinMax(sched)[:min]
 
                 if minimum:
-                    if not res["spt"] or res["spt"] > minimum:
+                    if res["spt"] is None or res["spt"] > minimum:
                         res["spt"] = minimum
 
             if sched.to_ScheduleCompact():
@@ -1774,7 +1824,7 @@ def minCoolScheduledSetpoint(zone=None):
                 minimum = scheduleCompactMinMax(sched)["min"]
 
                 if minimum:
-                    if not res["spt"] or res["spt"] > minimum:
+                    if res["spt"] is None or res["spt"] > minimum:
                         res["spt"] = minimum
 
             if sched.to_ScheduleInterval():
@@ -1782,7 +1832,7 @@ def minCoolScheduledSetpoint(zone=None):
                 minimum = scheduleIntervalMinMax(sched)["min"]
 
                 if minimum:
-                    if not res["spt"] or res["spt"] > minimum:
+                    if res["spt"] is None or res["spt"] > minimum:
                         res["spt"] = minimum
 
             if sched.to_ScheduleYear():
@@ -1793,13 +1843,13 @@ def minCoolScheduledSetpoint(zone=None):
                         dd = week.summerDesignDaySchedule().get()
 
                         if dd.values():
-                            if not res["spt"] or res["spt"] < min(dd.values()):
+                            if res["spt"] is None or res["spt"] < min(dd.values()):
                                 res["spt"] = min(dd.values())
 
     return res
 
 
-def has_coolingTemperatureSetpoints(model=None):
+def hasCoolingTemperatureSetpoints(model=None):
     """Confirms if model has zones with valid cooling temperature setpoints.
 
     Args:
@@ -1810,7 +1860,7 @@ def has_coolingTemperatureSetpoints(model=None):
         bool: Whether model holds valid cooling temperature setpoints.
         False: If invalid inputs (see logs).
     """
-    mth = "osut.has_coolingTemperatureSetpoints"
+    mth = "osut.hasCoolingTemperatureSetpoints"
     cl  = openstudio.model.Model
 
     if not isinstance(model, cl):
@@ -1822,15 +1872,15 @@ def has_coolingTemperatureSetpoints(model=None):
     return False
 
 
-def is_vestibule(space=None):
-    """Validates whether space is a vestibule.
+def areVestibules(set=None):
+    """Validates whether one or more spaces can be considered vestibules(s).
 
     Args:
-        space ():
-            An OpenStudio space.
+        set (list):
+            One or more openstudio.model.Space instances.
 
     Returns:
-        bool: Whether space is considered a vestibule.
+        bool: Whether space(s) can be considered as vestibule(s).
         False: If invalid input (see logs).
     """
     # INFO: OpenStudio-Standards' "thermal_zone_vestibule" criteria:
@@ -1842,74 +1892,75 @@ def is_vestibule(space=None):
     #   standards/Standards.ThermalZone.rb#L1264
     #
     # This (unused) OpenStudio-Standards method likely needs revision; it
-    # returns "false" if the thermal zone area were less than 200ft2. Not sure
-    # which edition of 90.1 relies on a 200ft2 threshold (2010?); 90.1 2016
+    # returns "False" if thermal zone areas were less than 200ft2. Not sure
+    # which edition of 90.1 relies on a 200ft2 threshold (2010?) - 90.1 2016
     # doesn't. Yet even fixed, the method would nonetheless misidentify as
     # "vestibule" a small space along an exterior wall, such as a semiheated
     # storage space.
     #
-    # The code below is intended as a simple short-term solution, basically
-    # relying on AdditionalProperties, or (if missing) a "vestibule" substring
-    # within a space's spaceType name (or the latter's standardsSpaceType).
+    # The code below is intended as a simple (short-term?) workaround, relying
+    # on AdditionalProperties, or (if missing) a "vestibule" substring within a
+    # space's spaceType name (or the latter's standardsSpaceType).
     #
-    # Alternatively, some future method could infer its status as a vestibule
-    # based on a few basic features (common to all vintages):
+    # Some future method could infer its status as vestibule based on a few
+    # basic features (common to all vintages):
     #   - 1x+ outdoor-facing wall(s) holding 1x+ door(s)
     #   - adjacent to 1x+ 'occupied' conditioned space(s)
     #   - ideally, 1x+ door(s) between vestibule and 1x+ such adjacent space(s)
     #
-    # An additional method parameter (i.e. std = "necb") could be added to
-    # ensure supplementary Standard-specific checks, e.g. maximum floor area,
-    # minimum distance between doors.
+    # An additional method parameter (e.g. std = "necb") could be added to
+    # ensure supplementary Standard-specific checks (e.g. maximum floor area,
+    # minimum distance between doors).
     #
     # Finally, an entirely separate method could be developed to first identify
     # whether "building entrances" (a defined term in 90.1) actually require
     # vestibules as per specific code requirements. Food for thought.
-    mth = "osut.is_vestibule"
+    mth = "osut.areVestibules"
     cl  = openstudio.model.Space
 
-    if not isinstance(space, cl):
-        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
+    if isinstance(set, cl):
+        set = [set]
+    elif not isinstance(set, list):
+        return oslg.mismatch("set", set, list, mth, CN.DBG, False)
 
-    id  = space.nameString()
-    m1  = "%s:vestibule" % id
-    m2  = "%s:boolean" % m1
+    for space in set:
+        if not isinstance(space, cl):
+            return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
 
-    if space.additionalProperties().hasFeature("vestibule"):
-        val = space.additionalProperties().getFeatureAsBoolean("vestibule")
+        if space.additionalProperties().hasFeature("vestibule"):
+            val = space.additionalProperties().getFeatureAsBoolean("vestibule")
 
-        if val:
-            val = val.get()
-
-            if isinstance(val, bool):
-                return val
+            if val:
+                if val.get() is True: continue
+                else: return False
             else:
-                return oslg.invalid(m2, mth, 1, CN.ERR, False)
-        else:
-            return oslg.invalid(m1, mth, 1, CN.ERR, False)
+                oslg.invalid("vestibule", mth, 1, CN.ERR)
 
-    if space.spaceType():
-        type = space.spaceType().get()
-        if "plenum" in type.nameString().lower(): return False
-        if "vestibule" in type.nameString().lower(): return True
+        if space.spaceType():
+            type = space.spaceType().get()
+            if "plenum" in type.nameString().lower(): return False
+            if "vestibule" in type.nameString().lower(): continue
 
-        if type.standardsSpaceType():
-            type = type.standardsSpaceType().get().lower()
-            if "plenum" in type: return False
-            if "vestibule" in type: return True
+            if type.standardsSpaceType():
+                type = type.standardsSpaceType().get().lower()
+                if "plenum" in type: return False
+                if "vestibule" in type: continue
 
-    return False
+        return False
+
+    return True
 
 
-def is_plenum(space=None):
-    """Validates whether a space is an indirectly-conditioned plenum.
+def arePlenums(set=None):
+    """Validates whether one or more spaces can be considered
+    indirectly-conditioned plenum(s).
 
     Args:
-        space (openstudio.model.Space):
-            An OpenStudio space.
+        set (list):space (openstudio.model.Space):
+            One or more openstudio.model.Space instances.
 
     Returns:
-        bool: Whether space is considered a plenum.
+        bool: Whether space(s) can be considered plenum(s).
         False: If invalid input (see logs).
     """
     # Largely inspired from NREL's "space_plenum?":
@@ -1918,7 +1969,7 @@ def is_plenum(space=None):
     #   58964222d25783e9da4ae292e375fb0d5c902aa5/lib/openstudio-standards/
     #   standards/Standards.Space.rb#L1384
     #
-    # Ideally, OSut's "is_plenum" should be in sync with OpenStudio SDK's
+    # Ideally, OSut's "arePlenums" should be in sync with OpenStudio SDK's
     # "isPlenum" method, which solely looks for either HVAC air mixer objects:
     #  - AirLoopHVACReturnPlenum
     #  - AirLoopHVACSupplyPlenum
@@ -1954,7 +2005,7 @@ def is_plenum(space=None):
     # isolation) to determine whether an UNOCCUPIED space should have its
     # envelope insulated ("plenum") or not ("attic").
     #
-    # In contrast to OpenStudio-Standards' "space_plenum?", OSut's "is_plenum"
+    # In contrast to OpenStudio-Standards' "space_plenum?", OSut's "arePlenums"
     # strictly returns FALSE if a space is indeed "partofTotalFloorArea". It
     # also returns FALSE if the space is a vestibule. Otherwise, it needs more
     # information to determine if such an UNOCCUPIED space is indeed a
@@ -1972,46 +2023,57 @@ def is_plenum(space=None):
     # spaces that are INDIRECTLYCONDITIONED (not necessarily plenums), then the
     # following combination is likely more reliable and less confusing:
     #   - SDK's partofTotalFloorArea == FALSE
-    #   - OSut's is_unconditioned == FALSE
-    mth = "osut.is_plenum"
+    #   - OSut's isUnconditioned == FALSE
+    mth = "osut.arePlenums"
     cl  = openstudio.model.Space
 
-    if not isinstance(space, cl):
-        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
+    if isinstance(set, cl):
+        set = [set]
+    elif not isinstance(set, list):
+        return oslg.mismatch("set", set, list, mth, CN.DBG, False)
 
-    if space.partofTotalFloorArea(): return False
-    if is_vestibule(space): return False
+    for space in set:
+        if not isinstance(space, cl):
+            return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
 
-    # CASE A: "plenum" spaceType.
-    if space.spaceType():
-        type = space.spaceType().get()
+        if space.partofTotalFloorArea(): return False
+        if areVestibules(space): return False
 
-        if "plenum" in type.nameString().lower():
-            return True
+        # CASE A: "plenum" spaceType.
+        if space.spaceType():
+            type = space.spaceType().get()
+            if "plenum" in type.nameString().lower(): continue
 
-        if type.standardsSpaceType():
-            type = type.standardsSpaceType().get().lower()
+            if type.standardsSpaceType():
+                type = type.standardsSpaceType().get().lower()
+                if "plenum" in type: continue
 
-            if "plenum" in type: return True
+        # CASE B: "isPlenum" == TRUE if airloops.
+        if hasAirLoopsHVAC(space.model()):
+            if space.isPlenum(): continue
 
-    # CASE B: "isPlenum" == TRUE if airloops.
-    if has_airLoopsHVAC(space.model()): return space.isPlenum()
+        # CASE C: zone holds an 'inactive' thermostat.
+        zone   = space.thermalZone()
+        heated = hasHeatingTemperatureSetpoints(space.model())
+        cooled = hasCoolingTemperatureSetpoints(space.model())
 
-    # CASE C: zone holds an 'inactive' thermostat.
-    zone   = space.thermalZone()
-    heated = has_heatingTemperatureSetpoints(space.model())
-    cooled = has_coolingTemperatureSetpoints(space.model())
+        if heated or cooled:
+            if zone:
+                zone = zone.get()
+                heat = maxHeatScheduledSetpoint(zone)
+                cool = minCoolScheduledSetpoint(zone)
 
-    if heated or cooled:
-        if not zone: return False
+                # Directly CONDITIONED?
+                if heat["spt"]: return False
+                if cool["spt"]: return False
 
-        zone = zone.get()
-        heat = maxHeatScheduledSetpoint(zone)
-        cool = minCoolScheduledSetpoint(zone)
-        if heat["spt"] or cool["spt"]: return False  # directly CONDITIONED
-        return heat["dual"] or cool["dual"]          # FALSE if both are None
+                # Inactive thermostat?
+                if heat["dual"]: continue
+                if cool["dual"]: continue
 
-    return False
+        return False
+
+    return True
 
 
 def setpoints(space=None):
@@ -2053,7 +2115,7 @@ def setpoints(space=None):
             cnd = None
 
     # 2. Check instead OSut's INDIRECTLYCONDITIONED (parent space) link.
-    if not cnd:
+    if cnd is None:
         id = space.additionalProperties().getFeatureAsString(tg2)
 
         if id:
@@ -2068,8 +2130,8 @@ def setpoints(space=None):
                 log(ERR, "Unknown space %s (%s)" % (id, mth))
 
     # 3. Fetch space setpoints (if model indeed holds valid setpoints).
-    heated = has_heatingTemperatureSetpoints(space.model())
-    cooled = has_coolingTemperatureSetpoints(space.model())
+    heated = hasHeatingTemperatureSetpoints(space.model())
+    cooled = hasCoolingTemperatureSetpoints(space.model())
     zone   = space.thermalZone()
 
     if heated or cooled:
@@ -2093,14 +2155,14 @@ def setpoints(space=None):
             if not res["cooling"]: res["cooling"] = 24.0 # default
 
     # 5. Reset if plenum.
-    if is_plenum(space):
+    if arePlenums(space):
         if not res["heating"]: res["heating"] = 21.0 # default
         if not res["cooling"]: res["cooling"] = 24.0 # default
 
     return res
 
 
-def is_unconditioned(space=None):
+def isUnconditioned(space=None):
     """Validates if a space is UNCONDITIONED.
 
     Args:
@@ -2110,7 +2172,7 @@ def is_unconditioned(space=None):
         bool: Whether space is considered UNCONDITIONED.
         False: If invalid input (see logs).
     """
-    mth = "osut.is_unconditioned"
+    mth = "osut.isUnconditioned"
     cl  = openstudio.model.Space
 
     if not isinstance(space, cl):
@@ -2122,7 +2184,7 @@ def is_unconditioned(space=None):
     return True
 
 
-def is_refrigerated(space=None):
+def isRefrigerated(space=None):
     """Confirms if a space can be considered as REFRIGERATED.
 
     Args:
@@ -2133,7 +2195,7 @@ def is_refrigerated(space=None):
         bool: Whether space is considered REFRIGERATED.
         False: If invalid inputs (see logs).
     """
-    mth = "osut.is_refrigerated"
+    mth = "osut.isRefrigerated"
     cl  = openstudio.model.Space
     tg0 = "refrigerated"
 
@@ -2159,7 +2221,7 @@ def is_refrigerated(space=None):
     return False
 
 
-def is_semiheated(space=None):
+def isSemiheated(space=None):
     """Confirms if a space can be considered as SEMIHEATED as per NECB 2020
     1.2.1.2. 2): Design heating setpoint < 15°C (and non-REFRIGERATED).
 
@@ -2171,12 +2233,12 @@ def is_semiheated(space=None):
         bool: Whether space is considered SEMIHEATED.
         False: If invalid inputs (see logs).
     """
-    mth = "osut.is_semiheated"
+    mth = "osut.isSemiheated"
     cl  = openstudio.model.Space
 
     if not isinstance(space, cl):
         return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
-    if is_refrigerated(space):
+    if isRefrigerated(space):
         return False
 
     stps = setpoints(space)
@@ -2228,7 +2290,7 @@ def availabilitySchedule(model=None, avl=""):
 
         limits = l
 
-    if not limits:
+    if limits is None:
         limits = openstudio.model.ScheduleTypeLimits(model)
         limits.setName("HVAC Operation ScheduleTypeLimits")
         limits.setLowerLimitValue(0)
@@ -2373,7 +2435,7 @@ def transforms(group=None) -> dict:
     res = dict(t=None, r=None)
     cl  = openstudio.model.PlanarSurfaceGroup
 
-    if isinstance(group, cl):
+    if not isinstance(group, cl):
         return oslg.mismatch("group", group, cl, mth, CN.DBG, res)
 
     mdl = group.model()
@@ -2395,7 +2457,7 @@ def trueNormal(s=None, r=0):
 
     Returns:
         openstudio.Vector3d: A surface's true normal vector.
-        None : If invalid input (see logs).
+        None: If invalid input (see logs).
 
     """
     mth = "osut.trueNormal"
@@ -2486,7 +2548,7 @@ def to_p3Dv(pts=None) -> openstudio.Point3dVector:
     return v
 
 
-def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
+def areSame(s1=None, s2=None, indexed=True) -> bool:
     """Returns True if 2 sets of OpenStudio 3D points are nearly equal.
 
     Args:
@@ -2510,39 +2572,982 @@ def is_same_vtx(s1=None, s2=None, indexed=True) -> bool:
     if not isinstance(indexed, bool): indexed = True
 
     if indexed:
-        xOK = abs(s1[0].x() - s2[0].x()) < CN.TOL
-        yOK = abs(s1[0].y() - s2[0].y()) < CN.TOL
-        zOK = abs(s1[0].z() - s2[0].z()) < CN.TOL
-
-        if xOK and yOK and zOK and len(s1) == 1:
-            return True
+        if len(s1) == 1:
+            if abs(s1[0].x() - s2[0].x()) > CN.TOL: return False
+            if abs(s1[0].y() - s2[0].y()) > CN.TOL: return False
+            if abs(s1[0].z() - s2[0].z()) > CN.TOL: return False
         else:
             indx = None
 
             for i, pt in enumerate(s2):
-                if indx: continue
+                if indx: break
 
-                xOK = abs(s1[0].x() - s2[i].x()) < CN.TOL
-                yOK = abs(s1[0].y() - s2[i].y()) < CN.TOL
-                zOK = abs(s1[0].z() - s2[i].z()) < CN.TOL
+                if abs(s1[0].x() - s2[i].x()) > CN.TOL: continue
+                if abs(s1[0].y() - s2[i].y()) > CN.TOL: continue
+                if abs(s1[0].z() - s2[i].z()) > CN.TOL: continue
 
-                if xOK and yOK and zOK: indx = i
+                indx = i
 
-            if not indx: return False
+            if indx is None: return False
 
             s2 = collections.deque(s2)
-            s2.rotate(indx)
+            s2.rotate(-indx)
             s2 = list(s2)
 
     # openstudio.isAlmostEqual3dPt(p1, p2, TOL) # ... from v350 onwards.
     for i in range(len(s1)):
-        xOK = abs(s1[i].x() - s2[i].x()) < CN.TOL
-        yOK = abs(s1[i].y() - s2[i].y()) < CN.TOL
-        zOK = abs(s1[i].z() - s2[i].z()) < CN.TOL
-
-        if not xOK or not yOK or not zOK: return False
+        if abs(s1[i].x() - s2[i].x()) > CN.TOL: return False
+        if abs(s1[i].y() - s2[i].y()) > CN.TOL: return False
+        if abs(s1[i].z() - s2[i].z()) > CN.TOL: return false
 
     return True
+
+
+def holds(pts=None, p1=None) -> bool:
+    """Returns True if an OpenStudio 3D point is part of a set of 3D points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        p1 (openstudio.Point3d):
+            An OpenStudio 3D point.
+
+    Returns:
+        bool: Whether part of a set of 3D points.
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.holds"
+    pts = to_p3Dv(pts)
+    cl  = openstudio.Point3d
+
+    if not isinstance(p1, cl):
+        return oslg.mismatch("point", p1, cl, mth, CN.DBG, False)
+
+    for pt in pts:
+        if areSame(p1, pt): return True
+
+    return False
+
+
+def nearest(pts=None, p01=None):
+    """Returns the vector index of an OpenStudio 3D point nearest to a point of
+    reference, e.g. grid origin. If left unspecified, the method systematically
+    returns the bottom-left corner (BLC) of any horizontal set. If more than
+    one point fits the initial criteria, the method relies on deterministic
+    sorting through triangulation.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        p1 (openstudio.Point3d):
+            An OpenStudio 3D point of reference.
+
+    Returns:
+        int: Vector index of nearest point to point of reference.
+        None: If invalid input (see logs).
+
+    """
+    mth = "osut.nearest"
+    l   = 100
+    d01 = 10000
+    d02 = 0
+    d03 = 0
+    idx = None
+    pts = to_p3Dv(pts)
+    if not pts: return idx
+
+    p03 = openstudio.Point3d( l,-l,-l)
+    p02 = openstudio.Point3d( l, l, l)
+
+    if not p01: p01 = openstudio.Point3d(-l,-l,-l)
+
+    if not isinstance(p01, openstudio.Point3d):
+        return oslg.mismatch("point", p01, cl, mth)
+
+    for i, pt in enumerate(pts):
+        if areSame(pt, p01): return i
+
+    for i, pt in enumerate(pts):
+        length01 = (pt - p01).length()
+        length02 = (pt - p02).length()
+        length03 = (pt - p03).length()
+
+        if round(length01, 2) == round(d01, 2):
+            if round(length02, 2) == round(d02, 2):
+                if round(length03, 2) > round(d03, 2):
+                    idx = i
+                    d03 = length03
+            elif round(length02, 2) > round(d02, 2):
+                idx = i
+                d03 = length03
+                d02 = length02
+        elif round(length01, 2) < round(d01, 2):
+            idx = i
+            d01 = length01
+            d02 = length02
+            d03 = length03
+
+    return idx
+
+
+def farthest(pts=None, p01=None):
+    """Returns the vector index of an OpenStudio 3D point farthest from a point
+    of reference, e.g. grid origin. If left unspecified, the method
+    systematically returns the top-right corner (TRC) of any horizontal set. If
+    more than one point fits the initial criteria, the method relies on
+    deterministic sorting through triangulation.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        p1 (openstudio.Point3d):
+            An OpenStudio 3D point of reference.
+
+    Returns:
+        int: Vector index of farthest point from point of reference.
+        None: If invalid input (see logs).
+
+    """
+    mth = "osut.farthest"
+    l   = 100
+    d01 = 0
+    d02 = 10000
+    d03 = 10000
+    idx = None
+    pts = to_p3Dv(pts)
+    if not pts: return idx
+
+    p03 = openstudio.Point3d( l,-l,-l)
+    p02 = openstudio.Point3d( l, l, l)
+
+    if not p01: p01 = openstudio.Point3d(-l,-l,-l)
+
+    if not isinstance(p01, openstudio.Point3d):
+        return oslg.mismatch("point", p01, cl, mth)
+
+    for i, pt in enumerate(pts):
+        if areSame(pt, p01): continue
+
+        length01 = (pt - p01).length()
+        length02 = (pt - p02).length()
+        length03 = (pt - p03).length()
+
+        if round(length01, 2) == round(d01, 2):
+            if round(length02, 2) == round(d02, 2):
+                if round(length03, 2) < round(d03, 2):
+                    idx = i
+                    d03 = length03
+            elif round(length02, 2) < round(d02, 2):
+                idx = i
+                d03 = length03
+                d02 = length02
+        elif round(length01, 2) > round(d01, 2):
+            idx = i
+            d01 = length01
+            d02 = length02
+            d03 = length03
+
+    return idx
+
+
+def flatten(pts=None, axs="z", val=0) -> openstudio.Point3dVector:
+    """Flattens OpenStudio 3D points vs X, Y or Z axes.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        axs (str):
+            Selected "x", "y" or "z" axis.
+        val (float):
+            Axis value.
+
+    Returns:
+        openstudio.Point3dVector: flattened points (see logs if empty)
+    """
+    mth = "osut.flatten"
+    pts = to_p3Dv(pts)
+    v   = openstudio.Point3dVector()
+
+    try:
+        val = float(val)
+    except:
+        return oslg.mismatch("val", val, float, mth, CN.DBG, v)
+
+    try:
+        axs = str(axs)
+    except:
+        return oslg.mismatch("axis (XYZ?)", axs, str, mth, CN.DBG, v)
+
+    if axs.lower() == "x":
+        for pt in pts: v.append(openstudio.Point3d(val, pt.y(), pt.z()))
+    elif axs.lower() == "y":
+        for pt in pts: v.append(openstudio.Point3d(pt.x(), val, pt.z()))
+    elif axs.lower() == "z":
+        for pt in pts: v.append(openstudio.Point3d(pt.x(), pt.y(), val))
+    else:
+        return oslg.invalid("axis (XYZ?)", mth, 2, CN.DBG, v)
+
+    return v
+
+
+def shareXYZ(pts=None, axs="z", val=0) -> bool:
+    """Validates whether 3D points share X, Y or Z coordinates.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        axs (str):
+            Selected "x", "y" or "z" axis.
+        val (float):
+            Axis value.
+
+    Returns:
+        bool: If points share X, Y or Z coordinates.
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.shareXYZ"
+    pts = to_p3Dv(pts)
+    if not pts: return False
+
+    try:
+        val = float(val)
+    except:
+        return oslg.mismatch("val", val, float, mth, CN.DBG, False)
+
+    try:
+        axs = str(axs)
+    except:
+        return oslg.mismatch("axis (XYZ?)", axs, str, mth, CN.DBG, False)
+
+    if axs.lower() == "x":
+        for pt in pts:
+            if abs(pt.x() - val) > CN.TOL: return False
+    elif axs.lower() == "y":
+        for pt in pts:
+            if abs(pt.y() - val) > CN.TOL: return False
+    elif axs.lower() == "z":
+        for pt in pts:
+            if abs(pt.z() - val) > CN.TOL: return False
+    else:
+        return invalid("axis", mth, 2, CN.DBG, False)
+
+    return True
+
+
+def nextUp(pts=None, pt=None):
+    """Returns next sequential point in an OpenStudio 3D point vector.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        p1 (openstudio.Point3d):
+            An OpenStudio 3D point of reference.
+
+    Returns:
+        openstudio.Point3d: The next sequential 3D point.
+        None: If invalid inputs (see logs).
+
+    """
+    mth = "osut.nextUP"
+    pts = to_p3Dv(pts)
+    cl  = openstudio.Point3d
+
+    if not isinstance(pt, cl):
+        return oslg.mismatch("point", pt, cl, mth)
+
+    if len(pts) < 2:
+        return oslg.invalid("points (2+)", mth, 1, CN.WRN)
+
+    for pair in each_cons(pts, 2):
+        if areSame(pair[0], pt): return pair[-1]
+
+    return pts[0]
+
+
+def width(pts=None) -> float:
+    """Returns 'width' of a set of OpenStudio 3D points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        float: 'Width' along X-axis.
+        0.0: If invalid input (see logs).
+    """
+    pts = to_p3Dv(pts)
+    if len(pts) < 2: return 0
+
+    xs = [pt.x() for pt in pts]
+    dx = max(xs) - min(xs)
+
+    return dx
+
+
+def height(pts=None) -> float:
+    """Returns 'width' of a set of OpenStudio 3D points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        float: 'Height' along Z-axis, or Y-axis if points are flat.
+        0.0: If invalid input (see logs).
+    """
+    pts = to_p3Dv(pts)
+    if len(pts) < 2: return 0
+
+    zs = [pt.z() for pt in pts]
+    ys = [pt.y() for pt in pts]
+    dz = max(zs) - min(zs)
+    dy = max(ys) - min(ys)
+
+    if abs(dz) > CN.TOL: return dz
+
+    return dy
+
+
+def midpoint(p1=None, p2=None):
+    """Returns midpoint coordinates of a line segment.
+
+    Args:
+        p1 (openstudio.Point3d):
+            1st 3D point of a line segment.
+        p2 (openstudio.Point3d):
+            2nd 3D point of a line segment.
+
+    Returns:
+        openstudio.Point3d: Midpoint.
+        None: If invalid input (see logs).
+
+    """
+    mth = "osut.midpoint"
+    cl  = openstudio.Point3d
+
+    if not isinstance(p1, cl):
+        return oslg.mismatch("point 1", p1, cl, mth)
+    if not isinstance(p2, cl):
+        return oslg.mismatch("point 2", p1, cl, mth)
+    if areSame(p1, p2):
+        return oslg.invalid("same points", mth)
+
+    midX = p1.x() + (p2.x() - p1.x())/2
+    midY = p1.y() + (p2.y() - p1.y())/2
+    midZ = p1.z() + (p2.z() - p1.z())/2
+
+    return openstudio.Point3d(midX, midY, midZ)
+
+
+def verticalPlane(p1=None, p2=None):
+    """Returns a vertical 3D plane from 2x 3D points, right-hand rule. Input
+    points are considered last 2 (of 3) points forming the plane; the first
+    point is assumed zenithal. Input points cannot align vertically.
+
+    Args:
+        p1 (openstudio.Point3d):
+            1st 3D point of a line segment.
+        p2 (openstudio.Point3d):
+            2nd 3D point of a line segment.
+
+    Returns:
+        openstudio.Plane: A vertical 3D plane.
+        None: If invalid inputs.
+
+    """
+    mth = "osut.verticalPlane"
+    cl = openstudio.Point3d
+
+    if not isinstance(p1, cl):
+        return oslg.mismatch("point 1", p1, cl, mth)
+    if not isinstance(p2, cl):
+        return oslg.mismatch("point 2", p1, cl, mth)
+    if areSame(p1, p2):
+        return oslg.invalid("same points", mth)
+
+    if abs(p1.x() - p2.x()) < CN.TOL and abs(p1.y() - p2.y()) < CN.TOL:
+        return oslg.invalid("vertically aligned points", mth)
+
+    zenith = openstudio.Point3d(p1.x(), p1.y(), (p2 - p1).length())
+    points = openstudio.Point3dVector()
+    points.append(zenith)
+    points.append(p1)
+    points.append(p2)
+
+    return openstudio.Plane(points)
+
+
+def uniques(pts=None, n=0) -> openstudio.Point3dVector:
+    """Returns unique OpenStudio 3D points from an OpenStudio 3D point vector.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        n (int):
+            Requested number of unique points (0 returns all).
+
+    Returns:
+        openstudio.Point3dVector: Unique points (see logs if empty).
+
+    """
+    mth = "osut.uniques"
+    pts = to_p3Dv(pts)
+    v   = openstudio.Point3dVector()
+    if not pts: return v
+
+    try:
+        n = int(n)
+    except:
+        return oslg.mismatch("n unique points", n, int, mth, CN.DBG, v)
+
+    for pt in pts:
+        if not holds(v, pt): v.append(pt)
+
+    if abs(n) > len(v): n = 0
+    if n > 0: v = v[0:n]
+    if n < 0: v = v[n:]
+
+    return v
+
+
+def segments(pts=None) -> openstudio.Point3dVectorVector:
+    """Returns paired sequential points as (non-zero length) line segments
+    (similar to tuple pairs). If the set holds only 2x unique points, a single
+    segment is returned. Otherwise, the returned number of segments equals the
+    number of unique points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        openstudio.Point3dVectorVector: 3D point segments (see logs if empty).
+
+    """
+    mth = "osut.segments"
+    vv  = openstudio.Point3dVectorVector()
+    pts = uniques(pts)
+    if len(pts) < 2: return vv
+
+    for i1, p1 in enumerate(pts):
+        i2 = i1 + 1
+        if i2 == len(pts): i2 = 0
+        p2 = pts[i2]
+
+        line = openstudio.Point3dVector()
+        line.append(p1)
+        line.append(p2)
+        vv.append(line)
+        if len(pts) == 2: break
+
+    return vv
+
+
+def isSegment(pts=None) -> bool:
+    """Determines if a set of 3D points if a valid segment.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: Whether set is a valid segment.
+        False: If invalid input (see logs).
+
+    """
+    pts = to_p3Dv(pts)
+    if len(pts) != 2: return False
+    if areSame(pts[0], pts[1]): return False
+
+    return True
+
+
+def triads(pts=None, co=False) -> openstudio.Point3dVectorVector:
+    """Returns points as (non-zero length) 'triads', i.e. 3x sequential points.
+    If the set holds less than 3x unique points, an empty triad is returned.
+    Otherwise, the returned number of triads equals the number of unique points.
+    If non-collinearity is requested, then the number of returned triads equals
+    the number of non-collinear points.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        openStudio.Point3dVectorVector: 3D point triads (see logs if empty).
+
+    """
+    vv  = openstudio.Point3dVectorVector()
+    pts = uniques(pts)
+    if len(pts) < 2: return vv
+
+    for i1, pts in enumerate(pts):
+        i2 = i1 + 1
+        if i2 == len(pts): i2 = 0
+        i3 = i2 + 1
+        if i3 == len(pts): i3 = 0
+        p2 = pts[i2]
+        p3 = pts[i3]
+
+        tri = openstudio.Point3dVector()
+        tri.append(p1)
+        tri.append(p2)
+        tri.append(p3)
+        vv.append(tri)
+
+    return vv
+
+
+def isTriad(pts=None) -> bool:
+    """Determines if a set of 3D points if a valid 'triad'.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: Whether set is a valid 'triad', i.e. trio of sequential 3D points.
+        False: If invalid input (see logs).
+
+    """
+    pts = to_p3Dv(pts)
+    if len(pts) != 3: return False
+    if areSame(pts[0], pts[1]): return False
+    if areSame(pts[0], pts[2]): return False
+    if areSame(pts[1], pts[2]): return False
+
+    return True
+
+
+def isPointAlongSegment(p0=None, sg=[]) -> bool:
+    """Validates whether a 3D point lies ~along a 3D point segment, i.e. less
+    than 10mm from any segment.
+
+    Args:
+        p0 (openstudio.Point3d):
+            A 3D point.
+        sg (openstudio.Point3dVector):
+            A 3D point segment.
+
+    Returns:
+        bool: Whether a 3D point lies ~along a 3D point segment.
+        False: If invalid inputs.
+
+    """
+    mth = "osut.isPointAlongSegment"
+    cl1 = openstudio.Point3d
+    cl2 = openstudio.Point3dVector
+
+    if not isinstance(p0, cl1):
+        return oslg.mismatch("point", p0, cl1, mth, CN.DBG, False)
+    if not isSegment(sg):
+        return oslg.mismatch("segment", sg, cl2, mth, CN.DBG, False)
+
+    if holds(sg, p0): return True
+
+    a   = sg[0]
+    b   = sg[-1]
+    ab  = b - a
+    abn = b - a
+    abn.normalize()
+    ap  = p0 - a
+    sp = ap.dot(abn)
+    if sp < 0: return False
+
+    apd = scalar(abn, sp)
+    if apd.length() > ab.length() + CN.TOL: return False
+
+    ap0 = a + apd
+    if round((p0 - ap0).length(), 2) <= CN.TOL: return True
+
+    return False
+
+
+def isPointAlongSegments(p0=None, sgs=[]) -> bool:
+    """Validates whether a 3D point lies anywhere ~along a set of 3D point
+    segments, i.e. less than 10mm from any segment.
+
+    Args:
+        p0 (openstudio.Point3d):
+            A 3D point.
+        sgs (openstudio.Point3dVectorVector):
+            3D point segments.
+
+    Returns:
+        bool: Whether a 3D point lies ~along a set of 3D point segments.
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.isPointAlongSegments"
+    cl1 = openstudio.Point3d
+    cl2 = openstudio.Point3dVectorVector
+
+    if not isinstance(sgs, cl2):
+        sgs = segments(sgs)
+    if not sgs:
+        return oslg.empty("segments", mth, CN.DBG, False)
+    if not isinstance(p0, cl1):
+        return oslg.mismatch("point", p0, cl, mth, CN.DBG, False)
+
+    for sg in sgs:
+        if isPointAlongSegment(p0, sg): return True
+
+    return False
+
+
+def lineIntersection(s1=[], s2=[]):
+    """Returns point of intersection of 2x 3D line segments.
+
+    Args:
+        s1 (openstudio.Point3dVectorVector):
+            1st 3D line segment.
+        s2 (openstudio.Point3dVectorVector):
+            2nd 3D line segment.
+
+    Returns:
+        openStudio.Point3d: Point of intersection of both lines.
+        None: If no intersection, or invalid input (see logs).
+
+    """
+    s1 = segments(s1)
+    s2 = segments(s2)
+    if not s1: return None
+    if not s2: return None
+
+    s1 = s1[0]
+    s2 = s2[0]
+
+    # Matching segments?
+    s2x = list(s2)
+    s2x.reverse()
+    if areSame(s1, s2x): return None
+    if areSame(s1, s2) : return None
+
+    a1 = s1[0]
+    a2 = s1[1]
+    b1 = s2[0]
+    b2 = s2[1]
+
+    # Matching segment endpoints?
+    if areSame(a1, b1): return a1
+    if areSame(a2, b1): return a2
+    if areSame(a1, b2): return a1
+    if areSame(a2, b2): return a2
+
+    # Segment endpoint along opposite segment?
+    if isPointAlongSegment(a1, s2): return a1
+    if isPointAlongSegment(a2, s2): return a2
+    if isPointAlongSegment(b1, s1): return b1
+    if isPointAlongSegment(b2, s1): return b2
+
+    # Line segments as vectors. Skip if collinear or parallel.
+    a   = a2 - a1
+    b   = b2 - b1
+    xab = a.cross(b)
+    if round(xab.length(), 4) < CN.TOL2: return None
+
+    # Link 1st point to other segment endpoints as vectors. Must be coplanar.
+    a1b1  = b1 - a1
+    a1b2  = b2 - a1
+    xa1b1 = a.cross(a1b1)
+    xa1b2 = a.cross(a1b2)
+    xa1b1.normalize()
+    xa1b2.normalize()
+    xab.normalize()
+    if round(xab.cross(xa1b1).length(), 4) > CN.TOL2: return None
+    if round(xab.cross(xa1b2).length(), 4) > CN.TOL2: return None
+
+    # Reset.
+    xa1b1 = a.cross(a1b1)
+    xa1b2 = a.cross(a1b2)
+
+    if xa1b1.length() < CN.TOL2:
+        if isPointAlongSegment(a1, [a2, b1]): return None
+        if isPointAlongSegment(a2, [a1, b1]): return None
+
+    if xa1b2.length() < CN.TOL2:
+        if isPointAlongSegment(a1, [a2, b2]): return None
+        if isPointAlongSegment(a2, [a1, b2]): return None
+
+    # Both segment endpoints can't be 'behind' point.
+    if a.dot(a1b1) < 0 and a.dot(a1b2) < 0: return None
+
+    # Both in 'front' of point? Pick farthest from 'a'.
+    if a.dot(a1b1) > 0 and a.dot(a1b2) > 0:
+        lxa1b1 = xa1b1.length()
+        lxa1b2 = xa1b2.length()
+
+        c1 = b1 if round(lxa1b1, 4) < round(lxa1b2, 4) else b2
+    else:
+        c1 = b1 if a.dot(a1b1) > 0 else b2
+
+    c1a1  = a1 - c1
+    xc1a1 = a.cross(c1a1)
+    d1    = a1 + xc1a1
+    n     = a.cross(xc1a1)
+    dot   = b.dot(n)
+    if dot < 0: n = n.reverseVector()
+    if abs(b.dot(n)) < CN.TOL: return None
+    f     = c1a1.dot(n) / b.dot(n)
+    p0    = c1 + scalar(b, f)
+
+    # Intersection can't be 'behind' point.
+    if a.dot(p0 - a1) < 0: return None
+
+    # Ensure intersection is sandwiched between endpoints.
+    if not isPointAlongSegment(p0, s2): return None
+    if not isPointAlongSegment(p0, s1): return None
+
+    return p0
+
+
+def doesLineIntersect(l=[], s=[]) -> bool:
+    """Validates whether a 3D line segment intersects 3D segments, e.g. polygon.
+
+    Args:
+        l (openstudio.Point3dVector):
+            A 3D line segment.
+        s (openstudio.Point3dVector):
+            3D segments.
+
+    Returns:
+        bool: Whether a 3D line intersects 3D segments.
+        False: If invalid input (see logs).
+
+    """
+    l = segments(l)
+    s = segments(s)
+    if not l: return None
+    if not s: return None
+
+    l = l[0]
+
+    for segment in s:
+        if lineIntersection(l, segment): return True
+
+    return False
+
+
+def isClockwise(pts=None) -> bool:
+    """Validates whether OpenStudio 3D points are listed clockwise, assuming
+    points have been pre-'aligned' - not just flattened along XY (i.e. Z = 0).
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
+
+    Returns:
+        bool: Whether sequence is clockwise.
+        False: If invalid input (see logs).
+
+    """
+    mth = "osut.isClockwise"
+    pts = to_p3Dv(pts)
+
+    if len(pts) < 3:
+        return oslg.invalid("3+ points", mth, 1, CN.DBG, False)
+    if not shareXYZ(pts, "z"):
+        return oslg.invalid("flat points", mth, 1, CN.DBG, False)
+
+    n = openstudio.getOutwardNormal(pts)
+
+    if not n:
+        return invalid("polygon", mth, 1, CN.DBG, False)
+    elif n.get().z() > 0:
+        return False
+
+    return True
+
+
+def ulc(pts=None) -> openstudio.Point3dVector:
+    """Returns OpenStudio 3D points (min 3x) conforming to an UpperLeftCorner
+    (ULC) convention. Points Z-axis values must be ~= 0. Points are returned
+    counterclockwise.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
+
+    Returns:
+        openstudio.Point3dVector: ULC points (see logs if empty).
+    """
+    mth = "osut.ulc"
+    v   = openstudio.Point3dVector()
+    pts = list(to_p3Dv(pts))
+
+    if len(pts) < 3:
+        return oslg.invalid("points (3+)", mth, 1, CN.DBG, v)
+    if not shareXYZ(pts, "z"):
+        return oslg.invalid("points (aligned)", mth, 1, CN.DBG, v)
+
+    # Ensure counterclockwise sequence.
+    if isClockwise(pts): pts.reverse()
+
+    minX = min([pt.x() for pt in pts])
+    i0   = nearest(pts)
+    p0   = pts[i0]
+
+    pts_x = [pt for pt in pts if round(pt.x(), 2) == round(minX, 2)]
+    pts_x.reverse()
+    p1 = pts_x[0]
+
+    for pt in pts_x:
+        if round((pt - p0).length(), 2) > round((p1 - p0).length(), 2): p1 = pt
+
+    i1  = pts.index(p1)
+    pts = collections.deque(pts)
+    pts.rotate(-i1)
+
+    return to_p3Dv(list(pts))
+
+
+def blc(pts=None) -> openstudio.Point3dVector:
+    """Returns OpenStudio 3D points (min 3x) conforming to an BottomLeftCorner
+    (BLC) convention. Points Z-axis values must be ~= 0. Points are returned
+    counterclockwise.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
+
+    Returns:
+        openstudio.Point3dVector: BLC points (see logs if empty).
+    """
+    mth = "osut.blc"
+    v   = openstudio.Point3dVector()
+    pts = list(to_p3Dv(pts))
+
+    if len(pts) < 3:
+        return oslg.invalid("points (3+)", mth, 1, CN.DBG, v)
+    if not shareXYZ(pts, "z"):
+        return oslg.invalid("points (aligned)", mth, 1, CN.DBG, v)
+
+    # Ensure counterclockwise sequence.
+    if isClockwise(pts): pts.reverse()
+
+    minX = min([pt.x() for pt in pts])
+    i0   = nearest(pts)
+    p0   = pts[i0]
+
+    pts_x = [pt for pt in pts if round(pt.x(), 2) == round(minX, 2)]
+    pts_x.reverse()
+    p1 = pts_x[0]
+
+    if p0 in pts_x:
+        pts = collections.deque(pts)
+        pts.rotate(-i0)
+        return to_p3Dv(list(pts))
+
+    for pt in pts_x:
+        if round((pt - p0).length(), 2) < round((p1 - p0).length(), 2): p1 = pt
+
+    i1  = pts.index(p1)
+    pts = collections.deque(pts)
+    pts.rotate(-i1)
+
+    return to_p3Dv(list(pts))
+
+
+def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
+    """Returns sequential non-collinear points in an OpenStudio 3D point vector.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        n (int):
+            Requested number of non-collinears (0 returns all).
+
+    Returns:
+        openstudio.Point3dVector: non-collinears (see logs if empty).
+
+    """
+    mth = "osut.nonCollinears"
+    v   = openstudio.Point3dVector()
+    a   = []
+    pts = uniques(pts)
+    if len(pts) < 3: return pts
+
+    try:
+        n = int(n)
+    except:
+        oslg.mismatch("n non-collinears", n, int, mth, CN.DBG, v)
+
+    if n > len(pts):
+        return oslg.invalid("+n non-collinears", mth, 0, CN.ERR, v)
+    elif n < 0 and abs(n) > len(pts):
+        return oslg.invalid("-n non-collinears", mth, 0, CN.ERR, v)
+
+    # Evaluate cross product of vectors of 3x sequential points.
+    for i2, p2 in enumerate(pts):
+        i1 = i2 - 1
+        i3 = i2 + 1
+        if i3 == len(pts): i3 = 0
+        p1 = pts[i1]
+        p3 = pts[i3]
+
+        v13 = p3 - p1
+        v12 = p2 - p1
+        if v12.cross(v13).length() < CN.TOL2: continue
+
+        a.append(p2)
+
+    if pts[0] in a:
+        if not areSame(a[0], pts[0]): a = a.rotate(1)
+
+    if n > len(a): return to_p3Dv(a)
+    if n < 0 and abs(n) > len(a): return to_p3Dv(a)
+
+    if n > 0: a = a[0:n]
+    if n < 0: a = a[n:]
+
+    return to_p3Dv(a)
+
+
+def collinears(pts=None, n=0) -> openstudio.Point3dVector:
+    """
+    Returns sequential collinear points in an OpenStudio 3D point vector.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
+        n (int):
+            Requested number of collinears (0 returns all).
+
+    Returns:
+        openstudio.Point3dVector: collinears (see logs if empty).
+
+    """
+    mth = "osut.collinears"
+    v   = openstudio.Point3dVector()
+    a   = []
+    pts = uniques(pts)
+    if len(pts) < 3: return pts
+
+    try:
+        n = int(n)
+    except:
+        oslg.mismatch("n collinears", n, int, mth, CN.DBG, v)
+
+    if n > len(pts):
+        return oslg.invalid("+n collinears", mth, 0, CN.ERR, v)
+    elif n < 0 and abs(n) > len(pts):
+        return oslg.invalid("-n collinears", mth, 0, CN.ERR, v)
+
+    ncolls = nonCollinears(pts)
+    if not ncolls: return pts
+
+    for pt in pts:
+        if pt not in ncolls: a.append(pt)
+
+    if n > len(a): return to_p3Dv(a)
+    if n < 0 and abs(n) > len(a): return to_p3Dv(a)
+
+    if n > 0: a = a[0:n]
+    if n < 0: a = a[n:]
+
+    return to_p3Dv(a)
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
