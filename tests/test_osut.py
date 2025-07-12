@@ -2444,7 +2444,74 @@ class TestOSutModuleMethods(unittest.TestCase):
         # [20, 10, 0]
         # [20,  0, 0]
 
-    # def test25_segments_triads_orientation(self):
+    def test25_segments_triads_orientation(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Basic OpenStudio intersection methods.
+
+        # Enclosed polygon.
+        p0 = openstudio.Point3d(-5, -5, -5)
+        p1 = openstudio.Point3d( 5,  5, -5)
+        p2 = openstudio.Point3d(15, 15, -5)
+        p3 = openstudio.Point3d(15, 25, -5)
+
+        # Independent line segment.
+        p4 = openstudio.Point3d(10,-30, -5)
+        p5 = openstudio.Point3d(10, 10, -5)
+        p6 = openstudio.Point3d(10, 40, -5)
+
+        # Independent points.
+        p7 = openstudio.Point3d(14, 20, -5)
+        p8 = openstudio.Point3d(-9, -9, -5)
+
+        # Stress tests.
+        m1 = "Invalid '+n collinears' (osut.collinears)"
+        m2 = "Invalid '-n collinears' (osut.collinears)"
+
+        collinears = osut.collinears([p0, p1, p3, p8])
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8])
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], 3)
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], 1)
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], -1)
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p1))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], -2)
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], 6)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m1)
+        self.assertTrue(o.clean(), DBG)
+
+        collinears = osut.collinears([p0, p1, p2, p3, p8], -6)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m2)
+
+        self.assertTrue(o.clean(), DBG)
 
     def test26_ulc_blc(self):
         o = osut.oslg

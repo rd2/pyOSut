@@ -2625,7 +2625,7 @@ def holds(pts=None, p1=None) -> bool:
         return oslg.mismatch("point", p1, cl, mth, CN.DBG, False)
 
     for pt in pts:
-        if areSame_vtx(p1, pt): return True
+        if areSame(p1, pt): return True
 
     return False
 
@@ -3045,7 +3045,7 @@ def segments(pts=None) -> openstudio.Point3dVectorVector:
     return vv
 
 
-def isSegment(pts=None):
+def isSegment(pts=None) -> bool:
     """Determines if a set of 3D points if a valid segment.
 
     Args:
@@ -3100,7 +3100,7 @@ def triads(pts=None, co=False) -> openstudio.Point3dVectorVector:
     return vv
 
 
-def isTriad(pts=None):
+def isTriad(pts=None) -> bool:
     """Determines if a set of 3D points if a valid 'triad'.
 
     Args:
@@ -3165,7 +3165,7 @@ def isPointAlongSegment(p0=None, sg=[]) -> bool:
     return False
 
 
-def isPointAlongSegments(p0=None, sgs=[]):
+def isPointAlongSegments(p0=None, sgs=[]) -> bool:
     """Validates whether a 3D point lies anywhere ~along a set of 3D point
     segments, i.e. less than 10mm from any segment.
 
@@ -3294,7 +3294,7 @@ def lineIntersection(s1=[], s2=[]):
     return p0
 
 
-def doesLineIntersect(l=[], s=[]):
+def doesLineIntersect(l=[], s=[]) -> bool:
     """Validates whether a 3D line segment intersects 3D segments, e.g. polygon.
 
     Args:
@@ -3321,13 +3321,13 @@ def doesLineIntersect(l=[], s=[]):
     return False
 
 
-def isClockwise(pts=None):
+def isClockwise(pts=None) -> bool:
     """Validates whether OpenStudio 3D points are listed clockwise, assuming
     points have been pre-'aligned' - not just flattened along XY (i.e. Z = 0).
 
     Args:
-        pts:
-            Pre-aligned 3D points.
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
 
     Returns:
         bool: Whether sequence is clockwise.
@@ -3352,14 +3352,14 @@ def isClockwise(pts=None):
     return True
 
 
-def ulc(pts=None):
+def ulc(pts=None) -> openstudio.Point3dVector:
     """Returns OpenStudio 3D points (min 3x) conforming to an UpperLeftCorner
     (ULC) convention. Points Z-axis values must be ~= 0. Points are returned
     counterclockwise.
 
     Args:
-        pts:
-            Pre-aligned 3D points.
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
 
     Returns:
         openstudio.Point3dVector: ULC points (see logs if empty).
@@ -3394,14 +3394,14 @@ def ulc(pts=None):
     return to_p3Dv(list(pts))
 
 
-def blc(pts=None):
+def blc(pts=None) -> openstudio.Point3dVector:
     """Returns OpenStudio 3D points (min 3x) conforming to an BottomLeftCorner
     (BLC) convention. Points Z-axis values must be ~= 0. Points are returned
     counterclockwise.
 
     Args:
-        pts:
-            Pre-aligned 3D points.
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
 
     Returns:
         openstudio.Point3dVector: BLC points (see logs if empty).
@@ -3439,6 +3439,106 @@ def blc(pts=None):
     pts.rotate(-i1)
 
     return to_p3Dv(list(pts))
+
+
+def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
+    """Returns sequential non-collinear points in an OpenStudio 3D point vector.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        n (int):
+            Requested number of non-collinears (0 returns all).
+
+    Returns:
+        openstudio.Point3dVector: non-collinears (see logs if empty).
+
+    """
+    mth = "osut.nonCollinears"
+    v   = openstudio.Point3dVector()
+    a   = []
+    pts = uniques(pts)
+    if len(pts) < 3: return pts
+
+    try:
+        n = int(n)
+    except:
+        oslg.mismatch("n non-collinears", n, int, mth, CN.DBG, v)
+
+    if n > len(pts):
+        return oslg.invalid("+n non-collinears", mth, 0, CN.ERR, v)
+    elif n < 0 and abs(n) > len(pts):
+        return oslg.invalid("-n non-collinears", mth, 0, CN.ERR, v)
+
+    # Evaluate cross product of vectors of 3x sequential points.
+    for i2, p2 in enumerate(pts):
+        i1 = i2 - 1
+        i3 = i2 + 1
+        if i3 == len(pts): i3 = 0
+        p1 = pts[i1]
+        p3 = pts[i3]
+
+        v13 = p3 - p1
+        v12 = p2 - p1
+        if v12.cross(v13).length() < CN.TOL2: continue
+
+        a.append(p2)
+
+    if pts[0] in a:
+        if not areSame(a[0], pts[0]): a = a.rotate(1)
+
+    if n > len(a): return to_p3Dv(a)
+    if n < 0 and abs(n) > len(a): return to_p3Dv(a)
+
+    if n > 0: a = a[0:n]
+    if n < 0: a = a[n:]
+
+    return to_p3Dv(a)
+
+
+def collinears(pts=None, n=0) -> openstudio.Point3dVector:
+    """
+    Returns sequential collinear points in an OpenStudio 3D point vector.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
+        n (int):
+            Requested number of collinears (0 returns all).
+
+    Returns:
+        openstudio.Point3dVector: collinears (see logs if empty).
+
+    """
+    mth = "osut.collinears"
+    v   = openstudio.Point3dVector()
+    a   = []
+    pts = uniques(pts)
+    if len(pts) < 3: return pts
+
+    try:
+        n = int(n)
+    except:
+        oslg.mismatch("n collinears", n, int, mth, CN.DBG, v)
+
+    if n > len(pts):
+        return oslg.invalid("+n collinears", mth, 0, CN.ERR, v)
+    elif n < 0 and abs(n) > len(pts):
+        return oslg.invalid("-n collinears", mth, 0, CN.ERR, v)
+
+    ncolls = nonCollinears(pts)
+    if not ncolls: return pts
+
+    for pt in pts:
+        if pt not in ncolls: a.append(pt)
+
+    if n > len(a): return to_p3Dv(a)
+    if n < 0 and abs(n) > len(a): return to_p3Dv(a)
+
+    if n > 0: a = a[0:n]
+    if n < 0: a = a[n:]
+
+    return to_p3Dv(a)
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
