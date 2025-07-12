@@ -3031,7 +3031,7 @@ def segments(pts=None) -> openstudio.Point3dVectorVector:
     pts = uniques(pts)
     if len(pts) < 2: return vv
 
-    for i1, pt in enumerate(pts):
+    for i1, p1 in enumerate(pts):
         i2 = i1 + 1
         if i2 == len(pts): i2 = 0
         p2 = pts[i2]
@@ -3185,7 +3185,7 @@ def isPointAlongSegments(p0=None, sgs=[]) -> bool:
     cl2 = openstudio.Point3dVectorVector
 
     if not isinstance(sgs, cl2):
-        sgs = getSegments(sgs)
+        sgs = segments(sgs)
     if not sgs:
         return oslg.empty("segments", mth, CN.DBG, False)
     if not isinstance(p0, cl1):
@@ -3211,8 +3211,8 @@ def lineIntersection(s1=[], s2=[]):
         None: If no intersection, or invalid input (see logs).
 
     """
-    s1  = segments(s1)
-    s2  = segments(s2)
+    s1 = segments(s1)
+    s2 = segments(s2)
     if not s1: return None
     if not s2: return None
 
@@ -3237,12 +3237,12 @@ def lineIntersection(s1=[], s2=[]):
     if areSame(a2, b2): return a2
 
     # Segment endpoint along opposite segment?
-    if isPointAlongSegments(a1, s2): return a1
-    if isPointAlongSegments(a2, s2): return a2
-    if isPointAlongSegments(b1, s1): return b1
-    if isPointAlongSegments(b2, s1): return b2
+    if isPointAlongSegment(a1, s2): return a1
+    if isPointAlongSegment(a2, s2): return a2
+    if isPointAlongSegment(b1, s1): return b1
+    if isPointAlongSegment(b2, s1): return b2
 
-    # Line segments as vectors. Skip if colinear.
+    # Line segments as vectors. Skip if collinear or parallel.
     a   = a2 - a1
     b   = b2 - b1
     xab = a.cross(b)
@@ -3263,6 +3263,14 @@ def lineIntersection(s1=[], s2=[]):
     xa1b1 = a.cross(a1b1)
     xa1b2 = a.cross(a1b2)
 
+    if xa1b1.length() < CN.TOL2:
+        if isPointAlongSegment(a1, [a2, b1]): return None
+        if isPointAlongSegment(a2, [a1, b1]): return None
+
+    if xa1b2.length() < CN.TOL2:
+        if isPointAlongSegment(a1, [a2, b2]): return None
+        if isPointAlongSegment(a2, [a1, b2]): return None
+
     # Both segment endpoints can't be 'behind' point.
     if a.dot(a1b1) < 0 and a.dot(a1b2) < 0: return None
 
@@ -3281,6 +3289,7 @@ def lineIntersection(s1=[], s2=[]):
     n     = a.cross(xc1a1)
     dot   = b.dot(n)
     if dot < 0: n = n.reverseVector()
+    if abs(b.dot(n)) < CN.TOL: return None
     f     = c1a1.dot(n) / b.dot(n)
     p0    = c1 + scalar(b, f)
 
@@ -3288,8 +3297,8 @@ def lineIntersection(s1=[], s2=[]):
     if a.dot(p0 - a1) < 0: return None
 
     # Ensure intersection is sandwiched between endpoints.
-    if not isPointAlongSegments(p0, s2): return None
-    if not isPointAlongSegments(p0, s1): return None
+    if not isPointAlongSegment(p0, s2): return None
+    if not isPointAlongSegment(p0, s1): return None
 
     return p0
 

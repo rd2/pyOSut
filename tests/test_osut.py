@@ -2451,9 +2451,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
-        # Basic OpenStudio intersection methods.
-
         # Enclosed polygon.
         p0 = openstudio.Point3d(-5, -5, -5)
         p1 = openstudio.Point3d( 5,  5, -5)
@@ -2510,8 +2507,48 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(o.is_error())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], m2)
-
         self.assertTrue(o.clean(), DBG)
+
+        # CASE a1: 2x end-to-end line segments (returns matching endpoints).
+        self.assertTrue(osut.doesLineIntersect([p0, p1], [p1, p2]))
+        pt = osut.lineIntersection([p0, p1], [p1, p2])
+        self.assertTrue(osut.areSame(pt, p1))
+        #
+        # # CASE a2: as a1, sequence of line segment endpoints doesn't matter.
+        self.assertTrue(osut.doesLineIntersect([p1, p0], [p1, p2]))
+        pt = osut.lineIntersection([p1, p0], [p1, p2])
+        self.assertTrue(osut.areSame(pt, p1))
+        #
+        # # CASE b1: 2x right-angle line segments, with 1x matching at corner.
+        self.assertTrue(osut.doesLineIntersect([p1, p2], [p1, p3]))
+        pt = osut.lineIntersection([p1, p2], [p2, p3])
+        self.assertTrue(osut.areSame(pt, p2))
+        #
+        # # CASE b2: as b1, sequence of segments doesn't matter.
+        self.assertTrue(osut.doesLineIntersect([p2, p3], [p1, p2]))
+        pt = osut.lineIntersection([p2, p3], [p1, p2])
+        self.assertTrue(osut.areSame(pt, p2))
+
+        # CASE c: 2x right-angle line segments, yet disconnected.
+        self.assertFalse(osut.doesLineIntersect([p0, p1], [p2, p3]))
+        pt = osut.lineIntersection([p0, p1], [p2, p3])
+        self.assertFalse(pt)
+
+        # CASE d: 2x connected line segments, acute angle.
+        self.assertTrue(osut.doesLineIntersect([p0, p2], [p3, p0]))
+        pt = osut.lineIntersection([p0, p2], [p3, p0])
+        self.assertTrue(osut.areSame(pt, p0))
+        #
+        # # CASE e1: 2x disconnected line segments, right angle.
+        self.assertTrue(osut.doesLineIntersect([p0, p2], [p4, p6]))
+        pt = osut.lineIntersection([p0, p2], [p4, p6])
+        self.assertTrue(osut.areSame(pt, p5))
+        #
+        # # CASE e2: as e1, sequence of line segment endpoints doesn't matter.
+        self.assertTrue(osut.doesLineIntersect([p0, p2], [p6, p4]))
+        pt = osut.lineIntersection([p0, p2], [p6, p4])
+        self.assertTrue(osut.areSame(pt, p5))
+
 
     def test26_ulc_blc(self):
         o = osut.oslg
