@@ -2384,7 +2384,68 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         # ... to be completed later.
 
-    # def test23_fits_overlaps(self):
+    def test23_fits_overlaps(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        self.assertEqual(o.status(), 0)
+
+        v = int("".join(openstudio.openStudioVersion().split(".")))
+
+        p1 = openstudio.Point3dVector()
+        p2 = openstudio.Point3dVector()
+
+        p1.append(openstudio.Point3d(3.63, 0, 4.03))
+        p1.append(openstudio.Point3d(3.63, 0, 2.44))
+        p1.append(openstudio.Point3d(7.34, 0, 2.44))
+        p1.append(openstudio.Point3d(7.34, 0, 4.03))
+
+        t = openstudio.Transformation.alignFace(p1)
+
+        if v < 340:
+            p2.append(openstudio.Point3d(3.63, 0, 2.49))
+            p2.append(openstudio.Point3d(3.63, 0, 1.00))
+            p2.append(openstudio.Point3d(7.34, 0, 1.00))
+            p2.append(openstudio.Point3d(7.34, 0, 2.49))
+        else:
+            p2.append(openstudio.Point3d(3.63, 0, 2.47))
+            p2.append(openstudio.Point3d(3.63, 0, 1.00))
+            p2.append(openstudio.Point3d(7.34, 0, 1.00))
+            p2.append(openstudio.Point3d(7.34, 0, 2.47))
+
+        area1 = openstudio.getArea(p1)
+        area2 = openstudio.getArea(p2)
+        self.assertTrue(area1)
+        self.assertTrue(area2)
+        area1 = area1.get()
+        area2 = area2.get()
+
+        p1a = list(t.inverse() * p1)
+        p2a = list(t.inverse() * p2)
+        p1a.reverse()
+        p2a.reverse()
+
+        union = openstudio.join(p1a, p2a, TOL2)
+        self.assertTrue(union)
+        union = union.get()
+        area  = openstudio.getArea(union)
+        self.assertTrue(area)
+        area  = area.get()
+        delta = area1 + area2 - area
+
+        res  = openstudio.intersect(p1a, p2a, TOL)
+        self.assertTrue(res)
+        res  = res.get()
+        res1 = res.polygon1()
+        self.assertTrue(res1)
+
+        res1_m2 = openstudio.getArea(res1)
+        self.assertTrue(res1_m2)
+        res1_m2 = res1_m2.get()
+        self.assertAlmostEqual(res1_m2, delta, places=2)
+        # self.assertTrue(mod1.doesOverlap(p1a, p2a))
+        # self.assertEqual(o.status(), 0)
 
     def test24_triangulation(self):
         o = osut.oslg
@@ -2407,41 +2468,26 @@ class TestOSutModuleMethods(unittest.TestCase):
         a_vtx.reverse()
         results = openstudio.computeTriangulation(a_vtx, holes)
         self.assertEqual(len(results), 1)
-        vtx0 = list(results[0])
-        vtx0.reverse()
+        # vtx0 = list(results[0])
+        # vtx0.reverse()
         # for vt0 in vtx0: print(vt0) # == initial triangle, yet flat.
         # [20, 10, 0]
         # [ 0, 10, 0]
         # [ 0,  0, 0]
 
         vtx.append(openstudio.Point3d(20, 0,  0))
-        # vtx << OpenStudio::Point3d.new(20, 0,  0)
-        # t       = OpenStudio::Transformation.alignFace(vtx)
-        # a_vtx   = (t.inverse * vtx).reverse
-        # results = OpenStudio.computeTriangulation(a_vtx, holes)
-        # expect(results.size).to eq(2)
-        # results.each { |result| puts result }
-        # [ 0, 10, 0]
-        # [20, 10, 0]
-        # [20,  0, 0]
-        #
-        # [ 0,  0, 0]
-        # [ 0, 10, 0]
-        # [20,  0, 0]
         t = openstudio.Transformation.alignFace(vtx)
         a_vtx = list(t.inverse() * vtx)
         a_vtx.reverse()
         results = openstudio.computeTriangulation(a_vtx, holes)
         self.assertEqual(len(results), 2)
-        vtx0 = list(results[0])
-        vtx1 = list(results[0])
-        # for vt0 in vtx0: print(vt0)
+        # for vt0 in list(results[0]): print(vt0)
         # [ 0, 10, 0]
         # [20, 10, 0]
         # [20,  0, 0]
-        # for vt1 in vtx1: print(vt1)
+        # for vt1 in list(results[1]): print(vt1)
+        # [ 0,  0, 0]
         # [ 0, 10, 0]
-        # [20, 10, 0]
         # [20,  0, 0]
 
     def test25_segments_triads_orientation(self):
@@ -2548,7 +2594,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(osut.doesLineIntersect([p0, p2], [p6, p4]))
         pt = osut.lineIntersection([p0, p2], [p6, p4])
         self.assertTrue(osut.areSame(pt, p5))
-
 
     def test26_ulc_blc(self):
         o = osut.oslg

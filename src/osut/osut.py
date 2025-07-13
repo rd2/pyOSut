@@ -2598,7 +2598,7 @@ def areSame(s1=None, s2=None, indexed=True) -> bool:
     for i in range(len(s1)):
         if abs(s1[i].x() - s2[i].x()) > CN.TOL: return False
         if abs(s1[i].y() - s2[i].y()) > CN.TOL: return False
-        if abs(s1[i].z() - s2[i].z()) > CN.TOL: return false
+        if abs(s1[i].z() - s2[i].z()) > CN.TOL: return False
 
     return True
 
@@ -3494,7 +3494,10 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
         a.append(p2)
 
     if pts[0] in a:
-        if not areSame(a[0], pts[0]): a = a.rotate(1)
+        if not areSame(a[0], pts[0]):
+            a = collections.deque(a)
+            a.rotate(1)
+            a = list(a)
 
     if n > len(a): return to_p3Dv(a)
     if n < 0 and abs(n) > len(a): return to_p3Dv(a)
@@ -3511,7 +3514,7 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
 
     Args:
         pts (openstudio.Point3dVector):
-            An OpenStudio vector of pre-aligned 3D points.
+            An OpenStudio vector of 3D points.
         n (int):
             Requested number of collinears (0 returns all).
 
@@ -3548,6 +3551,384 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
     if n < 0: a = a[n:]
 
     return to_p3Dv(a)
+
+
+def poly(pts=None, vx=False, uq=False, co=False, tt=False, sq="no") -> openstudio.Point3dVector:
+    """Returns an OpenStudio 3D point vector as basis for a valid OpenStudio 3D
+    polygon. In addition to basic OpenStudio polygon tests (e.g. all points
+    sharing the same 3D plane, non-self-intersecting), the method can
+    optionally check for convexity, or ensure uniqueness and/or non-collinearity.
+    Returned vector can also be 'aligned', as well as in UpperLeftCorner (ULC),
+    BottomLeftCorner (BLC), in clockwise (or counterclockwise) sequences.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+        vx (bool):
+            Whether to check for convexity.
+        uq (bool):
+            Whether to ensure uniqueness.
+        co (bool):
+            Whether to ensure non-collinearity.
+        tt (bool, openstudio.Transformation):
+            Whether to 'align'.
+        sq ("no", "ulc", "blc", "cw"):
+            Unaltered, ULC, BLC or clockwise sequence.
+
+    Returns:
+        openstudio.Point3dVector: 3D points (see logs if empty).
+
+    """
+    mth = "osut.poly"
+    pts = to_p3Dv(pts)
+    cl  = openstudio.Transformation
+    v   = openstudio.Point3dVector()
+    sqs = ["no", "ulc", "blc", "cw"]
+    if not isinstance(vx, bool): vx = False
+    if not isinstance(uq, bool): uq = False
+    if not isinstance(co, bool): co = False
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Exit if mismatched/invalid arguments.
+    if not isinstance(tt, bool) and not isinstance(tt, cl):
+        return oslg.invalid("transformation", mth, 5, CN.DBG, v)
+
+    if sq not in sqs:
+        return oslg.invalid("sequence", mth, 6, CN.DBG, v)
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Minimum 3 points?
+    p3 = nonCollinears(pts, 3)
+
+    if len(p3) < 3:
+        return oslg.empty("polygon (non-collinears < 3)", mth, CN.ERR, v)
+
+    # Coplanar?
+    pln = openstudio.Plane(p3)
+
+    for pt in pts:
+        if not pln.pointOnPlane(pt): return oslg.empty("plane", mth, CN.ERR, v)
+
+    t  = openstudio.Transformation.alignFace(pts)
+    at = t.inverse() * pts
+    at.reverse()
+
+    if isinstance(tt, cl):
+        att = tt.inverse() * pts
+        att.reverse()
+
+        if areSame(at, att):
+            a = att
+            if isClockwise(a): a = list(ulc(a))
+            t = None
+        else:
+            if shareXYZ(att, "z"):
+                t = None
+            else:
+                t = openstudio.Transformation.alignFace(att)
+
+            if t:
+                a = t.inverse() * att
+                a.reverse()
+            else:
+                a = att
+    else:
+        a = at
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Ensure uniqueness and/or non-collinearity. Preserve original sequence.
+    p0 = a[0]
+    i0 = None
+    if uq: a = list(uniques(a))
+    if co: a = list(nonCollinears(a))
+
+    i0 = [i for i, pt in enumerate(a) if areSame(pt, p0)]
+
+    if i0:
+        i0 = i0[0]
+        a  = collections.deque(a)
+        a.rotate(-i0)
+        a  = list(a)
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Check for convexity (optional).
+    if vx and len(a) > 3:
+        zen = openstudio.Point3d(0, 0, 1000)
+
+        for trio in triads(a):
+            p1  = trio[0]
+            p2  = trio[1]
+            p3  = trio[2]
+            v12 = p2 - p1
+            v13 = p3 - p1
+            x   = (zen - p1).cross(v12)
+            if round(x.dot(v13), 4) > 0: return v
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Alter sequence (optional).
+    if sq != "cw": a.reverse()
+
+    if isinstance(tt, cl):
+        if sq == "ulc":
+            a = to_p3Dv(t * ulc(a)) if t else to_p3Dv(ulc(a))
+        elif sq == "blc":
+            a = to_p3Dv(t * blc(a)) if t else to_p3Dv(blc(a))
+        elif sq == "cw":
+            a = to_p3Dv(t * a) if t else to_p3Dv(a)
+        else:
+            a = to_p3Dv(t * a) if t else to_p3Dv(a)
+    else:
+        if sq == "ulc":
+            a = to_p3Dv(ulc(a)) if tt else to_p3Dv(t * ulc(a))
+        elif sq == "blc":
+            a = to_p3Dv(blc(a)) if tt else to_p3Dv(t * blc(a))
+        elif sq == "cw":
+            a = to_p3Dv(a) if tt else to_p3Dv(t * a)
+        else:
+            a = to_p3Dv(a) if tt else to_p3Dv(t * a)
+
+    return a
+
+
+def isPointWithinPolygon(p0=None, s=[], entirely=False) -> bool:
+    """Validates whether 3D point is within a 3D polygon. If option 'entirely'
+    is set to True, then the method returns False if point lies along any of
+    the polygon edges, or is very near any of its vertices.
+
+    Args:
+        p0 (openstudio.Point3d):
+            a 3D point.
+        s (openstudio.Point3dVector):
+            A 3D polygon.
+        entirely (bool):
+            Whether point should be neatly within polygon limits.
+
+    Returns:
+        bool: Whether 3D point lies within 3D polygon.
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.isPointWithinPolygon"
+    cl  = openstudio.Point3d
+
+    if not isinstance(p0, cl):
+        return oslg.mismatch("point", p0, cl, mth, CN.DBG, False)
+
+    s = poly(s, False, True, True)
+    if not s: return oslg.empty("polygon", mth, CN.DBG, False)
+
+    n = OpenStudio.getOutwardNormal(s)
+    if not n: return oslg.invalid("plane/normal", mth, 2, CN.DBG, False)
+
+    n  = n.get()
+    pl = openstudio.Plane(s[0], n)
+    if not pl.pointOnPlane(p0): return False
+    if not isinstance(entireley, bool): entirely = False
+
+    segs = segments(s)
+
+    # Along polygon edges, or near vertices?
+    if isPointAlongSegments(p0, segs):
+        return False if entirely else True
+
+    for segment in segs:
+        # - draw vector from segment midpoint to point
+        # - scale 1000x (assuming no building surface would be 1km wide)
+        # - convert vector to an independent line segment
+        # - loop through polygon segments, tally the number of intersections
+        # - avoid double-counting polygon vertices as intersections
+        # - return False if number of intersections is even
+        mid = midpoint(segment[0], segment[1])
+        mpV = scalar(mid - p0, 1000)
+        p1  = p0 + mpV
+        ctr = 0
+
+        # Skip if ~collinear.
+        if round(mpV.cross(segment[1] - segment[0]).length(), 4) < CN.TOL2:
+            continue
+
+        for sg in segs:
+            intersect = lineIntersection([p0, p1], sg)
+            if not intersect: continue
+
+            # Skip test altogether if one of the polygon vertices.
+            if holds(s, intersect):
+                ctr = 0
+                break
+            else:
+                ctr += 1
+
+        if ctr == 0: continue
+        if ctr % 2 == 0: return False # 'even'?
+
+    return True
+
+
+def areParallel(p1=None, p2=None) -> bool:
+    """Validates whether 2 polygons are parallel, regardless of their direction.
+
+    Args:
+        p1 (openstudio.Point3dVector):
+            1st set of 3D points.
+        p2 (openstudio.Point3dVector):
+            2nd set of 3D points.
+
+    Returns:
+        bool: Whether 2 polygons are parallel.
+        False: If invalid inputs.
+
+    """
+    p1 = poly(p1, False, True)
+    p2 = poly(p2, False, True)
+    if not p1: return False
+    if not p2: return False
+
+    n1 = OpenStudio.getOutwardNormal(p1)
+    n2 = OpenStudio.getOutwardNormal(p2)
+    if not n1: return False
+    if not n2: return False
+
+    return abs(n1.get().dot(n2.get())) > 0.99
+
+
+def isRoof(pts=None) -> bool:
+    """Validates whether a polygon can be considered a valid 'roof' surface, as
+    per ASHRAE 90.1 & Canadian NECBs, i.e. outward normal within 60° from
+    vertical.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of pre-aligned 3D points.
+
+    Returns:
+        bool: If considered a roof surface.
+        False: If invalid input (see logs).
+    """
+    ray = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
+    dut = math.cos(60 * math.pi / 180)
+    pts = poly(pts, False, True, True)
+    if not pts: return False
+
+    dot = ray.dot(openstudio.getOutwardNormal(pts).get())
+    if round(dot, 2) <= 0: return False
+    if round(dot, 2) == 1: return True
+
+    return round(dot, 4) >= round(dut, 4)
+
+
+def facingUp(pts=None) -> bool:
+    """Validates whether a polygon faces upwards, harmonized with OpenStudio
+    Utilities' "alignZPrime" function.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: If facing upwards.
+        False: If invalid inputs (see logs).
+
+    """
+    ray = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
+    pts = poly(pts, False, True, True)
+    if not pts : return False
+
+    return openstudio.getOutwardNormal(pts).get().dot(ray) > 0.99
+
+
+def facingDown(pts=None) -> bool:
+    """Validates whether a polygon faces downwards, harmonized with OpenStudio
+    Utilities' "alignZPrime" function.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: If facing downwards.
+        False: If invalid inputs (see logs).
+
+    """
+    ray = openstudio.Point3d(0,0,-1) - openstudio.Point3d(0,0,0)
+    pts = poly(pts, False, True, True)
+    if not pts: return False
+
+    return openstudio.getOutwardNormal(pts).get().dot(ray) > 0.99
+
+
+def isSloped(pts=None) -> bool:
+    """Validates whether a surface can be considered 'sloped' (i.e. not ~flat,
+    as per OpenStudio Utilities' "alignZPrime"). Vertical polygons returns True.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: Whether surface is sloped.
+        False: If invalid input (see logs).
+
+    """
+    pts = poly(pts, False, True, True)
+    if not pts: return False
+    if facingUp(pts): return False
+    if facingDown(pts): return False
+
+    return True
+
+
+def isRectangular(pts=None) -> bool:
+    """Validates whether an OpenStudio polygon is a rectangle (4x sides + 2x
+    diagonals of equal length, meeting at midpoints).
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: Whether polygon is rectangular.
+        False: If invalid input (see logs).
+
+    """
+    pts = poly(pts, False, False, False)
+    if not pts: return False
+    if len(pts) != 4: return False
+
+    m1 = midpoint(pts[0], pts[2])
+    m2 = midpoint(pts[1], pts[3])
+    if not areSame(m1, m2): return False
+
+    diag1 = pts[2] - pts[0]
+    diag2 = pts[3] - pts[1]
+    if abs(diag1.length() - diag2.length()) < CN.TOL: return True
+
+    return False
+
+
+def isSquare(pts=None) -> bool:
+    """Validates whether an OpenStudio polygon is a square (rectangular,
+    4x ~equal sides).
+
+    Args:
+        pts (openstudio.Point3dVector):
+            An OpenStudio vector of 3D points.
+
+    Returns:
+        bool: Whether polygon is a square.
+        False: If invalid input (see logs).
+
+    """
+    d   = None
+    pts = poly(pts, False, False, False)
+    if not pts: return False
+    if not isRectangular(pts): return False
+
+    for pt in segments(pts):
+        l = (pt[1] - pt[0]).length()
+        if not d: d = l
+        if round(l, 2) != round(d, 2): return False
+
+    return True
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
