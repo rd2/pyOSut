@@ -2444,8 +2444,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(res1_m2)
         res1_m2 = res1_m2.get()
         self.assertAlmostEqual(res1_m2, delta, places=2)
-        # self.assertTrue(osut.overlaps(p1a, p2a))
-        # self.assertEqual(o.status(), 0)
+        # olap = osut.overlap(p1a, p2a)
+        self.assertTrue(osut.doesOverlap(p1a, p2a))
+        self.assertEqual(o.status(), 0)
 
     def test24_triangulation(self):
         o = osut.oslg

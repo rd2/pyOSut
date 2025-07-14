@@ -3978,7 +3978,7 @@ def fits(p1=None, p2=None, entirely=False) -> bool:
     return True
 
 
-def overlaps(p1=None, p2=None, flat=False) -> bool:
+def overlap(p1=None, p2=None, flat=False) -> bool:
     """Returns intersection of overlapping polygons, empty if non intersecting.
     If the optional 3rd argument is left as False, the 2nd polygon may only
     overlap if it shares the 3D plane equation of the 1st one. If the 3rd
@@ -4011,19 +4011,17 @@ def overlaps(p1=None, p2=None, flat=False) -> bool:
 
     if not isinstance(flat, bool): flat = False
 
+    cw1 = isClockwise(p01)
+    t = None
+
     if shareXYZ(p01, "z"):
-        t   = None
-        a1  = list(p01)
-        a2  = list(p02)
-        cw1 = isClockwise(p01)
+        a1 = list(p01)
+        a2 = list(p02)
         if cw1: a1.reverse()
-        if flat: a2 = flatten(a2)
+        if flat: a2 = list(flatten(a2))
 
         if not shareXYZ(a2, "z"):
             return invalid("points 2", mth, 2, CN.DBG, face)
-
-        cw2 = isClockwise(a2)
-        if cw2: a2.reverse()
     else:
         t  = openstudio.Transformation.alignFace(p01)
         a1 = t.inverse() * p01
@@ -4033,8 +4031,8 @@ def overlaps(p1=None, p2=None, flat=False) -> bool:
         if not shareXYZ(a2, "z"):
             return invalid("points 2", mth, 2, CN.DBG, face)
 
-        cw2 = isClockwise(a2)
-        if cw2: a2.reverse()
+    cw2 = isClockwise(a2)
+    if cw2: a2.reverse()
 
     # Return either (transformed) polygon if one fits into the other.
     p1t = p01
@@ -4044,11 +4042,11 @@ def overlaps(p1=None, p2=None, flat=False) -> bool:
         p2t = to_p3Dv(t * a2)
     else:
         if cw1:
-            if cw2: a2.reverse()
-            p2t = to_p3Dv(a2)
-        else:
             if not cw2: a2.reverse()
-            p2t = to_p3Dv(a2)
+        else:
+            if cw2: a2.reverse()
+
+        p2t = to_p3Dv(a2)
 
     if fits(a1, a2): return p1t
     if fits(a2, a1): return p2t
@@ -4063,11 +4061,12 @@ def overlaps(p1=None, p2=None, flat=False) -> bool:
     area2 = area2.get()
     a1.reverse()
     a2.reverse()
+
     union = openstudio.join(a1, a2, CN.TOL2)
     if not union: return face
 
     union = union.get()
-    area  = OpenStudio.getArea(union)
+    area  = openstudio.getArea(union)
     if not area: return face
 
     area  = area.get()
@@ -4085,10 +4084,31 @@ def overlaps(p1=None, p2=None, flat=False) -> bool:
     res1 = res.polygon1()
     if not res1: return face
 
+    res1 = list(res1)
     res1.reverse()
     if t: res1 = t * res1
 
     return to_p3Dv(res1)
+
+
+def doesOverlap(p1=None, p2=None, flat=False):
+    """Determines whether OpenStudio polygons overlap.
+
+    Args:
+        p1 (openstudio.Point3d):
+            1st OpenStudio vector of 3D points.
+        p2 (openstudio.Point3d):
+            2nd OpenStudio vector of 3D points.
+        flat (bool):
+             Whether to first project the 2nd set onto the 1st set plane.
+
+    Returns:
+        bool: Whether polygons overlap (or fit).
+        False: If invalid input (see logs).
+    """
+    if overlap(p1, p2, flat): return True
+
+    return False
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
