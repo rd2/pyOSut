@@ -2444,7 +2444,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(res1_m2)
         res1_m2 = res1_m2.get()
         self.assertAlmostEqual(res1_m2, delta, places=2)
-        # olap = osut.overlap(p1a, p2a)
         self.assertTrue(osut.doesOverlap(p1a, p2a))
         self.assertEqual(o.status(), 0)
 
