@@ -3610,11 +3610,11 @@ def poly(pts=None, vx=False, uq=False, co=False, tt=False, sq="no") -> openstudi
         if not pln.pointOnPlane(pt): return oslg.empty("plane", mth, CN.ERR, v)
 
     t  = openstudio.Transformation.alignFace(pts)
-    at = t.inverse() * pts
+    at = list(t.inverse() * pts)
     at.reverse()
 
     if isinstance(tt, cl):
-        att = tt.inverse() * pts
+        att = list(tt.inverse() * pts)
         att.reverse()
 
         if areSame(at, att):
@@ -3628,7 +3628,7 @@ def poly(pts=None, vx=False, uq=False, co=False, tt=False, sq="no") -> openstudi
                 t = openstudio.Transformation.alignFace(att)
 
             if t:
-                a = t.inverse() * att
+                a = list(t.inverse() * att)
                 a.reverse()
             else:
                 a = att
@@ -3717,13 +3717,13 @@ def isPointWithinPolygon(p0=None, s=[], entirely=False) -> bool:
     s = poly(s, False, True, True)
     if not s: return oslg.empty("polygon", mth, CN.DBG, False)
 
-    n = OpenStudio.getOutwardNormal(s)
+    n = openstudio.getOutwardNormal(s)
     if not n: return oslg.invalid("plane/normal", mth, 2, CN.DBG, False)
 
     n  = n.get()
     pl = openstudio.Plane(s[0], n)
     if not pl.pointOnPlane(p0): return False
-    if not isinstance(entireley, bool): entirely = False
+    if not isinstance(entirely, bool): entirely = False
 
     segs = segments(s)
 
@@ -3929,6 +3929,166 @@ def isSquare(pts=None) -> bool:
         if round(l, 2) != round(d, 2): return False
 
     return True
+
+
+def fits(p1=None, p2=None, entirely=False) -> bool:
+    """Determines whether a 1st OpenStudio polygon (p1) fits within a 2nd
+    polygon (p2). Vertex sequencing of both polygons must be counterclockwise.
+    If option 'entirely' is True, then the method returns False if a 'p1' point
+    lies along any of the 'p2' polygon edges, or is very near any of its
+    vertices.
+
+    Args:
+        p1 (openstudio.Point3d):
+            1st OpenStudio vector of 3D points.
+        p2 (openstudio.Point3d):
+            2nd OpenStudio vector of 3D points.
+        entirely (bool):
+            Whether point should be neatly within polygon limits.
+
+    Returns:
+        bool: Whether 1st polygon fits within the 2nd polygon.
+        False: If invalid input (see logs).
+
+    """
+    pts = []
+    p1  = poly(p1)
+    p2  = poly(p2)
+    if not p1: return False
+    if not p2: return False
+
+    for p0 in p1:
+        if not isPointWithinPolygon(p0, p2): return False
+
+    # Although p2 points may lie ALONG p1, none may lie entirely WITHIN p1.
+    for p0 in p2:
+        if isPointWithinPolygon(p0, p1): return False
+
+    # p1 segment mid-points must not lie OUTSIDE of p2.
+    for sg in segments(p1):
+        mp = midpoint(sg[0], sg[1])
+        if not isPointWithinPolygon(mp, p2): return False
+
+    if not isinstance(entirely, bool): entirely = False
+    if not entirely: return True
+
+    for p0 in p1:
+        if not isPointWithinPolygon(p0, p2, entirely): return False
+
+    return True
+
+
+def overlaps(p1=None, p2=None, flat=False) -> bool:
+    """Returns intersection of overlapping polygons, empty if non intersecting.
+    If the optional 3rd argument is left as False, the 2nd polygon may only
+    overlap if it shares the 3D plane equation of the 1st one. If the 3rd
+    argument is instead set to True, then the 2nd polygon is first 'cast' onto
+    the 3D plane of the 1st one; the method therefore returns (as overlap) the
+    intersection of a 'projection' of the 2nd polygon onto the 1st one. The
+    method returns the smallest of the 2 polygons if either fits within the
+    larger one.
+
+    Args:
+        p1 (openstudio.Point3d):
+            1st OpenStudio vector of 3D points.
+        p2 (openstudio.Point3d):
+            2nd OpenStudio vector of 3D points.
+        flat (bool):
+             Whether to first project the 2nd set onto the 1st set plane.
+
+    Returns:
+        openstudio.Point3dVector: Largest intersection (see logs if empty).
+
+    """
+    mth  = "osut.overlap"
+    face = openstudio.Point3dVector()
+    p01  = poly(p1)
+    p02  = poly(p2)
+    if not p01: return oslg.empty("points 1", mth, CN.DBG, face)
+    if not p02: return oslg.empty("points 2", mth, CN.DBG, face)
+    if fits(p01, p02): return p01
+    if fits(p02, p01): return p02
+
+    if not isinstance(flat, bool): flat = False
+
+    if shareXYZ(p01, "z"):
+        t   = None
+        a1  = list(p01)
+        a2  = list(p02)
+        cw1 = isClockwise(p01)
+        if cw1: a1.reverse()
+        if flat: a2 = flatten(a2)
+
+        if not shareXYZ(a2, "z"):
+            return invalid("points 2", mth, 2, CN.DBG, face)
+
+        cw2 = isClockwise(a2)
+        if cw2: a2.reverse()
+    else:
+        t  = openstudio.Transformation.alignFace(p01)
+        a1 = t.inverse() * p01
+        a2 = t.inverse() * p02
+        if flat: a2 = list(flatten(a2))
+
+        if not shareXYZ(a2, "z"):
+            return invalid("points 2", mth, 2, CN.DBG, face)
+
+        cw2 = isClockwise(a2)
+        if cw2: a2.reverse()
+
+    # Return either (transformed) polygon if one fits into the other.
+    p1t = p01
+
+    if t:
+        if not cw2: a2.reverse()
+        p2t = to_p3Dv(t * a2)
+    else:
+        if cw1:
+            if cw2: a2.reverse()
+            p2t = to_p3Dv(a2)
+        else:
+            if not cw2: a2.reverse()
+            p2t = to_p3Dv(a2)
+
+    if fits(a1, a2): return p1t
+    if fits(a2, a1): return p2t
+
+    area1 = openstudio.getArea(a1)
+    area2 = openstudio.getArea(a2)
+
+    if not area1: return oslg.empty("points 1 area", mth, CN.ERR, face)
+    if not area2: return oslg.empty("points 2 area", mth, CN.ERR, face)
+
+    area1 = area1.get()
+    area2 = area2.get()
+    a1.reverse()
+    a2.reverse()
+    union = openstudio.join(a1, a2, CN.TOL2)
+    if not union: return face
+
+    union = union.get()
+    area  = OpenStudio.getArea(union)
+    if not area: return face
+
+    area  = area.get()
+    delta = area1 + area2 - area
+
+    if area > CN.TOL:
+        if round(area,  2) == round(area1, 2): return face
+        if round(area,  2) == round(area2, 2): return face
+        if round(delta, 2) == 0: return face
+
+    res = openstudio.intersect(a1, a2, CN.TOL)
+    if not res: return face
+
+    res  = res.get()
+    res1 = res.polygon1()
+    if not res1: return face
+
+    res1.reverse()
+    if t: res1 = t * res1
+
+    return to_p3Dv(res1)
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
