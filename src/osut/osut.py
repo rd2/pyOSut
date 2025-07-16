@@ -2510,7 +2510,7 @@ def scalar(v=None, m=0) -> openstudio.Vector3d:
     return v0
 
 
-def to_p3Dv(pts=None) -> openstudio.Point3dVector:
+def p3Dv(pts=None) -> openstudio.Point3dVector:
     """Returns OpenStudio 3D points as an OpenStudio point vector, validating
     points in the process.
 
@@ -2521,7 +2521,7 @@ def to_p3Dv(pts=None) -> openstudio.Point3dVector:
         openstudio.Point3dVector: Vector of 3D points (see logs if empty).
 
     """
-    mth = "osut.to_p3Dv"
+    mth = "osut.p3Dv"
     cl  = openstudio.Point3d
     v   = openstudio.Point3dVector()
 
@@ -2531,7 +2531,7 @@ def to_p3Dv(pts=None) -> openstudio.Point3dVector:
     elif isinstance(pts, openstudio.Point3dVector):
         return pts
     elif isinstance(pts, openstudio.model.PlanarSurface):
-        return pts.vertices()
+        pts = list(pts.vertices())
 
     try:
         pts = list(pts)
@@ -2564,8 +2564,8 @@ def areSame(s1=None, s2=None, indexed=True) -> bool:
         False: If invalid input (see logs).
 
     """
-    s1 = list(to_p3Dv(s1))
-    s2 = list(to_p3Dv(s2))
+    s1 = list(p3Dv(s1))
+    s2 = list(p3Dv(s2))
     if not s1: return False
     if not s2: return False
     if len(s1) != len(s2): return False
@@ -2618,7 +2618,7 @@ def holds(pts=None, p1=None) -> bool:
 
     """
     mth = "osut.holds"
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     cl  = openstudio.Point3d
 
     if not isinstance(p1, cl):
@@ -2654,7 +2654,7 @@ def nearest(pts=None, p01=None):
     d02 = 0
     d03 = 0
     idx = None
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     if not pts: return idx
 
     p03 = openstudio.Point3d( l,-l,-l)
@@ -2715,7 +2715,7 @@ def farthest(pts=None, p01=None):
     d02 = 10000
     d03 = 10000
     idx = None
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     if not pts: return idx
 
     p03 = openstudio.Point3d( l,-l,-l)
@@ -2766,7 +2766,7 @@ def flatten(pts=None, axs="z", val=0) -> openstudio.Point3dVector:
         openstudio.Point3dVector: flattened points (see logs if empty)
     """
     mth = "osut.flatten"
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     v   = openstudio.Point3dVector()
 
     try:
@@ -2808,7 +2808,7 @@ def shareXYZ(pts=None, axs="z", val=0) -> bool:
 
     """
     mth = "osut.shareXYZ"
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     if not pts: return False
 
     try:
@@ -2851,7 +2851,7 @@ def nextUp(pts=None, pt=None):
 
     """
     mth = "osut.nextUP"
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     cl  = openstudio.Point3d
 
     if not isinstance(pt, cl):
@@ -2877,7 +2877,7 @@ def width(pts=None) -> float:
         float: 'Width' along X-axis.
         0.0: If invalid input (see logs).
     """
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     if len(pts) < 2: return 0
 
     xs = [pt.x() for pt in pts]
@@ -2897,7 +2897,7 @@ def height(pts=None) -> float:
         float: 'Height' along Z-axis, or Y-axis if points are flat.
         0.0: If invalid input (see logs).
     """
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     if len(pts) < 2: return 0
 
     zs = [pt.z() for pt in pts]
@@ -2993,7 +2993,7 @@ def uniques(pts=None, n=0) -> openstudio.Point3dVector:
 
     """
     mth = "osut.uniques"
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     v   = openstudio.Point3dVector()
     if not pts: return v
 
@@ -3057,7 +3057,7 @@ def isSegment(pts=None) -> bool:
         False: If invalid input (see logs).
 
     """
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     if len(pts) != 2: return False
     if areSame(pts[0], pts[1]): return False
 
@@ -3112,7 +3112,7 @@ def isTriad(pts=None) -> bool:
         False: If invalid input (see logs).
 
     """
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     if len(pts) != 3: return False
     if areSame(pts[0], pts[1]): return False
     if areSame(pts[0], pts[2]): return False
@@ -3344,7 +3344,7 @@ def isClockwise(pts=None) -> bool:
 
     """
     mth = "osut.isClockwise"
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
 
     if len(pts) < 3:
         return oslg.invalid("3+ points", mth, 1, CN.DBG, False)
@@ -3375,7 +3375,7 @@ def ulc(pts=None) -> openstudio.Point3dVector:
     """
     mth = "osut.ulc"
     v   = openstudio.Point3dVector()
-    pts = list(to_p3Dv(pts))
+    pts = list(p3Dv(pts))
 
     if len(pts) < 3:
         return oslg.invalid("points (3+)", mth, 1, CN.DBG, v)
@@ -3400,7 +3400,7 @@ def ulc(pts=None) -> openstudio.Point3dVector:
     pts = collections.deque(pts)
     pts.rotate(-i1)
 
-    return to_p3Dv(list(pts))
+    return p3Dv(list(pts))
 
 
 def blc(pts=None) -> openstudio.Point3dVector:
@@ -3417,7 +3417,7 @@ def blc(pts=None) -> openstudio.Point3dVector:
     """
     mth = "osut.blc"
     v   = openstudio.Point3dVector()
-    pts = list(to_p3Dv(pts))
+    pts = list(p3Dv(pts))
 
     if len(pts) < 3:
         return oslg.invalid("points (3+)", mth, 1, CN.DBG, v)
@@ -3438,7 +3438,7 @@ def blc(pts=None) -> openstudio.Point3dVector:
     if p0 in pts_x:
         pts = collections.deque(pts)
         pts.rotate(-i0)
-        return to_p3Dv(list(pts))
+        return p3Dv(list(pts))
 
     for pt in pts_x:
         if round((pt - p0).length(), 2) < round((p1 - p0).length(), 2): p1 = pt
@@ -3447,7 +3447,7 @@ def blc(pts=None) -> openstudio.Point3dVector:
     pts = collections.deque(pts)
     pts.rotate(-i1)
 
-    return to_p3Dv(list(pts))
+    return p3Dv(list(pts))
 
 
 def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
@@ -3499,13 +3499,13 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
             a.rotate(1)
             a = list(a)
 
-    if n > len(a): return to_p3Dv(a)
-    if n < 0 and abs(n) > len(a): return to_p3Dv(a)
+    if n > len(a): return p3Dv(a)
+    if n < 0 and abs(n) > len(a): return p3Dv(a)
 
     if n > 0: a = a[0:n]
     if n < 0: a = a[n:]
 
-    return to_p3Dv(a)
+    return p3Dv(a)
 
 
 def collinears(pts=None, n=0) -> openstudio.Point3dVector:
@@ -3544,13 +3544,13 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
     for pt in pts:
         if pt not in ncolls: a.append(pt)
 
-    if n > len(a): return to_p3Dv(a)
-    if n < 0 and abs(n) > len(a): return to_p3Dv(a)
+    if n > len(a): return p3Dv(a)
+    if n < 0 and abs(n) > len(a): return p3Dv(a)
 
     if n > 0: a = a[0:n]
     if n < 0: a = a[n:]
 
-    return to_p3Dv(a)
+    return p3Dv(a)
 
 
 def poly(pts=None, vx=False, uq=False, co=False, tt=False, sq="no") -> openstudio.Point3dVector:
@@ -3580,7 +3580,7 @@ def poly(pts=None, vx=False, uq=False, co=False, tt=False, sq="no") -> openstudi
 
     """
     mth = "osut.poly"
-    pts = to_p3Dv(pts)
+    pts = p3Dv(pts)
     cl  = openstudio.Transformation
     v   = openstudio.Point3dVector()
     sqs = ["no", "ulc", "blc", "cw"]
@@ -3670,22 +3670,22 @@ def poly(pts=None, vx=False, uq=False, co=False, tt=False, sq="no") -> openstudi
 
     if isinstance(tt, cl):
         if sq == "ulc":
-            a = to_p3Dv(t * ulc(a)) if t else to_p3Dv(ulc(a))
+            a = p3Dv(t * ulc(a)) if t else p3Dv(ulc(a))
         elif sq == "blc":
-            a = to_p3Dv(t * blc(a)) if t else to_p3Dv(blc(a))
+            a = p3Dv(t * blc(a)) if t else p3Dv(blc(a))
         elif sq == "cw":
-            a = to_p3Dv(t * a) if t else to_p3Dv(a)
+            a = p3Dv(t * a) if t else p3Dv(a)
         else:
-            a = to_p3Dv(t * a) if t else to_p3Dv(a)
+            a = p3Dv(t * a) if t else p3Dv(a)
     else:
         if sq == "ulc":
-            a = to_p3Dv(ulc(a)) if tt else to_p3Dv(t * ulc(a))
+            a = p3Dv(ulc(a)) if tt else p3Dv(t * ulc(a))
         elif sq == "blc":
-            a = to_p3Dv(blc(a)) if tt else to_p3Dv(t * blc(a))
+            a = p3Dv(blc(a)) if tt else p3Dv(t * blc(a))
         elif sq == "cw":
-            a = to_p3Dv(a) if tt else to_p3Dv(t * a)
+            a = p3Dv(a) if tt else p3Dv(t * a)
         else:
-            a = to_p3Dv(a) if tt else to_p3Dv(t * a)
+            a = p3Dv(a) if tt else p3Dv(t * a)
 
     return a
 
@@ -3783,8 +3783,8 @@ def areParallel(p1=None, p2=None) -> bool:
     if not p1: return False
     if not p2: return False
 
-    n1 = OpenStudio.getOutwardNormal(p1)
-    n2 = OpenStudio.getOutwardNormal(p2)
+    n1 = openstudio.getOutwardNormal(p1)
+    n2 = openstudio.getOutwardNormal(p2)
     if not n1: return False
     if not n2: return False
 
@@ -3962,7 +3962,7 @@ def fits(p1=None, p2=None, entirely=False) -> bool:
 
     # Although p2 points may lie ALONG p1, none may lie entirely WITHIN p1.
     for p0 in p2:
-        if isPointWithinPolygon(p0, p1): return False
+        if isPointWithinPolygon(p0, p1, True): return False
 
     # p1 segment mid-points must not lie OUTSIDE of p2.
     for sg in segments(p1):
@@ -4001,6 +4001,7 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
 
     """
     mth  = "osut.overlap"
+    t    = None
     face = openstudio.Point3dVector()
     p01  = poly(p1)
     p02  = poly(p2)
@@ -4008,48 +4009,24 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
     if not p02: return oslg.empty("points 2", mth, CN.DBG, face)
     if fits(p01, p02): return p01
     if fits(p02, p01): return p02
-
     if not isinstance(flat, bool): flat = False
-
-    cw1 = isClockwise(p01)
-    t = None
 
     if shareXYZ(p01, "z"):
         a1 = list(p01)
         a2 = list(p02)
-        if cw1: a1.reverse()
-        if flat: a2 = list(flatten(a2))
-
-        if not shareXYZ(a2, "z"):
-            return invalid("points 2", mth, 2, CN.DBG, face)
+        if isClockwise(p01): a1.reverse()
     else:
-        t  = openstudio.Transformation.alignFace(p01)
-        a1 = t.inverse() * p01
-        a2 = t.inverse() * p02
-        if flat: a2 = list(flatten(a2))
+        t   = openstudio.Transformation.alignFace(p01)
+        cw1 = False
+        a1  = list(t.inverse() * p01)
+        a2  = list(t.inverse() * p02)
 
-        if not shareXYZ(a2, "z"):
-            return invalid("points 2", mth, 2, CN.DBG, face)
+    if flat: a2 = list(flatten(a2))
 
-    cw2 = isClockwise(a2)
-    if cw2: a2.reverse()
+    if not shareXYZ(a2, "z"):
+        return invalid("points 2", mth, 2, CN.DBG, face)
 
-    # Return either (transformed) polygon if one fits into the other.
-    p1t = p01
-
-    if t:
-        if not cw2: a2.reverse()
-        p2t = to_p3Dv(t * a2)
-    else:
-        if cw1:
-            if not cw2: a2.reverse()
-        else:
-            if cw2: a2.reverse()
-
-        p2t = to_p3Dv(a2)
-
-    if fits(a1, a2): return p1t
-    if fits(a2, a1): return p2t
+    if isClockwise(a2): a2.reverse()
 
     area1 = openstudio.getArea(a1)
     area2 = openstudio.getArea(a2)
@@ -4081,17 +4058,15 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
     if not res: return face
 
     res  = res.get()
-    res1 = res.polygon1()
-    if not res1: return face
-
-    res1 = list(res1)
+    res1 = list(res.polygon1())
     res1.reverse()
-    if t: res1 = t * res1
+    if not res1: return face
+    if t: res1 = list(t * res1)
 
-    return to_p3Dv(res1)
+    return p3Dv(res1)
 
 
-def doesOverlap(p1=None, p2=None, flat=False):
+def overlapping(p1=None, p2=None, flat=False):
     """Determines whether OpenStudio polygons overlap.
 
     Args:
@@ -4109,6 +4084,56 @@ def doesOverlap(p1=None, p2=None, flat=False):
     if overlap(p1, p2, flat): return True
 
     return False
+
+
+def cast(p1=None, p2=None, ray=None) -> openstudio.Point3dVector:
+    """Casts an OpenStudio polygon onto the 3D plane of a 2nd polygon, relying
+    on an independent 3D ray vector.
+
+    Args:
+        p1 (openstudio.Point3dVector):
+            1st OpenStudio vector of 3D points.
+        p2 (openstudio.Point3dvector):
+            2nd OpenStudio vector of 3D points.
+        ray (openstudio.Point3d):
+            A 3D vector.
+
+    Returns:
+        (openstudio.Point3dVector): Cast of p1 onto p2 (see logs if empty).
+
+    """
+    mth  = "osut.cast"
+    cl   = openstudio.Vector3d
+    face = openstudio.Point3dVector()
+    p1   = poly(p1)
+    p2   = poly(p2)
+    if not p1: return face
+    if not p2: return face
+
+    if not isinstance(ray, cl):
+        return oslg.mismatch("ray", ray, cl, mth, CN.DBG, face)
+
+    # From OpenStudio SDK v3.7.0 onwards, one could/should rely on:
+    #
+    # s3.amazonaws.com/openstudio-sdk-documentation/cpp/OpenStudio-3.7.0-doc/
+    # utilities/html/classopenstudio_1_1_plane.html
+    # #abc4747b1b041a7f09a6887bc0e5abce1
+    #
+    #   Example Ruby implementation.
+    #   e.g. p1.each { |pt| face << pl.rayIntersection(pt, ray) }
+    #
+    # The following +/- replicates the same solution, based on:
+    #   https://stackoverflow.com/a/65832417
+    p0 = p2[0]
+    pl = openstudio.Plane(p2)
+    n  = pl.outwardNormal()
+    if abs(n.dot(ray)) < CN.TOL: return face
+
+    for pt in p1:
+        length = n.dot(pt - p0) / n.dot(ray.reverseVector())
+        face.append(pt) + scalar(ray, length)
+
+    return face
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:

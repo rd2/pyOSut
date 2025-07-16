@@ -28,6 +28,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import math
+import collections
 import unittest
 import openstudio
 from src.osut import osut
@@ -98,7 +99,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(o.logs()),1)
         self.assertEqual(o.logs()[0]["level"], DBG)
         self.assertEqual(o.logs()[0]["message"], m1)
-        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(o.clean(), DBG)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -110,7 +111,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(o.logs()),1)
         self.assertEqual(o.logs()[0]["level"], DBG)
         self.assertTrue(o.logs()[0]["message"], m2)
-        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(o.clean(), DBG)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del(model)
@@ -836,7 +837,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(th > 0)
 
         self.assertTrue(o.is_error())
-        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(o.clean(), DBG)
         self.assertEqual(o.status(), 0)
         self.assertFalse(o.logs())
 
@@ -1843,7 +1844,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(o.is_error())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], msg)
-        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(o.clean(), DBG)
         self.assertTrue(entry.additionalProperties().resetFeature(tag))
 
         # Successful attempts.
@@ -2444,8 +2445,190 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(res1_m2)
         res1_m2 = res1_m2.get()
         self.assertAlmostEqual(res1_m2, delta, places=2)
-        self.assertTrue(osut.doesOverlap(p1a, p2a))
+        self.assertTrue(osut.overlapping(p1a, p2a))
         self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Tests line intersecting line segments.
+        sg1 = openstudio.Point3dVector()
+        sg1.append(openstudio.Point3d(18, 0, 0))
+        sg1.append(openstudio.Point3d( 8, 3, 0))
+
+        sg2 = openstudio.Point3dVector()
+        sg2.append(openstudio.Point3d(12, 14, 0))
+        sg2.append(openstudio.Point3d(12,  6, 0))
+
+        self.assertFalse(osut.lineIntersection(sg1, sg2))
+
+        sg1 = openstudio.Point3dVector()
+        sg1.append(openstudio.Point3d(0.60,19.06, 0))
+        sg1.append(openstudio.Point3d(0.60, 0.60, 0))
+        sg1.append(openstudio.Point3d(0.00, 0.00, 0))
+        sg1.append(openstudio.Point3d(0.00,19.66, 0))
+
+        sg2 = openstudio.Point3dVector()
+        sg2.append(openstudio.Point3d(9.83, 9.83, 0))
+        sg2.append(openstudio.Point3d(0.00, 0.00, 0))
+        sg2.append(openstudio.Point3d(0.00,19.66, 0))
+
+        self.assertTrue(osut.areSame(sg1[2], sg2[1]))
+        self.assertTrue(osut.areSame(sg1[3], sg2[2]))
+        self.assertTrue(osut.fits(sg1, sg2))
+        self.assertFalse(osut.fits(sg2, sg1))
+        self.assertTrue(osut.areSame(osut.overlap(sg1, sg2), sg1))
+        self.assertTrue(osut.areSame(osut.overlap(sg2, sg1), sg1))
+
+        for i, pt in enumerate(sg1):
+            self.assertTrue(osut.isPointWithinPolygon(pt, sg2))
+
+        # Note: As of OpenStudio v340, the following method is available as an
+        # all-in-one solution to check if a polygon fits within another polygon.
+        #
+        # answer = OpenStudio.polygonInPolygon(aligned_door, aligned_wall, TOL)
+        #
+        # As with other Boost-based methods, it requires 'aligned' surfaces
+        # (using OpenStudio Transformation' alignFace method), and set in a
+        # clockwise sequence. OSut sticks to fits? as it executes these steps
+        # behind the scenes, and is consistent for pre-v340 implementations.
+        model = openstudio.model.Model()
+
+        # 10m x 10m parent vertical (wall) surface.
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(  0,  0, 10))
+        vec.append(openstudio.Point3d(  0,  0,  0))
+        vec.append(openstudio.Point3d( 10,  0,  0))
+        vec.append(openstudio.Point3d( 10,  0, 10))
+        wall = openstudio.model.Surface(vec, model)
+
+        # Side test: point alignment detection, 'w12' == wall/floor edge.
+        w1  = vec[1]
+        w2  = vec[2]
+        w12 = w2 - w1
+
+        # Side test: same?
+        vec2 = list(osut.p3Dv(vec))
+        self.assertNotEqual(vec, vec2)
+        self.assertTrue(osut.areSame(vec, vec2))
+
+        vec2 = collections.deque(vec2)
+        vec2.rotate(-2)
+        vec2 = list(vec2)
+        self.assertTrue(osut.areSame(vec, vec2))
+        self.assertFalse(osut.areSame(vec, vec2, False))
+
+        # 1m x 2m corner door (with 2x edges along wall edges), 4mm sill.
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(  0.5,  0,  2.000))
+        vec.append(openstudio.Point3d(  0.5,  0,  0.004))
+        vec.append(openstudio.Point3d(  1.5,  0,  0.004))
+        vec.append(openstudio.Point3d(  1.5,  0,  2.000))
+        door1 = openstudio.model.SubSurface(vec, model)
+
+        # Side test: point alignment detection:
+        # 'd1_w1': vector from door sill to wall corner 1 ( 0,0,0)
+        # 'd1_w2': vector from door sill to wall corner 1 (10,0,0)
+        d1 = vec[1]
+        d2 = vec[2]
+        d1_w1 = w1 - d1
+        d1_w2 = w2 - d1
+        self.assertTrue(osut.isPointAlongSegments(d1, [w1, w2]))
+
+        # Order of arguments matter.
+        self.assertTrue(osut.fits(door1, wall))
+        self.assertTrue(osut.overlapping(door1, wall))
+        self.assertFalse(osut.fits(wall, door1))
+        self.assertTrue(osut.overlapping(wall, door1))
+
+        # The method 'fits' offers an optional 3rd argument: whether a smaller
+        # polygon (e.g. door1) needs to 'entirely' fit within the larger
+        # polygon. Here, door1 shares its sill with the host wall (as its
+        # within 10mm of the wall bottom edge).
+        self.assertFalse(osut.fits(door1, wall, True))
+
+        # Another 1m x 2m corner door, yet entirely beyond the wall surface.
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d( 16,  0,  2))
+        vec.append(openstudio.Point3d( 16,  0,  0))
+        vec.append(openstudio.Point3d( 17,  0,  0))
+        vec.append(openstudio.Point3d( 17,  0,  2))
+        door2 = openstudio.model.SubSurface(vec, model)
+
+        # Door2 fits?, overlaps? Order of arguments doesn't matter.
+        self.assertFalse(osut.fits(door2, wall))
+        self.assertFalse(osut.overlapping(door2, wall))
+        self.assertFalse(osut.fits(wall, door2))
+        self.assertFalse(osut.overlapping(wall, door2))
+
+        # Top-right corner 2m x 2m window, overlapping top-right corner of wall.
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(  9,  0, 11))
+        vec.append(openstudio.Point3d(  9,  0,  9))
+        vec.append(openstudio.Point3d( 11,  0,  9))
+        vec.append(openstudio.Point3d( 11,  0, 11))
+        window = openstudio.model.SubSurface(vec, model)
+
+        # Window fits?, overlaps?
+        self.assertFalse(osut.fits(window, wall))
+        olap = osut.overlap(window, wall)
+        self.assertEqual(len(olap), 4)
+        self.assertTrue(osut.fits(olap, wall))
+        self.assertTrue(osut.overlapping(window, wall))
+        self.assertFalse(osut.fits(wall, window))
+        self.assertTrue(osut.overlapping(wall, window))
+
+        # A glazed surface, entirely encompassing the wall.
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(  0,  0, 10))
+        vec.append(openstudio.Point3d(  0,  0,  0))
+        vec.append(openstudio.Point3d( 10,  0,  0))
+        vec.append(openstudio.Point3d( 10,  0, 10))
+        glazing = openstudio.model.SubSurface(vec, model)
+
+        # Glazing fits?, overlaps? parallel?
+        self.assertTrue(osut.areParallel(glazing, wall))
+        self.assertTrue(osut.fits(glazing, wall))
+        self.assertTrue(osut.overlapping(glazing, wall))
+        self.assertTrue(osut.areParallel(wall, glazing))
+        self.assertTrue(osut.fits(wall, glazing))
+        self.assertTrue(osut.overlapping(wall, glazing))
+
+        del(model)
+        self.assertEqual(o.clean(), DBG)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Checks overlaps when 2 surfaces don't share the same plane equation.
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/in/smalloffice.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        ceiling = model.getSurfaceByName("Core_ZN_ceiling")
+        floor   = model.getSurfaceByName("Attic_floor_core")
+        roof    = model.getSurfaceByName("Attic_roof_east")
+        soffit  = model.getSurfaceByName("Attic_soffit_east")
+        south   = model.getSurfaceByName("Attic_roof_south")
+        self.assertTrue(ceiling)
+        self.assertTrue(floor)
+        self.assertTrue(roof)
+        self.assertTrue(soffit)
+        self.assertTrue(south)
+        ceiling = ceiling.get()
+        floor   = floor.get()
+        roof    = roof.get()
+        soffit  = soffit.get()
+        south   = south.get()
+
+        # Side test: triad, medial and bounded boxes.
+        # pts   = mod1.getNonCollinears(ceiling.vertices, 3)
+        # box01 = mod1.triadBox(pts)
+        # box11 = mod1.boundedBox(ceiling)
+        # self.asserTrue(mod1.areSame(box01, box11)
+        # self.asserTrue(mod1.fits(box01, ceiling)
+
+        del(model)
+        self.assertEqual(o.clean(), DBG)
 
     def test24_triangulation(self):
         o = osut.oslg
@@ -2547,13 +2730,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(o.is_error())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], m1)
-        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(o.clean(), DBG)
 
         collinears = osut.collinears([p0, p1, p2, p3, p8], -6)
         self.assertTrue(o.is_error())
         self.assertEqual(len(o.logs()), 1)
         self.assertEqual(o.logs()[0]["message"], m2)
-        self.assertTrue(o.clean(), DBG)
+        self.assertEqual(o.clean(), DBG)
 
         # CASE a1: 2x end-to-end line segments (returns matching endpoints).
         self.assertTrue(osut.doesLineIntersect([p0, p1], [p1, p2]))
