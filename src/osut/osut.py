@@ -4183,7 +4183,7 @@ def offset(p1=None, w=0, v=0) -> openstudio.Point3dVector:
 
         offset = offset.get()
         offset.reverse()
-        return to_p3Dv(list(t * offset))
+        return p3Dv(list(t * offset))
     else: # brute force approach
         pz      = {}
         pz["A"] = {}
@@ -4407,6 +4407,7 @@ def outline(a=[], bfr=0, flat=True) -> openstudio.Point3dVector:
 
     try:
         bfr = float(bfr)
+        if bfr < 0.0254: bfr = 0
     except:
         oslg.mismatch("buffer", bfr, float, mth)
         bfr = 0
@@ -4425,7 +4426,6 @@ def outline(a=[], bfr=0, flat=True) -> openstudio.Point3dVector:
 
     vtx = poly(a[0])
     if not vtx: return out
-    if bfr < 0.0254: bfr = 0
 
     t = openstudio.Transformation.alignFace(vtx)
 
@@ -4485,8 +4485,341 @@ def outline(a=[], bfr=0, flat=True) -> openstudio.Point3dVector:
     # Apply buffer, apply ULC (options).
     if bfr > 0.0254: out = offset(out, bfr, 300)
 
-    return to_p3Dv(t * out)
+    return p3Dv(t * out)
 
+
+def triadBox(pts=None) -> openstudio.Point3dVector:
+    """Generates a BLC box from a triad (3D points). Points must be unique and
+    non-collinear.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            A 'triad' - an OpenStudio vector of 3x 3D points.
+
+    Returns:
+        openstudio.Point3dVector:
+            A rectangular BLC box (see logs if empty).
+
+    """
+    mth = "osut.triadBox"
+    t   = None
+    bkp = openstudio.Point3dVector()
+    box = []
+    pts = nonCollinears(pts)
+    if not pts: return bkp
+
+    if not shareXYZ(pts, "z"):
+        t = openstudio.Transformation.alignFace(pts)
+        pts = poly(pts, False, True, True, t)
+        if not pts: return bkp
+
+    if len(pts) != 3: return oslg.invalid("triad", mth, 1, CN.ERR, bkp)
+
+    if isClockwise(pts):
+        pts = list(pts)
+        pts.reverse()
+        pts = p3Dv(pts)
+
+    p0 = pts[0]
+    p1 = pts[1]
+    p2 = pts[2]
+
+    # Cast p0 unto vertical plane defined by p1/p2.
+    pp0 = verticalPlane(p1, p2).project(p0)
+    v00 = p0  - pp0
+    v11 = pp0 - p1
+    v10 = p0  - p1
+    v12 = p2  - p1
+
+    # Reset p0 and/or p1 if obtuse or acute.
+    if v12.dot(v10) < 0:
+        p0 = p1 + v00
+    elif v12.dot(v10) > 0:
+        if v11.length() < v12.length():
+            p1 = pp0
+        else:
+            p0 = p1 + v00
+
+    p3 = p2 + v00
+
+    box.append(openstudio.Point3d(p0.x(), p0.y(), p0.z()))
+    box.append(openstudio.Point3d(p1.x(), p1.y(), p1.z()))
+    box.append(openstudio.Point3d(p2.x(), p2.y(), p2.z()))
+    box.append(openstudio.Point3d(p3.x(), p3.y(), p3.z()))
+
+    box = nonCollinears(box, 4)
+    if len(box) != 4: return bkp
+
+    box = blc(box)
+    if not isRectangular(box): return bkp
+
+    if t: box = p3Dv(t * box)
+
+    return box
+
+
+def medialBox(pts=None) -> openstudio.Point3dVector:
+    """Generates a BLC box bounded within a triangle (midpoint theorem).
+
+    Args:
+        pts (openstudio.Point3dVector):
+            A triangular polygon.
+
+    Returns:
+        openstudio.Point3dVector: A medial bounded box (see logs if empty).
+    """
+    mth = "osut.medialBox"
+    t   = None
+    bkp = openstudio.Point3dVector()
+    box = []
+    pts = poly(pts, True, True, True)
+    if not pts: return bkp
+    if len(pts) != 3: return oslg.invalid("triangle", mth, 1, CN.ERR, bkp)
+
+    if not shareXYZ(pts, "z"):
+        t = openstudio.Transformation.alignFace(pts)
+        pts = poly(pts, False, False, False, t)
+        if not pts: return bkp
+
+    if isClockwise(pts):
+        pts.reverse()
+        pts = p3Dv(pts)
+
+    # Generate vertical plane along longest segment.
+    sgs = segments(pts)
+
+    mpoints  = []
+    longest  = sgs[0]
+    distance = openstudio.getDistanceSquared(longest[0], longest[1])
+
+    for sg in sgs:
+        if sg == longest: continue
+
+        d0 = openstudio.getDistanceSquared(sg[0], sg[1])
+
+        if distance < d0:
+            distance = d0
+            longest  = sg
+
+    plane = verticalPlane(longest[0], longest[1])
+
+    # Fetch midpoints of other 2 segments.
+    for sg in sgs:
+        if sg != longest: mpoints.append(midpoint(sg[0], sg[1]))
+
+    if len(mpoints) != 2: return bkp
+
+    # Generate medial bounded box.
+    box.append(plane.project(mpoints[0]))
+    box.append(mpoints[0])
+    box.append(mpoints[1])
+    box.append(plane.project(mpoints[1]))
+    box = list(nonCollinears(box))
+    if box.size != 4: return bkp
+
+    if isClockwise(box): box.reverse()
+
+    box = blc(box)
+    if not isRectangular(box): return bkp
+    if not fits(box, pts): return bkp
+
+    if t: box = p3Dv(t * box)
+
+    return box
+
+
+def boundedBox(pts=None) -> openstudio.Point3dVector:
+    """Generates a BLC bounded box within a polygon.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            A set of OpenStudio 3D points.
+
+    Returns:
+         openstudio.Point3dVector: A bounded box (see logs if empty).
+    """
+    # str = ".*(?<!utilities.geometry.join)$"
+    # OpenStudio::Logger.instance.standardOutLogger.setChannelRegex(str)
+
+    mth = "osut.boundedBox"
+    t   = None
+    bkp = openstudio.Point3dVector()
+    box = []
+    pts = poly(pts, False, True, True)
+    if not pts: return bkp
+
+    if not shareXYZ(pts, "Z"):
+        t   = openstudio.Transformation.alignFace(pts)
+        pts = p3Dv(t.inverse() * pts)
+        if not pts: return bkp
+
+    if isClockwise(pts):
+        pts = list(pts)
+        pts.reverse()
+        pts = p3Dv(pts)
+
+    # PATH A : Return medial bounded box if polygon is a triangle.
+    if len(pts) == 3:
+        box = medialBox(pts)
+
+        if box:
+            if t: box = p3Dv(t * box)
+            return box
+
+    # PATH B : Return polygon itself if already rectangular.
+    if isRectangular(pts):
+        box = p3Dv(t * pts) if t else pts
+        return box
+
+    aire = 0
+
+    # PATH C : Right-angle, midpoint triad approach.
+    for sg in segments(pts):
+        m0 = midpoint(sg[0], sg[1])
+
+        for seg in getSegments(pts):
+            p1 = seg[0]
+            p2 = seg[1]
+            if areSame(p1, sg[0]): continue
+            if areSame(p1, sg[1]): continue
+            if areSame(p2, sg[0]): continue
+            if areSame(p2, sg[1]): continue
+
+            out = triadBox(openstudio.Point3dVector([m0, p1, p2]))
+            if not out: continue
+            if not fits(out, pts): continue
+            if fits(pts, out): continue
+
+            area = openstudio.getArea(out)
+            if not area: continue
+
+            area = area.get()
+            if area < CN.TOL: continue
+            if area < aire: continue
+
+            aire = area
+            box  = out
+
+    # PATH D : Right-angle triad approach, may override PATH C boxes.
+    for sg in segments(pts):
+        p0 = sg[0]
+        p1 = sg[1]
+
+        for p2 in pts:
+            if areSame(p2, p0): continue
+            if areSame(p2, p1): continue
+
+            out = triadBox(openstudio.Point3dVector([p0, p1, p2]))
+            if not out: continue
+            if not fits(out, pts): continue
+            if fits(pts, out): continue
+
+            area = openstudio.getArea(out)
+            if not area: continue
+
+            area = area.get()
+            if area < CN.TOL: continue
+            if area < aire: continue
+
+            aire = area
+            box  = out
+
+    if aire > CN.TOL:
+        if t: box = p3Dv(t * box)
+        return box
+
+    # PATH E : Medial box, segment approach.
+    aire = 0
+
+    for sg in segments(pts):
+        p0 = sg[0]
+        p1 = sg[1]
+
+        for p2 in pts:
+            if areSame(p2, p0): continue
+            if areSame(p2, p1): continue
+
+            out = medialBox(openstudioPoint3dVector([p0, p1, p2]))
+            if not out: continue
+            if not fits(out, pts): continue
+            if fits(pts, out): continue
+
+            area = openstudio.getArea(box)
+            if not area: continue
+
+            area = area.get()
+            if area < CN.TOL: continue
+            if area < aire: continue
+
+            aire = area
+            box  = out
+
+    if aire > CN.TOL:
+        if t: box = p3Dv(t * box)
+        return box
+
+    # PATH F : Medial box, triad approach.
+    aire = 0
+
+    for sg in triads(pts):
+        p0 = sg[0]
+        p1 = sg[1]
+        p2 = sg[2]
+
+        out = medialBox(openstudio.Point3dVector([p0, p1, p2]))
+        if not out: continue
+        if not fits(out, pts): continue
+        if fits(pts, out): continue
+
+        area = openstudio.getArea(box)
+        if not area: continue
+
+        area = area.get()
+        if area < CN.TOL: continue
+        if area < aire: continue
+
+        aire = area
+        box  = out
+
+        if aire > CN.TOL:
+            if t: box = p3Dv(t * box)
+            return box
+
+    # PATH G : Medial box, triangulated approach.
+    aire  = 0
+    outer = list(pts)
+    outer.reverse()
+    outer = p3Dv(outer)
+    holes = openstudio.Point3dVectorVector()
+
+    for triangle in openstudio.computeTriangulation(outer, holes):
+        for sg in segments(triangle):
+            p0 = sg[0]
+            p1 = sg[1]
+
+            for p2 in pts:
+                if areSame(p2, p0): continue
+                if areSame(p2, p1): continue
+
+                out = medialBox(openstudio.Point3dVector([p0, p1, p2]))
+                if not out: continue
+                if not fits(out, pts): continue
+                if fits(pts, out): continue
+
+                area = openstudio.getArea(out)
+                if not area: continue
+
+                area = area.get()
+                if area < CN.TOL: continue
+                if area < aire: continue
+
+                aire = area
+                box  = out
+
+    if aire < CN.TOL: return bkp
+    if t: box = p3Dv(t * box)
+
+    return box
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:

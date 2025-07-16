@@ -2621,11 +2621,12 @@ class TestOSutModuleMethods(unittest.TestCase):
         south   = south.get()
 
         # Side test: triad, medial and bounded boxes.
-        # pts   = mod1.getNonCollinears(ceiling.vertices, 3)
-        # box01 = mod1.triadBox(pts)
-        # box11 = mod1.boundedBox(ceiling)
-        # self.asserTrue(mod1.areSame(box01, box11)
-        # self.asserTrue(mod1.fits(box01, ceiling)
+        pts   = osut.nonCollinears(ceiling.vertices(), 3)
+        box01 = osut.triadBox(pts)
+        box11 = osut.boundedBox(ceiling)
+        print(o.logs())
+        self.assertTrue(osut.areSame(box01, box11))
+        self.assertTrue(osut.fits(box01, ceiling))
 
         del(model)
         self.assertEqual(o.clean(), DBG)
