@@ -4030,7 +4030,6 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
 
     area1 = openstudio.getArea(a1)
     area2 = openstudio.getArea(a2)
-
     if not area1: return oslg.empty("points 1 area", mth, CN.ERR, face)
     if not area2: return oslg.empty("points 2 area", mth, CN.ERR, face)
 
@@ -4066,7 +4065,7 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
     return p3Dv(res1)
 
 
-def overlapping(p1=None, p2=None, flat=False):
+def overlapping(p1=None, p2=None, flat=False) -> bool:
     """Determines whether OpenStudio polygons overlap.
 
     Args:
@@ -4134,6 +4133,360 @@ def cast(p1=None, p2=None, ray=None) -> openstudio.Point3dVector:
         face.append(pt) + scalar(ray, length)
 
     return face
+
+
+def offset(p1=None, w=0, v=0) -> openstudio.Point3dVector:
+    """Generates offset vertices (by width) for a 3- or 4-sided, convex polygon.
+    If width is negative, the vertices are contracted inwards.
+
+    Args:
+        p1 (openstudio.Point3dVector):
+            OpenStudio vector of 3D points.
+        w (float):
+            Offset width (absolute min: 0.0254m).
+        v (int):
+            OpenStudio SDK version, eg '321' for "v3.2.1" (optional).
+
+    Returns:
+        openstudio.Point3dVector: Offset points (see logs if unaltered).
+
+    """
+    mth = "osut.offset"
+    vs  = int("".join(openstudio.openStudioVersion().split(".")))
+    pts = poly(p1, True, True, False, True, "cw")
+
+    if len(pts) < 3 or len(pts) > 4:
+        return oslg.invalid("points", mth, 1, CN.DBG, p1)
+    elif len(pts) == 4:
+        iv = True
+    else:
+        iv = False
+
+    try:
+        w = float(w)
+    except:
+        oslg.mismatch("width", w, float, mth)
+        w = 0
+
+    try:
+        v = int(v)
+    except:
+        oslg.mismatch("version", v, int, mth)
+        v = vs
+
+    if abs(w) < 0.0254: return p1
+
+    if v >= 340:
+        t = openstudio.Transformation.alignFace(p1)
+        offset = openstudio.buffer(pts, w, CN.TOL)
+        if not offset: return p1
+
+        offset = offset.get()
+        offset.reverse()
+        return to_p3Dv(list(t * offset))
+    else: # brute force approach
+        pz      = {}
+        pz["A"] = {}
+        pz["B"] = {}
+        pz["C"] = {}
+        if iv:
+            pz["D"] = {}
+
+        pz["A"]["p"] = openstudio.Point3d(p1[0].x(), p1[0].y(), p1[0].z())
+        pz["B"]["p"] = openstudio.Point3d(p1[1].x(), p1[1].y(), p1[1].z())
+        pz["C"]["p"] = openstudio.Point3d(p1[2].x(), p1[2].y(), p1[2].z())
+        if iv:
+            pz["D"]["p"] = openstudio.Point3d(p1[3].x(), p1[3].y(), p1[3].z())
+
+        pzAp = pz["A"]["p"]
+        pzBp = pz["B"]["p"]
+        pzCp = pz["C"]["p"]
+        if iv:
+            pzDp = pz["D"]["p"]
+
+        # Generate vector pairs, from next point & from previous point.
+        # :f_n : "from next"
+        # :f_p : "from previous"
+        #
+        #
+        #
+        #
+        #
+        #
+        #             A <---------- B
+        #              ^
+        #               \
+        #                \
+        #                 C (or D)
+        #
+        pz["A"]["f_n"] = pzAp - pzBp
+        if iv:
+            pz["A"]["f_p"] = pzAp - pzDp
+        else:
+            pz["A"]["f_p"] = pzAp - pzCp
+
+        pz["B"]["f_n"] = pzBp - pzCp
+        pz["B"]["f_p"] = pzBp - pzAp
+
+        pz["C"]["f_p"] = pzCp - pzBp
+        if iv:
+            pz["C"]["f_n"] = pzCp - pzDp
+        else:
+            pz["C"]["f_n"] = pzCp - pzAp
+
+        if iv:
+            pz["D"]["f_n"] = pzDp - pzAp
+            pz["D"]["f_p"] = pzDp - pzCp
+
+        # Generate 3D plane from vectors.
+        #
+        #
+        #             |  <<< 3D plane ... from point A, with normal B>A
+        #             |
+        #             |
+        #             |
+        # <---------- A <---------- B
+        #             |\
+        #             | \
+        #             |  \
+        #             |   C (or D)
+        #
+        pz["A"]["pl_f_n"] = openstudio.Plane(pzAp, pz["A"]["f_n"])
+        pz["A"]["pl_f_p"] = openstudio.Plane(pzAp, pz["A"]["f_p"])
+
+        pz["B"]["pl_f_n"] = openstudio.Plane(pzBp, pz["B"]["f_n"])
+        pz["B"]["pl_f_p"] = openstudio.Plane(pzBp, pz["B"]["f_p"])
+
+        pz["C"]["pl_f_n"] = openstudio.Plane(pzCp, pz["C"]["f_n"])
+        pz["C"]["pl_f_p"] = openstudio.Plane(pzCp, pz["C"]["f_p"])
+
+        if iv:
+            pz["D"]["pl_f_n"] = openstudio.Plane(pzDp, pz["D"]["f_n"])
+            pz["D"]["pl_f_p"] = openstudio.Plane(pzDp, pz["D"]["f_p"])
+
+        # Project an extended point (pC) unto 3D plane.
+        #
+        #             pC   <<< projected unto extended B>A 3D plane
+        #        eC   |
+        #          \  |
+        #           \ |
+        #            \|
+        # <---------- A <---------- B
+        #             |\
+        #             | \
+        #             |  \
+        #             |   C (or D)
+        #
+        pz["A"]["p_n_pl"] = pz["A"]["pl_f_n"].project(pz["A"]["p"] + pz["A"]["f_p"])
+        pz["A"]["n_p_pl"] = pz["A"]["pl_f_p"].project(pz["A"]["p"] + pz["A"]["f_n"])
+
+        pz["B"]["p_n_pl"] = pz["B"]["pl_f_n"].project(pz["B"]["p"] + pz["B"]["f_p"])
+        pz["B"]["n_p_pl"] = pz["B"]["pl_f_p"].project(pz["B"]["p"] + pz["B"]["f_n"])
+
+        pz["C"]["p_n_pl"] = pz["C"]["pl_f_n"].project(pz["C"]["p"] + pz["C"]["f_p"])
+        pz["C"]["n_p_pl"] = pz["C"]["pl_f_p"].project(pz["C"]["p"] + pz["C"]["f_n"])
+
+        if iv:
+            pz["D"]["p_n_pl"] = pz["D"]["pl_f_n"].project(pz["D"]["p"] + pz["D"]["f_p"])
+            pz["D"]["n_p_pl"] = pz["D"]["pl_f_p"].project(pz["D"]["p"] + pz["D"]["f_n"])
+
+        # Generate vector from point (e.g. A) to projected extended point (pC).
+        #
+        #             pC
+        #        eC   ^
+        #          \  |
+        #           \ |
+        #            \|
+        # <---------- A <---------- B
+        #             |\
+        #             | \
+        #             |  \
+        #             |   C (or D)
+        #
+        pz["A"]["n_p_n_pl"] = pz["A"]["p_n_pl"] - pzAp
+        pz["A"]["n_n_p_pl"] = pz["A"]["n_p_pl"] - pzAp
+
+        pz["B"]["n_p_n_pl"] = pz["B"]["p_n_pl"] - pzBp
+        pz["B"]["n_n_p_pl"] = pz["B"]["n_p_pl"] - pzBp
+
+        pz["C"]["n_p_n_pl"] = pz["C"]["p_n_pl"] - pzCp
+        pz["C"]["n_n_p_pl"] = pz["C"]["n_p_pl"] - pzCp
+
+        if iv:
+            pz["D"]["n_p_n_pl"] = pz["D"]["p_n_pl"] - pzDp
+            pz["D"]["n_n_p_pl"] = pz["D"]["n_p_pl"] - pzDp
+
+        # Fetch angle between both extended vectors (A>pC & A>pB),
+        # ... then normalize (Cn).
+        #
+        #             pC
+        #        eC   ^
+        #          \  |
+        #           \ Cn
+        #            \|
+        # <---------- A <---------- B
+        #             |\
+        #             | \
+        #             |  \
+        #             |   C (or D)
+        #
+        a1 = openstudio.getAngle(pz["A"]["n_p_n_pl"], pz["A"]["n_n_p_pl"])
+        a2 = openstudio.getAngle(pz["B"]["n_p_n_pl"], pz["B"]["n_n_p_pl"])
+        a3 = openstudio.getAngle(pz["C"]["n_p_n_pl"], pz["C"]["n_n_p_pl"])
+        if iv:
+            a4 = openstudio.getAngle(pz["D"]["n_p_n_pl"], pz["D"]["n_n_p_pl"])
+
+        # Generate new 3D points A', B', C' (and D') ... zigzag.
+        #
+        #
+        #
+        #
+        #     A' ---------------------- B'
+        #      \
+        #       \      A <---------- B
+        #        \      \
+        #         \      \
+        #          \      \
+        #           C'      C
+        pz["A"]["f_n"].normalize()
+        pz["A"]["n_p_n_pl"].normalize()
+        pzAp = pzAp + scalar(pz["A"]["n_p_n_pl"], w)
+        pzAp = pzAp + scalar(pz["A"]["f_n"], w * math.tan(a1/2))
+
+        pz["B"]["f_n"].normalize()
+        pz["B"]["n_p_n_pl"].normalize()
+        pzBp = pzBp + scalar(pz["B"]["n_p_n_pl"], w)
+        pzBp = pzBp + scalar(pz["B"]["f_n"], w * math.tan(a2/2))
+
+        pz["C"]["f_n"].normalize()
+        pz["C"]["n_p_n_pl"].normalize()
+        pzCp = pzCp + scalar(pz["C"]["n_p_n_pl"], w)
+        pzCp = pzCp + scalar(pz["C"]["f_n"], w * math.tan(a3/2))
+
+        if iv:
+            pz["D"]["f_n"].normalize()
+            pz["D"]["n_p_n_pl"].normalize()
+            pzDp = pzDp + scalar(pz["D"]["n_p_n_pl"], w)
+            pzDp = pzDp + scalar(pz["D"]["f_n"], w * math.tan(a4/2))
+
+        # Re-convert to OpenStudio 3D points.
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(pzAp.x(), pzAp.y(), pzAp.z()))
+        vec.append(openstudio.Point3d(pzBp.x(), pzBp.y(), pzBp.z()))
+        vec.append(openstudio.Point3d(pzCp.x(), pzCp.y(), pzCp.z()))
+        if iv:
+            vec.append(openstudio.Point3d(pzDp.x(), pzDp.y(), pzDp.z()))
+
+    return vec
+
+
+def outline(a=[], bfr=0, flat=True) -> openstudio.Point3dVector:
+    """Generates a ULC OpenStudio 3D point vector (a bounding box) that
+    surrounds multiple (smaller) OpenStudio 3D point vectors. The generated,
+    4-point outline is optionally buffered (or offset). Frame and Divider frame
+    widths are taken into account.
+
+    Args:
+        a (list):
+            One or more sets of OpenStudio 3D points.
+        bfr (float):
+            An optional buffer size (min: 0.0254m).
+        flat (bool):
+            Whether points are to be pre-flattened (Z=0).
+    Returns:
+        openstudio.Point3dVector: ULC outline (see logs if empty).
+
+    """
+    mth  = "osut.outline"
+    out  = openstudio.Point3dVector()
+    xMIN = None
+    xMAX = None
+    yMIN = None
+    yMAX = None
+    a2   = []
+
+    try:
+        bfr = float(bfr)
+    except:
+        oslg.mismatch("buffer", bfr, float, mth)
+        bfr = 0
+
+    try:
+        flat = bool(flat)
+    except:
+        flat = True
+
+    try:
+        a = list(a)
+    except:
+        return oslg.mismatch("array", a, list, mth, CN.DBG, out)
+
+    if not a: return oslg.empty("array", mth, CN.DBG, out)
+
+    vtx = poly(a[0])
+    if not vtx: return out
+    if bfr < 0.0254: bfr = 0
+
+    t = openstudio.Transformation.alignFace(vtx)
+
+    for pts in a:
+        points = poly(pts, False, True, False, t)
+        if flat: points = flatten(points)
+        if not points: continue
+
+        a2.append(points)
+
+    for pts in a2:
+        xs = [pt.x() for pt in pts]
+        ys = [pt.y() for pt in pts]
+
+        minX = min(xs)
+        maxX = max(xs)
+        minY = min(ys)
+        maxY = max(ys)
+
+        # Consider frame width, if frame-and-divider-enabled sub surface.
+        if hasattr(pts, "allowWindowPropertyFrameAndDivider"):
+            w  = 0
+            fd = pts.windowPropertyFrameAndDivider()
+            if fd: w = fd.get().frameWidth()
+
+            if w > CN.TOL:
+                minX -= w
+                maxX += w
+                minY -= w
+                maxY += w
+
+        if not xMIN: xMIN = minX
+        if not xMAX: xMAX = maxX
+        if not yMIN: yMIN = minY
+        if not yMAX: yMAX = maxY
+
+        xMIN = min(xMIN, minX)
+        xMAX = max(xMAX, maxX)
+        yMIN = min(yMIN, minY)
+        yMAX = max(yMAX, maxY)
+
+    if xMAX < xMIN:
+        return oslg.negative("outline width", mth, CN.DBG, out)
+    if yMAX < yMIN:
+        return oslg.negative("outline height", mth, Cn.DBG, out)
+    if abs(xMIN - xMAX) < TOL:
+        return oslg.zero("outline width", mth, CN.DBG, out)
+    if abs(yMIN - yMAX) < TOL:
+        return oslg.zero("outline height", mth, CN.DBG, out)
+
+    # Generate ULC point 3D vector.
+    out.append(openstudio.Point3d(xMIN, yMAX, 0))
+    out.append(openstudio.Point3d(xMIN, yMIN, 0))
+    out.append(openstudio.Point3d(xMAX, yMIN, 0))
+    out.append(openstudio.Point3d(xMAX, yMAX, 0))
+
+    # Apply buffer, apply ULC (options).
+    if bfr > 0.0254: out = offset(out, bfr, 300)
+
+    return to_p3Dv(t * out)
+
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
