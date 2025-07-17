@@ -3098,6 +3098,102 @@ class TestOSutModuleMethods(unittest.TestCase):
         pt = osut.lineIntersection([p0, p2], [p6, p4])
         self.assertTrue(osut.areSame(pt, p5))
 
+        # Point ENTIRELY within (vs outside) a polygon.
+        self.assertFalse(osut.isPointWithinPolygon(p0, [p0, p1, p2, p3], True))
+        self.assertFalse(osut.isPointWithinPolygon(p1, [p0, p1, p2, p3], True))
+        self.assertFalse(osut.isPointWithinPolygon(p2, [p0, p1, p2, p3], True))
+        self.assertFalse(osut.isPointWithinPolygon(p3, [p0, p1, p2, p3], True))
+        self.assertFalse(osut.isPointWithinPolygon(p4, [p0, p1, p2, p3]))
+        self.assertTrue(osut.isPointWithinPolygon(p5, [p0, p1, p2, p3]))
+        self.assertFalse(osut.isPointWithinPolygon(p6, [p0, p1, p2, p3]))
+        self.assertTrue(osut.isPointWithinPolygon(p7, [p0, p1, p2, p3]))
+        self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Test invalid plane.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(20, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0, 10))
+        vtx.append(openstudio.Point3d( 0, 0,  0))
+        vtx.append(openstudio.Point3d(20, 1,  0))
+
+        self.assertEqual(len(osut.poly(vtx)), 0)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertTrue("Empty 'plane'" in o.logs()[0]["message"])
+        self.assertEqual(o.clean(), DBG)
+
+        # Self-intersecting polygon. If reactivated, OpenStudio logs to stdout:
+        #   [utilities.Transformation]
+        #   <1> Cannot compute outward normal for vertices
+        # vtx = openstudio.Point3dVector()
+        # vtx.append(openstudio.Point3d(20, 0, 10))
+        # vtx.append(openstudio.Point3d( 0, 0, 10))
+        # vtx.append(openstudio.Point3d(20, 0,  0))
+        # vtx.append(openstudio.Point3d( 0, 0,  0))
+        #
+        # Original polygon remains unaltered.
+        # self.assertEqual(len(osut.poly(vtx)), 4)
+        # self.assertEqual(o.status(), 0)
+        # self.assertEqual(o.clean(), DBG)
+
+        # Regular polygon, counterclockwise yet not UpperLeftCorner (ULC).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(20,  0, 10))
+        vtx.append(openstudio.Point3d( 0,  0, 10))
+        vtx.append(openstudio.Point3d( 0,  0,  0))
+
+        sgs = osut.segments(vtx)
+        self.assertTrue(isinstance(sgs, openstudio.Point3dVectorVector))
+        self.assertEqual(len(sgs), 3)
+
+        for i, sg in enumerate(sgs):
+            if not osut.shareXYZ(sg, "x", sg[0].x()):
+                vplane = osut.verticalPlane(sg[0], sg[1])
+                self.assertTrue(isinstance(vplane, openstudio.Plane))
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Test when alignFace switches solution when surfaces are nearly flat,
+        # i.e. when dot product of surface normal vs zenith > 0.99.
+        #   (see openstudio.Transformation.alignFace)
+        origin  = openstudio.Point3d(0,0,0)
+        originZ = openstudio.Point3d(0,0,1)
+        zenith  = originZ - origin
+
+        # 1st surface, nearly horizontal.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 2,10, 0.0))
+        vtx.append(openstudio.Point3d( 6, 4, 0.0))
+        vtx.append(openstudio.Point3d( 8, 8, 0.5))
+        normal = openstudio.getOutwardNormal(vtx).get()
+        self.assertGreater(abs(zenith.dot(normal)), 0.99)
+        self.assertTrue(osut.facingUp(vtx))
+
+        aligned = list(osut.poly(vtx, False, False, False, True, "ulc"))
+        matches = []
+
+        for pt in aligned:
+            if osut.areSame(pt, origin): matches.append(pt)
+
+        self.assertEqual(len(matches), 0)
+
+        # 2nd surface (nearly identical, yet too slanted to be flat.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 2,10, 0.0))
+        vtx.append(openstudio.Point3d( 6, 4, 0.0))
+        vtx.append(openstudio.Point3d( 8, 8, 0.6))
+        normal = openstudio.getOutwardNormal(vtx).get()
+        self.assertLess(abs(zenith.dot(normal)), 0.99)
+        self.assertFalse(osut.facingUp(vtx))
+
+        aligned = list(osut.poly(vtx, False, False, False, True, "ulc"))
+        matches = []
+
+        for pt in aligned:
+            if osut.areSame(pt, origin): matches.append(pt)
+
+        self.assertEqual(len(matches), 1)
+
     def test26_ulc_blc(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)

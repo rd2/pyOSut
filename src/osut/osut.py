@@ -1299,6 +1299,141 @@ def isFenestrated(s=None) -> bool:
     return True
 
 
+# ---- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---- #
+# ---- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---- #
+# This next set of utilities (~850 lines) help distinguish spaces that are
+# directly vs indirectly CONDITIONED, vs SEMIHEATED. The solution here
+# relies as much as possible on space conditioning categories found in
+# standards like ASHRAE 90.1 and energy codes like the Canadian NECBs.
+#
+# Both documents share many similarities, regardless of nomenclature. There
+# are however noticeable differences between approaches on how a space is
+# tagged as falling into one of the aforementioned categories. First, an
+# overview of 90.1 requirements, with some minor edits for brevity/emphasis:
+#
+# www.pnnl.gov/main/publications/external/technical_reports/PNNL-26917.pdf
+#
+#   3.2.1. General Information - SPACE CONDITIONING CATEGORY
+#
+#     - CONDITIONED space: an ENCLOSED space that has a heating and/or
+#       cooling system of sufficient size to maintain temperatures suitable
+#       for HUMAN COMFORT:
+#         - COOLED: cooled by a system >= 10 W/m2
+#         - HEATED: heated by a system, e.g. >= 50 W/m2 in Climate Zone CZ-7
+#         - INDIRECTLY: heated or cooled via adjacent space(s) provided:
+#             - UA of adjacent surfaces > UA of other surfaces
+#                 or
+#             - intentional air transfer from HEATED/COOLED space > 3 ACH
+#
+#               ... includes plenums, atria, etc.
+#
+#     - SEMIHEATED space: an ENCLOSED space that has a heating system
+#       >= 10 W/m2, yet NOT a CONDITIONED space (see above).
+#
+#     - UNCONDITIONED space: an ENCLOSED space that is NOT a conditioned
+#       space or a SEMIHEATED space (see above).
+#
+#       NOTE: Crawlspaces, attics, and parking garages with natural or
+#       mechanical ventilation are considered UNENCLOSED spaces.
+#
+#       2.3.3 Modeling Requirements: surfaces adjacent to UNENCLOSED spaces
+#       shall be treated as exterior surfaces. All other UNENCLOSED surfaces
+#       are to be modeled as is in both proposed and baseline models. For
+#       instance, modeled fenestration in UNENCLOSED spaces would not be
+#       factored in WWR calculations.
+#
+#
+# Related NECB definitions and concepts, starting with CONDITIONED space:
+#
+# "[...] the temperature of which is controlled to limit variation in
+# response to the exterior ambient temperature by the provision, either
+# DIRECTLY or INDIRECTLY, of heating or cooling [...]". Although criteria
+# differ (e.g., not sizing-based), the general idea is sufficiently similar
+# to ASHRAE 90.1 (e.g. heating and/or cooling based, no distinction for
+# INDIRECTLY conditioned spaces like plenums).
+#
+# SEMIHEATED spaces are described in the NECB (yet not a defined term). The
+# distinction is also based on desired/intended design space setpoint
+# temperatures (here 15°C) - not system sizing criteria. No further treatment
+# is implemented here to distinguish SEMIHEATED from CONDITIONED spaces;
+# notwithstanding the AdditionalProperties tag (described further in this
+# section), it is up to users to determine if a CONDITIONED space is
+# indeed SEMIHEATED or not (e.g. based on MIN/MAX setpoints).
+#
+# The single NECB criterion distinguishing UNCONDITIONED ENCLOSED spaces
+# (such as vestibules) from UNENCLOSED spaces (such as attics) remains the
+# intention to ventilate - or rather to what degree. Regardless, the methods
+# here are designed to process both classifications in the same way, namely
+# by focusing on adjacent surfaces to CONDITIONED (or SEMIHEATED) spaces as
+# part of the building envelope.
+
+# In light of the above, OSut methods here are designed without a priori
+# knowledge of explicit system sizing choices or access to iterative
+# autosizing processes. As discussed in greater detail below, methods here
+# are developed to rely on zoning and/or "intended" setpoint temperatures.
+# In addition, OSut methods here cannot distinguish between UNCONDITIONED vs
+# UNENCLOSED spaces from OpenStudio geometry alone. They are henceforth
+# considered synonymous.
+#
+# For an OpenStudio model in an incomplete or preliminary state, e.g. holding
+# fully-formed ENCLOSED spaces WITHOUT thermal zoning information or setpoint
+# temperatures (early design stage assessments of form, porosity or
+# envelope), OpenStudio spaces are considered CONDITIONED by default. This
+# default behaviour may be reset based on the (Space) AdditionalProperties
+# "space_conditioning_category" key (4x possible values), which is relied
+# upon by OpenStudio-Standards:
+#
+#   github.com/NREL/openstudio-standards/blob/
+#   d2b5e28928e712cb3f137ab5c1ad6d8889ca02b7/lib/openstudio-standards/
+#   standards/Standards.Space.rb#L1604C5-L1605C1
+#
+# OpenStudio-Standards recognizes 4x possible value strings:
+#   - "NonResConditioned"
+#   - "ResConditioned"
+#   - "Semiheated"
+#   - "Unconditioned"
+#
+# OSut maintains existing "space_conditioning_category" key/value pairs
+# intact. Based on these, OSut methods may return related outputs:
+#
+#   "space_conditioning_category" | OSut status   | heating °C | cooling °C
+# -------------------------------   -------------   ----------   ----------
+#   - "NonResConditioned"           CONDITIONED     21.0         24.0
+#   - "ResConditioned"              CONDITIONED     21.0         24.0
+#   - "Semiheated"                  SEMIHEATED      15.0         NA
+#   - "Unconditioned"               UNCONDITIONED   NA           NA
+#
+# OSut also looks up another (Space) AdditionalProperties 'key',
+# "indirectlyconditioned" to flag plenum or occupied spaces indirectly
+# conditioned with transfer air only. The only accepted 'value' for an
+# "indirectlyconditioned" 'key' is the name (string) of another (linked)
+# space, e.g.:
+#
+#   "indirectlyconditioned" space | linked space, e.g. "core_space"
+# -------------------------------   ---------------------------------------
+#   return air plenum               occupied space below
+#   supply air plenum               occupied space above
+#   dead air space (not a plenum)   nearby occupied space
+#
+# OSut doesn't validate whether the "indirectlyconditioned" space is actually
+# adjacent to its linked space. It nonetheless relies on the latter's
+# conditioning category (e.g. CONDITIONED, SEMIHEATED) to determine
+# anticipated ambient temperatures in the former. For instance, an
+# "indirectlyconditioned"-tagged return air plenum linked to a SEMIHEATED
+# space is considered as free-floating in terms of cooling, and unlikely to
+# have ambient conditions below 15°C under heating (winter) design
+# conditions. OSut will associate this plenum to a 15°C heating setpoint
+# temperature. If the SEMIHEATED space instead has a heating setpoint
+# temperature of 7°C, then OSut will associate a 7°C heating setpoint to this
+# plenum.
+#
+# Even with a (more developed) OpenStudio model holding valid space/zone
+# setpoint temperatures, OSut gives priority to these AdditionalProperties.
+# For instance, a CONDITIONED space can be considered INDIRECTLYCONDITIONED,
+# even if its zone thermostat has a valid heating and/or cooling setpoint.
+# This is in sync with OpenStudio-Standards' method
+# "space_conditioning_category()".
+
 def hasAirLoopsHVAC(model=None) -> bool:
     """Validates if model has zones with HVAC air loops.
 
@@ -1668,14 +1803,14 @@ def maxHeatScheduledSetpoint(zone=None) -> dict:
 
 
 def hasHeatingTemperatureSetpoints(model=None):
-    """Confirms if model has zones with valid heating temperature setpoints.
+    """Confirms if model has zones with valid heating setpoint temperature.
 
     Args:
         model (openstudio.model.Model):
             An OpenStudio model.
 
     Returns:
-        bool: Whether model holds valid heating temperature setpoints.
+        bool: Whether model holds valid heating setpoint temperatures.
         False: If invalid inputs (see logs).
     """
     mth = "osut.hasHeatingTemperatureSetpoints"
@@ -1850,14 +1985,14 @@ def minCoolScheduledSetpoint(zone=None):
 
 
 def hasCoolingTemperatureSetpoints(model=None):
-    """Confirms if model has zones with valid cooling temperature setpoints.
+    """Confirms if model has zones with valid cooling setpoint temperatures.
 
     Args:
         model (openstudio.model.Model):
             An OpenStudio model.
 
     Returns:
-        bool: Whether model holds valid cooling temperature setpoints.
+        bool: Whether model holds valid cooling setpoint temperatures.
         False: If invalid inputs (see logs).
     """
     mth = "osut.hasCoolingTemperatureSetpoints"
@@ -3089,7 +3224,7 @@ def triads(pts=None, co=False) -> openstudio.Point3dVectorVector:
 
         i3 = i2 + 1
         if i3 == len(pts): i3 = 0
-        
+
         p2 = pts[i2]
         p3 = pts[i3]
 
