@@ -4049,8 +4049,6 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
     delta = area1 + area2 - area
 
     if area > CN.TOL:
-        if round(area,  2) == round(area1, 2): return face
-        if round(area,  2) == round(area2, 2): return face
         if round(delta, 2) == 0: return face
 
     res = openstudio.intersect(a1, a2, CN.TOL)
@@ -4582,6 +4580,7 @@ def medialBox(pts=None) -> openstudio.Point3dVector:
         if not pts: return bkp
 
     if isClockwise(pts):
+        pts = list(pts)
         pts.reverse()
         pts = p3Dv(pts)
 
@@ -4614,8 +4613,9 @@ def medialBox(pts=None) -> openstudio.Point3dVector:
     box.append(mpoints[0])
     box.append(mpoints[1])
     box.append(plane.project(mpoints[1]))
+
     box = list(nonCollinears(box))
-    if box.size != 4: return bkp
+    if len(box) != 4: return bkp
 
     if isClockwise(box): box.reverse()
 
@@ -4677,7 +4677,7 @@ def boundedBox(pts=None) -> openstudio.Point3dVector:
     for sg in segments(pts):
         m0 = midpoint(sg[0], sg[1])
 
-        for seg in getSegments(pts):
+        for seg in segments(pts):
             p1 = seg[0]
             p2 = seg[1]
             if areSame(p1, sg[0]): continue
@@ -4781,9 +4781,9 @@ def boundedBox(pts=None) -> openstudio.Point3dVector:
         aire = area
         box  = out
 
-        if aire > CN.TOL:
-            if t: box = p3Dv(t * box)
-            return box
+    if aire > CN.TOL:
+        if t: box = p3Dv(t * box)
+        return box
 
     # PATH G : Medial box, triangulated approach.
     aire  = 0

@@ -2624,9 +2624,85 @@ class TestOSutModuleMethods(unittest.TestCase):
         pts   = osut.nonCollinears(ceiling.vertices(), 3)
         box01 = osut.triadBox(pts)
         box11 = osut.boundedBox(ceiling)
-        print(o.logs())
         self.assertTrue(osut.areSame(box01, box11))
         self.assertTrue(osut.fits(box01, ceiling))
+
+        pts   = osut.nonCollinears(roof.vertices(), 3)
+        box02 = osut.medialBox(pts)
+        box12 = osut.boundedBox(roof)
+        self.assertTrue(osut.areSame(box02, box12))
+        self.assertTrue(osut.fits(box02, roof))
+
+        box03 = osut.triadBox(pts)
+        self.assertFalse(osut.areSame(box03, box12))
+        self.assertEqual(o.status(), 0)
+
+        # For parallel surfaces, OSut's 'overlap' output is consistent
+        # regardless of the sequence of arguments. Here, floor and ceiling are
+        # mirrored - the former counterclockwise, the latter clockwise. The
+        # returned overlap conserves the vertex winding of the first surface.
+        self.assertTrue(osut.areParallel(floor, ceiling))
+        olap1 = osut.overlap(floor, ceiling)
+        olap2 = osut.overlap(ceiling, floor)
+        self.assertTrue(osut.areSame(floor.vertices(), olap1))
+        self.assertTrue(osut.areSame(ceiling.vertices(), olap2))
+
+        # When surfaces aren't parallel, 'overlap' remains somewhat consistent
+        # if both share a common edge. Here, the flat soffit shares an edge
+        # with the sloped roof. The projection of the soffit neatly fits onto
+        # the roof, yet the generated overlap will obviously be distorted with
+        # respect to the original soffit vertices. Nonetheless, the shared
+        # vertices/edge(s) would be preserved.
+        olap1 = osut.overlap(soffit, roof, True)
+        olap2 = osut.overlap(roof, soffit, True)
+        self.assertTrue(osut.areParallel(olap1, soffit))
+        self.assertFalse(osut.areParallel(olap1, roof))
+        self.assertTrue(osut.areParallel(olap2, roof))
+        self.assertFalse(osut.areParallel(olap2, soffit))
+        self.assertEqual(len(olap1), 4)
+        self.assertEqual(len(olap2), 4)
+        area1 = openstudio.getArea(olap1)
+        area2 = openstudio.getArea(olap2)
+        self.assertTrue(area1)
+        self.assertTrue(area2)
+        area1 = area1.get()
+        area2 = area2.get()
+        self.assertGreater(abs(area1 - area2), TOL)
+        pl1 = openstudio.Plane(olap1)
+        pl2 = openstudio.Plane(olap2)
+        n1  = pl1.outwardNormal()
+        n2  = pl2.outwardNormal()
+        dt1 = soffit.plane().outwardNormal().dot(n1)
+        dt2 = roof.plane().outwardNormal().dot(n2)
+        self.assertAlmostEqual(dt1, 1, places=2)
+        self.assertAlmostEqual(dt2, 1, places=2)
+
+        # When surfaces are neither parallel nor share any edges (e.g. sloped roof
+        # vs horizontal floor), the generated overlap is more likely to hold extra
+        # vertices, depending on which surface it is cast onto.
+        olap1 = osut.overlap(floor, roof, True)
+        olap2 = osut.overlap(roof, floor, True)
+        self.assertTrue(osut.areParallel(olap1, floor))
+        self.assertFalse(osut.areParallel(olap1, roof))
+        self.assertTrue(osut.areParallel(olap2, roof))
+        self.assertFalse(osut.areParallel(olap2, floor))
+        self.assertEqual(len(olap1), 3)
+        self.assertEqual(len(olap2), 5)
+        area1 = openstudio.getArea(olap1)
+        area2 = openstudio.getArea(olap2)
+        self.assertTrue(area1)
+        self.assertTrue(area2)
+        area1 = area1.get()
+        area2 = area2.get()
+        self.assertGreater(area2 - area1, TOL)
+        pl1 = openstudio.Plane(olap1)
+        pl2 = openstudio.Plane(olap2)
+        n1  = pl1.outwardNormal()
+        n2  = pl2.outwardNormal()
+        dt1 = floor.plane().outwardNormal().dot(n1)
+        dt2 = roof.plane().outwardNormal().dot(n2)
+        self.assertAlmostEqual(dt1, 1, places=2)
+        self.assertAlmostEqual(dt2, 1, places=2)
 
         del(model)
         self.assertEqual(o.clean(), DBG)
