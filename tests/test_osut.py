@@ -2704,6 +2704,249 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(dt1, 1, places=2)
         self.assertAlmostEqual(dt2, 1, places=2)
 
+        # Alternative: first 'cast' vertically one polygon onto the other.
+        pl1    = openstudio.Plane(ceiling.vertices())
+        pl2    = openstudio.Plane(roof.vertices())
+        up     = openstudio.Point3d(0, 0, 1) - openstudio.Point3d(0, 0, 0)
+        down   = openstudio.Point3d(0, 0,-1) - openstudio.Point3d(0, 0, 0)
+        cast00 = osut.cast(roof, ceiling, down)
+        cast01 = osut.cast(roof, ceiling, up)
+        cast02 = osut.cast(ceiling, roof, up)
+        self.assertTrue(osut.areParallel(cast00, ceiling))
+        self.assertTrue(osut.areParallel(cast01, ceiling))
+        self.assertTrue(osut.areParallel(cast02, roof))
+        self.assertFalse(osut.areParallel(cast00, roof))
+        self.assertFalse(osut.areParallel(cast01, roof))
+        self.assertFalse(osut.areParallel(cast02, ceiling))
+
+        # As the cast ray is vertical, only the Z-axis coordinate changes.
+        for i, pt in enumerate(cast00):
+            self.assertTrue(pl1.pointOnPlane(pt))
+            self.assertAlmostEqual(pt.x(), roof.vertices()[i].x(), places=2)
+            self.assertAlmostEqual(pt.y(), roof.vertices()[i].y(), places=2)
+
+        # The direction of the cast ray doesn't matter (e.g. up or down).
+        for i, pt in enumerate(cast01):
+            self.assertTrue(pl1.pointOnPlane(pt))
+            self.assertAlmostEqual(pt.x(), cast00[i].x(), places=2)
+            self.assertAlmostEqual(pt.y(), cast00[i].y(), places=2)
+
+        # The sequence of arguments matters: 1st polygon is cast onto 2nd.
+        for i, pt in enumerate(cast02):
+            self.assertTrue(pl2.pointOnPlane(pt))
+            self.assertAlmostEqual(pt.x(), ceiling.vertices()[i].x())
+            self.assertAlmostEqual(pt.y(), ceiling.vertices()[i].y())
+
+        # Overlap between roof and vertically-cast ceiling onto roof plane.
+        olap02 = osut.overlap(roof, cast02)
+        self.assertEqual(len(olap02), 3) # not 5
+        self.assertTrue(osut.fits(olap02, roof))
+
+        for pt in olap02: self.assertTrue(pl2.pointOnPlane(pt))
+
+        vtx1 = openstudio.Point3dVector()
+        vtx1.append(openstudio.Point3d(17.69, 0.00, 0))
+        vtx1.append(openstudio.Point3d(13.46, 4.46, 0))
+        vtx1.append(openstudio.Point3d( 4.23, 4.46, 0))
+        vtx1.append(openstudio.Point3d( 0.00, 0.00, 0))
+
+        vtx2 = openstudio.Point3dVector()
+        vtx2.append(openstudio.Point3d( 8.85, 0.00, 0))
+        vtx2.append(openstudio.Point3d( 8.85, 4.46, 0))
+        vtx2.append(openstudio.Point3d( 4.23, 4.46, 0))
+        vtx2.append(openstudio.Point3d( 4.23, 0.00, 0))
+
+        self.assertTrue(osut.isPointAlongSegment(vtx2[1], [vtx1[1], vtx1[2]]))
+        self.assertTrue(osut.isPointAlongSegments(vtx2[1], vtx1))
+        self.assertTrue(osut.isPointWithinPolygon(vtx2[1], vtx1))
+        self.assertTrue(osut.fits(vtx2, vtx1))
+
+        # Bounded box test.
+        cast03 = osut.cast(ceiling, south, down)
+        self.assertTrue(osut.isRectangular(cast03))
+        olap03 = osut.overlap(south, cast03)
+        self.assertTrue(osut.areParallel(south, olap03))
+        self.assertFalse(osut.isRectangular(olap03))
+        box = osut.boundedBox(olap03)
+        self.assertTrue(osut.isRectangular(box))
+        self.assertTrue(osut.areParallel(olap03, box))
+
+        area1 = openstudio.getArea(olap03)
+        area2 = openstudio.getArea(box)
+        self.assertTrue(area1)
+        self.assertTrue(area2)
+        area1 = area1.get()
+        area2 = area2.get()
+        self.assertEqual(int(100 * area2 / area1), 68) # %
+        self.assertEqual(o.status(), 0)
+
+        del(model)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Testing more complex cases, e.g. triangular windows, irregular 4-side
+        # windows, rough opening edges overlapping parent surface edges. These
+        # tests were initially part of the TBD Tests repository:
+        #
+        #   github.com/rd2/tbd_tests
+        #
+        # ... yet have been upgraded and are now tested here.
+        model = openstudio.model.Model()
+        space = openstudio.model.Space(model)
+        space.setName("Space")
+
+        # Windows are SimpleGlazing constructions.
+        fen     = openstudio.model.Construction(model)
+        glazing = openstudio.model.SimpleGlazing(model)
+        layers  = openstudio.model.MaterialVector()
+        fen.setName("FD fen")
+        glazing.setName("FD glazing")
+        self.assertTrue(glazing.setUFactor(2.0))
+        layers.append(glazing)
+        self.assertTrue(fen.setLayers(layers))
+
+        # Frame & Divider object.
+        w000 = 0.000
+        w200 = 0.200 # 0mm to 200mm (wide!) around glazing
+        fd   = openstudio.model.WindowPropertyFrameAndDivider(model)
+        fd.setName("FD")
+        self.assertTrue(fd.setFrameConductance(0.500))
+        self.assertTrue(fd.isFrameWidthDefaulted())
+        self.assertAlmostEqual(fd.frameWidth(), w000, places=2)
+
+        # A square base wall surface:
+        v0 = openstudio.Point3dVector()
+        v0.append(openstudio.Point3d( 0.00, 0.00, 10.00))
+        v0.append(openstudio.Point3d( 0.00, 0.00,  0.00))
+        v0.append(openstudio.Point3d(10.00, 0.00,  0.00))
+        v0.append(openstudio.Point3d(10.00, 0.00, 10.00))
+
+        # A first triangular window:
+        v1 = openstudio.Point3dVector()
+        v1.append(openstudio.Point3d( 2.00, 0.00, 8.00))
+        v1.append(openstudio.Point3d( 1.00, 0.00, 6.00))
+        v1.append(openstudio.Point3d( 4.00, 0.00, 9.00))
+
+        # A larger, irregular window:
+        v2 = openstudio.Point3dVector()
+        v2.append(openstudio.Point3d( 7.00, 0.00, 4.00))
+        v2.append(openstudio.Point3d( 4.00, 0.00, 1.00))
+        v2.append(openstudio.Point3d( 8.00, 0.00, 2.00))
+        v2.append(openstudio.Point3d( 9.00, 0.00, 3.00))
+
+        # A final triangular window, near the wall's upper right corner:
+        v3 = openstudio.Point3dVector()
+        v3.append(openstudio.Point3d( 9.00, 0.00, 9.80))
+        v3.append(openstudio.Point3d( 9.80, 0.00, 9.00))
+        v3.append(openstudio.Point3d( 9.80, 0.00, 9.80))
+
+        w0 = openstudio.model.Surface(v0, model)
+        w1 = openstudio.model.SubSurface(v1, model)
+        w2 = openstudio.model.SubSurface(v2, model)
+        w3 = openstudio.model.SubSurface(v3, model)
+        w0.setName("w0")
+        w1.setName("w1")
+        w2.setName("w2")
+        w3.setName("w3")
+        self.assertTrue(w0.setSpace(space))
+        sub_gross = 0
+
+        for w in [w1, w2, w3]:
+            self.assertTrue(w.setSubSurfaceType("FixedWindow"))
+            self.assertTrue(w.setSurface(w0))
+            self.assertTrue(w.setConstruction(fen))
+            self.assertTrue(w.uFactor())
+            self.assertAlmostEqual(w.uFactor().get(), 2.0, places=1)
+            self.assertTrue(w.allowWindowPropertyFrameAndDivider())
+            self.assertTrue(w.setWindowPropertyFrameAndDivider(fd))
+            width = w.windowPropertyFrameAndDivider().get().frameWidth()
+            self.assertAlmostEqual(width, w000, places=2)
+
+            sub_gross += w.grossArea()
+
+        self.assertAlmostEqual(w1.grossArea(), 1.50, places=2)
+        self.assertAlmostEqual(w2.grossArea(), 6.00, places=2)
+        self.assertAlmostEqual(w3.grossArea(), 0.32, places=2)
+        self.assertAlmostEqual(w0.grossArea(), 100.00, places=2)
+        self.assertAlmostEqual(w1.netArea(), w1.grossArea(), places=2)
+        self.assertAlmostEqual(w2.netArea(), w2.grossArea(), places=2)
+        self.assertAlmostEqual(w3.netArea(), w3.grossArea(), places=2)
+        self.assertAlmostEqual(w0.netArea(), w0.grossArea()-sub_gross, places=2)
+
+        # Applying 2 sets of alterations:
+        #   - WITHOUT, then WITH Frame & Dividers (F&D)
+        #   - 3 successive 20° rotations around:
+        angle  = math.pi / 9
+        origin = openstudio.Point3d(0, 0, 0)
+        east   = openstudio.Point3d(1, 0, 0) - origin
+        up     = openstudio.Point3d(0, 0, 1) - origin
+        north  = openstudio.Point3d(0, 1, 0) - origin
+
+        for i in range(4): # successive rotations
+            if i != 0:
+                if i == 1: r = openstudio.createRotation(origin, east, angle)
+                if i == 2: r = openstudio.createRotation(origin, up, angle)
+                if i == 3: r = openstudio.createRotation(origin, north, angle)
+                self.assertTrue(w0.setVertices(r.inverse() * w0.vertices()))
+                self.assertTrue(w1.setVertices(r.inverse() * w1.vertices()))
+                self.assertTrue(w2.setVertices(r.inverse() * w2.vertices()))
+                self.assertTrue(w3.setVertices(r.inverse() * w3.vertices()))
+
+            for j in range(2): # F&D
+                if j == 0:
+                    wx = w000
+                    if i != 0: fd.resetFrameWidth()
+                else:
+                    wx = w200
+                    self.assertTrue(fd.setFrameWidth(wx))
+
+                    for w in [w1, w2, w3]:
+                        wfd = w.windowPropertyFrameAndDivider().get()
+                        width = wfd.frameWidth()
+                        self.assertAlmostEqual(width, wx, places=2)
+
+                # F&D widths offset window vertices.
+                w1o = osut.offset(w1.vertices(), wx, 300)
+                w2o = osut.offset(w2.vertices(), wx, 300)
+                w3o = osut.offset(w3.vertices(), wx, 300)
+
+                w1o_m2 = openstudio.getArea(w1o)
+                w2o_m2 = openstudio.getArea(w2o)
+                w3o_m2 = openstudio.getArea(w3o)
+                self.assertTrue(w1o_m2)
+                self.assertTrue(w2o_m2)
+                self.assertTrue(w3o_m2)
+                w1o_m2 = w1o_m2.get()
+                w2o_m2 = w2o_m2.get()
+                w3o_m2 = w3o_m2.get()
+
+                if j == 0:
+                    # w1 == 1.50m2; w2 == 6.00 m2; w3 == 0.32m2
+                    self.assertAlmostEqual(w1o_m2, w1.grossArea(), places=2)
+                    self.assertAlmostEqual(w2o_m2, w2.grossArea(), places=2)
+                    self.assertAlmostEqual(w3o_m2, w3.grossArea(), places=2)
+                else:
+                    self.assertAlmostEqual(w1o_m2, 3.75, places=2)
+                    self.assertAlmostEqual(w2o_m2, 8.64, places=2)
+                    self.assertAlmostEqual(w3o_m2, 1.10, places=2)
+
+                # All windows entirely fit within the wall (without F&D).
+                for w in [w1, w2, w3]: self.assertTrue(osut.fits(w, w0, True))
+
+                # All windows fit within the wall (with F&D).
+                for w in [w1o, w2o]: self.assertTrue(osut.fits(w, w0))
+
+                # If F&D frame width == 200mm, w3o aligns along the wall top &
+                # side, so not entirely within wall polygon.
+                self.assertTrue(osut.fits(w3, w0, True))
+                self.assertTrue(osut.fits(w3o, w0))
+                if j == 0: self.assertTrue(osut.fits(w3o, w0, True))
+                if j != 0: self.assertFalse(osut.fits(w3o, w0, True))
+
+                # None of the windows conflict with each other.
+                self.assertFalse(osut.overlapping(w1o, w2o))
+                self.assertFalse(osut.overlapping(w1o, w3o))
+                self.assertFalse(osut.overlapping(w2o, w3o))
+
         del(model)
         self.assertEqual(o.clean(), DBG)
 

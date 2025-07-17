@@ -3083,11 +3083,13 @@ def triads(pts=None, co=False) -> openstudio.Point3dVectorVector:
     pts = uniques(pts)
     if len(pts) < 2: return vv
 
-    for i1, pts in enumerate(pts):
+    for i1, p1 in enumerate(pts):
         i2 = i1 + 1
         if i2 == len(pts): i2 = 0
+
         i3 = i2 + 1
         if i3 == len(pts): i3 = 0
+        
         p2 = pts[i2]
         p3 = pts[i3]
 
@@ -4128,7 +4130,7 @@ def cast(p1=None, p2=None, ray=None) -> openstudio.Point3dVector:
 
     for pt in p1:
         length = n.dot(pt - p0) / n.dot(ray.reverseVector())
-        face.append(pt) + scalar(ray, length)
+        face.append(pt + scalar(ray, length))
 
     return face
 
