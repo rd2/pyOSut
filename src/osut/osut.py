@@ -4959,6 +4959,136 @@ def boundedBox(pts=None) -> openstudio.Point3dVector:
     return box
 
 
+def realignedFace(pts=None, force=False) -> dict:
+    """Generates re-'aligned' polygon vertices with respect to main axis of
+    symmetry of its largest 'bounded box'. Input polygon vertex Z-axis values
+    must equal 0, and be counterclockwise. First, cloned polygon vertices are
+    rotated so the longest axis of symmetry of its bounded box lies parallel to
+    the X-axis (see returned key "o": midpoint of the narrow side of the bounded
+    box, nearest to grid origin [0,0,0]). If the axis of symmetry of the bounded
+    box is already parallel to the X-axis, then the rotation step is skipped
+    (unless 'force' is True). Whether rotated or not, polygon vertices are then
+    translated as to ensure one or more vertices are aligned along the X-axis
+    and one or more vertices are aligned along the Y-axis (no vertices with
+    negative X or Y coordinate values). To unalign the returned set of vertices
+    (or its bounded box, or its bounding box), first inverse the translation
+    transformation, then inverse the rotation transformation. If failure (e.g.
+    invalid inputs), the returned dict values are set to None.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            A set of OpenStudio 3D points.
+        force (bool):
+            Whether to force rotation for aligned (yet narrow) boxes.
+
+    Returns:
+        dict:
+        - "set" (openstudio.Point3dVector): realigned (cloned) polygon vertices
+        - "box" (openstudio.Point3dVector): its bounded box (wrt to "set")
+        - "bbox" (openstudio.Point3dVector): its bounding box
+        - "t" (openstudio.Transformation): its translation transformation
+        - "r" (openstudio.Transformation): its rotation transformation
+        - "o" (openstudio.Point3d): origin coordinates of its axis of rotation
+
+    """
+    mth = "osut.realignedFace"
+    out = dict(set=None, box=None, bbox=None, t=None, r=None, o=None)
+    pts = poly(pts, False, True)
+    if not pts: return out
+
+    if not shareXYZ(pts, "z"):
+        return oslg.invalid("aligned plane", mth, 1, CN.DBG, out)
+
+    if isClockwise(pts):
+        return oslg.invalid("clockwise pts", mth, 1, CN.DBG, out)
+
+    # Optionally force rotation so bounded box ends up wider than taller.
+    # Strongly suggested for flat surfaces like roofs (see 'sloped?').
+    try:
+        force = bool(force)
+    except:
+        oslg.log(CN.DBG, "Ignoring force input (%s)" % mth)
+        force = False
+
+    o = openstudio.Point3d(0, 0, 0)
+    w = width(pts)
+    h = height(pts)
+    d = h if h > w else w
+
+    sgs = {}
+    box = boundedBox(pts)
+
+    if not box:
+        return oslg.invalid("bounded box", mth, 0, CN.DBG, out)
+
+    segs = segments(box)
+
+    if not segs:
+        return oslg.invalid("bounded box segments", mth, 0, CN.DBG, out)
+
+    # Deterministic ID of box rotation/translation 'origin'.
+    for idx, sg in enumerate(segs):
+        sgs[sg]       = {}
+        sgs[sg]["idx"] = idx
+        sgs[sg]["mid"] = midpoint(sg[0], sg[1])
+        sgs[sg]["l"  ] = (sg[1] - sg[0]).length()
+        sgs[sg]["mo" ] = (sgs[sg]["mid"] - o).length()
+
+    if isSquare(box):
+        sgs = dict(sorted(sgs.items(), key=lambda item: item[1]["mo"])[:2])
+    else:
+        sgs = dict(sorted(sgs.items(), key=lambda item: item[1]["l" ])[:2])
+        sgs = dict(sorted(sgs.items(), key=lambda item: item[1]["mo"])[:2])
+
+    sg0 = sgs.values[0]
+    sg1 = sgs.values[1]
+
+    i = sg0["idx"]
+
+    if round(sg0["mo"], 2) == round(sg1["mo"], 2):
+        if round(sg1["mid"].y(), 2) < round(sg0["mid"].y(), 2):
+            i = sg1["idx"]
+
+    k = i+2 if i+2 < len(segs) else i-2
+
+    origin   = midpoint(segs[i][0], segs[i][1])
+    terminal = midpoint(segs[k][0], segs[k][1])
+
+    seg   = terminal - origin
+    right = openstudio.Point3d(origin.x() + d, origin.y()    , 0) - origin
+    north = openstudio.Point3d(origin.x(),     origin.y() + d, 0) - origin
+    axis  = openstudio.Point3d(origin.x(),     origin.y()    , d) - origin
+    angle = openstudio.getAngle(right, seg)
+
+    if north.dot(seg) < 0: angle = -angle
+
+    # Skip rotation if bounded box is already aligned along XY grid (albeit
+    # 'narrow'), i.e. if the angle is 90°.
+    if round(angle, 3) == round(math.pi/2, 3):
+        if force is False: angle = 0
+
+    r    = openstudio.createRotation(origin, axis, angle)
+    pts  = p3Dv(r.inverse() * pts)
+    box  = p3Dv(r.inverse() * box)
+    dX   = min([pt.x() for pt in pts])
+    dY   = min([pt.y() for pt in pts])
+    xy   = openstudio.Point3d(origin.x() + dX, origin.y() + dY, 0)
+    o2   = xy - origin
+    t    = openstudio.createTranslation(o2)
+    set  = p3Dv(t.inverse() * pts)
+    box  = p3Dv(t.inverse() * box)
+    bbox = outline([set])
+
+    out["set" ] = blc(set)
+    out["box" ] = blc(box)
+    out["bbox"] = blc(bbox)
+    out["t"   ] = t
+    out["r"   ] = r
+    out["o"   ] = origin
+
+    return out
+
+
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
     """Returns an array of OpenStudio space surfaces or subsurfaces that match
     criteria, e.g. exterior, north-east facing walls in hotel "lobby". Note
