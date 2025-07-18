@@ -3368,7 +3368,222 @@ class TestOSutModuleMethods(unittest.TestCase):
         # [70, 45, 0]
         # [ 0, 45, 0]
 
-    # def test27_polygon_attributes(self):
+    def test27_polygon_attributes(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(INF), INF)
+        self.assertEqual(o.level(), INF)
+        self.assertEqual(o.status(), 0)
+
+        # 2x points (not a polygon).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0,10))
+
+        v = osut.poly(vtx)
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertFalse(v)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertTrue("non-collinears < 3" in o.logs()[0]["message"])
+        self.assertEqual(o.clean(), INF)
+
+        # 3x non-unique points (not a polygon).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0,10))
+
+        v = osut.poly(vtx)
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertFalse(v)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertTrue("non-collinears < 3" in o.logs()[0]["message"])
+        self.assertEqual(o.clean(), INF)
+
+        # 4th non-planar point (not a polygon).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0,10))
+        vtx.append(openstudio.Point3d( 0,10,10))
+
+        v = osut.poly(vtx)
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertFalse(v)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertTrue("plane" in o.logs()[0]["message"])
+        self.assertEqual(o.clean(), INF)
+
+        # 3x unique points (a valid polygon).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+
+        v = osut.poly(vtx)
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 3)
+        self.assertEqual(o.status(), 0)
+
+        # 4th collinear point (collinear permissive).
+        vtx.append(openstudio.Point3d(20, 0, 0))
+        v = osut.poly(vtx)
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 4)
+        self.assertEqual(o.status(), 0)
+
+        # Intersecting points, e.g. a 'bowtie' (not a valid Openstudio polygon).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0,10))
+        vtx.append(openstudio.Point3d( 0,10, 0))
+
+        v = osut.poly(vtx)
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertFalse(v)
+        self.assertTrue(o.is_error())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertTrue("Empty 'plane' (osut.poly)" in o.logs()[0]["message"])
+        self.assertEqual(o.clean(), INF)
+
+        # Ensure uniqueness & OpenStudio's counterclockwise ULC sequence.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+
+        v = osut.poly(vtx, False, True, False, False, "ulc")
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 3)
+        self.assertTrue(osut.areSame(vtx[0], v[0]))
+        self.assertTrue(osut.areSame(vtx[1], v[1]))
+        self.assertTrue(osut.areSame(vtx[2], v[2]))
+        self.assertEqual(o.status(), 0)
+
+        # Ensure strict non-collinearity (ULC).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+        vtx.append(openstudio.Point3d(20, 0, 0))
+
+        v = osut.poly(vtx, False, False, True, False, "ulc")
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 3)
+        self.assertTrue(osut.areSame(vtx[0], v[0]))
+        self.assertTrue(osut.areSame(vtx[1], v[1]))
+        self.assertTrue(osut.areSame(vtx[3], v[2]))
+        self.assertEqual(o.status(), 0)
+
+        # Ensuring strict non-collinearity also ensures uniqueness (ULC).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+        vtx.append(openstudio.Point3d(20, 0, 0))
+
+        v = osut.poly(vtx, False, False, True, False, "ulc")
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 3)
+        self.assertTrue(osut.areSame(vtx[0], v[0]))
+        self.assertTrue(osut.areSame(vtx[1], v[1]))
+        self.assertTrue(osut.areSame(vtx[4], v[2]))
+        self.assertEqual(o.status(), 0)
+
+        # Check for (valid) convexity.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(20, 0, 0))
+
+        v = osut.poly(vtx, True)
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 3)
+        self.assertEqual(o.status(), 0)
+
+        # Check for (invalid) convexity.
+        vtx.append(openstudio.Point3d(1, 0, 1))
+        v = osut.poly(vtx, True)
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertFalse(v)
+        self.assertEqual(o.status(), 0)
+
+        # 2nd check for (valid) convexity (with collinear points).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+        vtx.append(openstudio.Point3d(20, 0, 0))
+
+        v = osut.poly(vtx, True, False, False, False, "ulc")
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 4)
+        self.assertTrue(osut.areSame(vtx[0], v[0]))
+        self.assertTrue(osut.areSame(vtx[1], v[1]))
+        self.assertTrue(osut.areSame(vtx[2], v[2]))
+        self.assertTrue(osut.areSame(vtx[3], v[3]))
+        self.assertEqual(o.status(), 0)
+
+        # 2nd check for (invalid) convexity (with collinear points).
+        vtx.append(openstudio.Point3d( 1, 0, 1))
+        v = osut.poly(vtx, True, False, False, False, "ulc")
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertFalse(v)
+        self.assertEqual(o.status(), 0)
+
+        # 3rd check for (valid) convexity (with collinear points), yet returned
+        # 3D points vector become 'aligned' & clockwise.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+        vtx.append(openstudio.Point3d(20, 0, 0))
+
+        v = osut.poly(vtx, True, False, False, True, "cw")
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 4)
+        self.assertTrue(osut.shareXYZ(v, "z", 0))
+        self.assertTrue(osut.isClockwise(v))
+        self.assertEqual(o.status(), 0)
+
+        # Ensure returned vector remains in original sequence (if unaltered).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+        vtx.append(openstudio.Point3d(20, 0, 0))
+
+        v = osut.poly(vtx, True, False, False, False, "no")
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 4)
+        self.assertTrue(osut.areSame(vtx[0], v[0]))
+        self.assertTrue(osut.areSame(vtx[1], v[1]))
+        self.assertTrue(osut.areSame(vtx[2], v[2]))
+        self.assertTrue(osut.areSame(vtx[3], v[3]))
+        self.assertFalse(osut.isClockwise(v))
+        self.assertEqual(o.status(), 0)
+
+         # Sequence of returned vector if altered (avoid collinearity).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d( 0, 0,10))
+        vtx.append(openstudio.Point3d( 0, 0, 0))
+        vtx.append(openstudio.Point3d(10, 0, 0))
+        vtx.append(openstudio.Point3d(20, 0, 0))
+
+        v = osut.poly(vtx, True, False, True, False, "no")
+        self.assertTrue(isinstance(v, openstudio.Point3dVector))
+        self.assertEqual(len(v), 3)
+        self.assertTrue(osut.areSame(vtx[0], v[0]))
+        self.assertTrue(osut.areSame(vtx[1], v[1]))
+        self.assertTrue(osut.areSame(vtx[3], v[2]))
+        self.assertFalse(osut.isClockwise(v))
+        self.assertEqual(o.status(), 0)
 
     # def test28_subsurface_insertions(self):
 
