@@ -3851,7 +3851,97 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     # def test31_convexity(self):
 
-    # def test32_outdoor_roofs(self):
+    def test32_outdoor_roofs(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(INF), INF)
+        self.assertEqual(o.level(), INF)
+        self.assertEqual(o.status(), 0)
+
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/in/5ZoneNoHVAC.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        spaces = {}
+        roofs  = {}
+
+        for space in model.getSpaces():
+            for s in space.surfaces():
+                if s.surfaceType().lower() != "roofceiling": continue
+                if s.outsideBoundaryCondition().lower() != "outdoors": continue
+
+                self.assertFalse(space.nameString() in spaces)
+                spaces[space.nameString()] = s.nameString()
+
+        self.assertEqual(len(spaces), 5)
+
+        # for key, value in spaces.items(): print(key, value)
+        # "Story 1 East Perimeter Space"  "Surface 18"
+        # "Story 1 North Perimeter Space" "Surface 12"
+        # "Story 1 Core Space"            "Surface 30"
+        # "Story 1 South Perimeter Space" "Surface 24"
+        # "Story 1 West Perimeter Space"  "Surface 6"
+
+        for space in model.getSpaces():
+            rufs = osut.roofs(space)
+            self.assertEqual(len(rufs), 1)
+            ruf = rufs[0]
+            self.assertTrue(isinstance(ruf, openstudio.model.Surface))
+            roofs[space.nameString()] = ruf.nameString()
+
+        self.assertEqual(len(roofs), len(spaces))
+
+        for id, surface in spaces.items():
+            self.assertTrue(id in roofs.keys())
+            self.assertEqual(roofs[id], surface)
+
+        del(model)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # CASE 2: None of the occupied spaces have outdoor-facing roofs, yet
+        # plenum above has 4 outdoor-facing roofs (each matches a space ceiling).
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        occupied = []
+        spaces   = {}
+        roofs    = {}
+
+        for space in model.getSpaces():
+            if not space.partofTotalFloorArea(): continue
+
+            occupied.append(space.nameString())
+
+            for s in space.surfaces():
+                if s.surfaceType().lower() != "roofceiling": continue
+                if s.outsideBoundaryCondition().lower() != "outdoors": continue
+
+                self.assertFalse(space.nameString() in spaces)
+                spaces[space.nameString()] = s.nameString()
+
+        self.assertEqual(len(occupied), 4)
+        self.assertFalse(spaces)
+
+        for space in model.getSpaces():
+            if not space.partofTotalFloorArea(): continue
+
+            rufs = osut.roofs(space)
+            self.assertEqual(len(rufs), 1)
+            ruf = rufs[0]
+            self.assertTrue(isinstance(ruf, openstudio.model.Surface))
+            roofs[space.nameString()] = ruf.nameString()
+
+        self.assertEqual(len(roofs), 4)
+        self.assertEqual(o.status(), 0)
+
+        for occ in occupied:
+            self.assertTrue(occ in roofs.keys())
+            self.assertTrue("plenum" in roofs[occ].lower())
 
     # def test33_leader_line_anchors_inserts(self):
 
@@ -3864,7 +3954,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         self.assertEqual(o.status(), 0)
 
-        version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
         path   = openstudio.path("./tests/files/osms/out/seb2.osm")

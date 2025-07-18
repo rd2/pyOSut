@@ -3015,9 +3015,8 @@ def width(pts=None) -> float:
     if len(pts) < 2: return 0
 
     xs = [pt.x() for pt in pts]
-    dx = max(xs) - min(xs)
 
-    return dx
+    return max(xs) - min(xs)
 
 
 def height(pts=None) -> float:
@@ -5088,6 +5087,71 @@ def realignedFace(pts=None, force=False) -> dict:
     return out
 
 
+def alignedWidth(pts=None, force=False) -> float:
+    """Returns 'width' of a set of OpenStudio 3D points, once re/aligned.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            A set of OpenStudio 3D points.
+        force (bool):
+            Whether to force rotation for aligned (yet narrow) boxes.
+
+    Returns:
+        float: Width along X-axis, once re/aligned.
+        0.0: If invalid inputs (see logs).
+
+    """
+    mth = "osut.alignedWidth"
+    pts = osut.poly(pts, False, True, True, True)
+    if len(pts) < 2: return 0
+
+    try:
+        force = bool(force)
+    except:
+        oslg.log(CN.DBG, "Ignoring force input (%s)" % mth)
+        force = False
+
+    pts = osut.realignedFace(pts, force)["set"]
+    if len(pts) < 2: return 0
+
+    xs = [pt.x() for pt in pts]
+
+    return max(xs) - min(xs)
+
+
+def alignedHeight(pts=None, force=False) -> float:
+    """Returns 'height' of a set of OpenStudio 3D points, once re/aligned.
+
+    Args:
+        pts (openstudio.Point3dVector):
+            A set of OpenStudio 3D points.
+        force (bool):
+            Whether to force rotation for aligned (yet narrow) boxes.
+
+    Returns:
+        float: Height along Y-axis, once re/aligned.
+        0.0: If invalid inputs (see logs).
+
+    """
+
+    mth = "osut.alignedHeight"
+    pts = osut.poly(pts, False, True, True, True)
+    if len(pts) < 2: return 0
+
+    try:
+        force = bool(force)
+    except:
+        oslg.log(CN.DBG, "Ignoring force input (%s)" % mth)
+        force = False
+
+    pts = osut.realignedFace(pts, force)["set"]
+    if len(pts) < 2: return 0
+
+    ys = [pt.y() for pt in pts]
+
+    return max(ys) - min(ys)
+
+
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
     """Returns an array of OpenStudio space surfaces or subsurfaces that match
     criteria, e.g. exterior, north-east facing walls in hotel "lobby". Note
@@ -5304,3 +5368,74 @@ def genSlab(pltz=[], z=0):
         slb = vtx
 
     return slb
+
+
+def roofs(spaces = []) -> list:
+    """Returns outdoor-facing, space-related roof surfaces. These include
+    outdoor-facing roofs of each space per se, as well as any outdoor-facing
+    roof surface of unoccupied spaces immediately above (e.g. plenums, attics)
+    overlapping any of the ceiling surfaces of each space. It does not include
+    surfaces labelled as 'RoofCeiling', which do not comply with ASHRAE 90.1 or
+    NECB tilt criteria - see 'isRoof'.
+
+    Args:
+        spaces (list):
+            Set of openstudio.model.Space instances.
+
+    Returns:
+        list of openstudio.model.Surface instances: roofs (may be empty).
+
+    """
+    mth    = "osut.getRoofs"
+    up     = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
+    roofs  = []
+    if isinstance(spaces, openstudio.model.Space): spaces = [spaces]
+
+    try:
+        spaces = list(spaces)
+    except:
+        spaces = []
+
+    spaces = [s for s in spaces if isinstance(s, openstudio.model.Space)]
+
+    # Space-specific outdoor-facing roof surfaces.
+    roofs = facets(spaces, "Outdoors", "RoofCeiling")
+    roofs = [roof for roof in roofs if isRoof(roof)]
+
+    for space in spaces:
+        # When unoccupied spaces are involved (e.g. plenums, attics), the
+        # target space may not share the same local transformation as the
+        # space(s) above. Fetching site transformation.
+        t0 = transforms(space)
+        if not t0["t"]: continue
+
+        t0 = t0["t"]
+
+        for ceiling in facets(space, "Surface", "RoofCeiling"):
+            cv0 = t0 * ceiling.vertices()
+
+            floor = ceiling.adjacentSurface()
+            if not floor: continue
+
+            other = floor.get().space()
+            if not other: continue
+
+            other = other.get()
+            if other.partofTotalFloorArea(): continue
+
+            ti = transforms(other)
+            if not ti["t"]: continue
+
+            ti = ti["t"]
+
+            # @todo: recursive call for stacked spaces as atria (AirBoundaries).
+            for ruf in facets(other, "Outdoors", "RoofCeiling"):
+                if not isRoof(ruf): continue
+
+                rvi = ti * ruf.vertices()
+                cst = cast(cv0, rvi, up)
+                if not overlapping(cst, rvi, False): continue
+
+                if ruf not in roofs: roofs.append(ruf)
+
+    return roofs
