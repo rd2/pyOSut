@@ -5441,8 +5441,6 @@ def roofs(spaces = []) -> list:
     return roofs
 
 
-  # @return [Bool]
-  # @return [false] if invalid input (see logs)
 def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
     """Validates whether space has outdoor-facing surfaces with fenestration.
 
@@ -5459,7 +5457,7 @@ def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
     Returns:
         bool: Whether space is daylit.
         False: If invalid inputs (see logs).
-    
+
     """
     mth    = "osut.isDaylit"
     cl     = openstudio.model.Space

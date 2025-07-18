@@ -3943,6 +3943,9 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(occ in roofs.keys())
             self.assertTrue("plenum" in roofs[occ].lower())
 
+        del(model)
+        self.assertEqual(o.status(), 0)
+
     # def test33_leader_line_anchors_inserts(self):
 
     # def test34_generated_skylight_wells(self):
