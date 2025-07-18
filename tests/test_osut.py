@@ -3849,7 +3849,191 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     # def test30_wwr_insertions(self):
 
-    # def test31_convexity(self):
+    def test31_convexity(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(INF), INF)
+        self.assertEqual(o.level(), INF)
+        self.assertEqual(o.status(), 0)
+        translator = openstudio.osversion.VersionTranslator()
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+
+        # Successful test.
+        path  = openstudio.path("./tests/files/osms/in/smalloffice.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+        core  = None
+        attic = None
+
+        for space in model.getSpaces():
+            id = space.nameString()
+
+            if version >= 350:
+                self.assertTrue(space.isVolumeAutocalculated)
+                self.assertTrue(space.isCeilingHeightAutocalculated)
+                self.assertTrue(space.isFloorAreaDefaulted)
+                self.assertTrue(space.isFloorAreaAutocalculated)
+
+            if id == "Attic":
+                self.assertFalse(space.partofTotalFloorArea())
+                attic = space
+                continue
+
+            # Isolate core as being part of the total floor area (occupied zone)
+            # and not having sidelighting.
+            self.assertTrue(space.partofTotalFloorArea())
+            if space.exteriorWallArea() > TOL: continue
+
+            core = space
+
+        srfs = core.surfaces()
+        core_floor   = [s for s in srfs if s.surfaceType() == "Floor"]
+        core_ceiling = [s for s in srfs if s.surfaceType() == "RoofCeiling"]
+
+        self.assertEqual(len(core_floor), 1)
+        self.assertEqual(len(core_ceiling), 1)
+        core_floor   = core_floor[0]
+        core_ceiling = core_ceiling[0]
+        attic_floor  = core_ceiling.adjacentSurface()
+        self.assertTrue(attic_floor)
+        attic_floor  = attic_floor.get()
+
+        self.assertTrue("Core" in core.nameString())
+        # 22.69, 13.46, 0,                        !- X,Y,Z Vertex 1 {m}
+        # 22.69,  5.00, 0,                        !- X,Y,Z Vertex 2 {m}
+        #  5.00,  5.00, 0,                        !- X,Y,Z Vertex 3 {m}
+        #  5.00, 13.46, 0;                        !- X,Y,Z Vertex 4 {m}
+        # -----,------,--
+        # 17.69 x 8.46 = 149.66 m2
+        self.assertAlmostEqual(core.floorArea(), 149.66, places=2)
+        core_volume = core.floorArea() * 3.05
+        self.assertAlmostEqual(core_volume, core.volume(), places=2)
+
+        # OpenStudio versions prior to v351 overestimate attic volume
+        # (798.41 m3), as they resort to floor area x height.
+        if version < 350:
+            self.assertAlmostEqual(attic.volume(), 798.41, places=2)
+        else:
+            self.assertAlmostEqual(attic.volume(), 720.19, places=2)
+
+        # Attic floor area includes overhang 'floor' surfaces (i.e. soffits).
+        self.assertAlmostEqual(attic.floorArea(), 567.98, places=2)
+        self.assertTrue(osut.poly(core_floor, True))   # convex
+        self.assertTrue(osut.poly(core_ceiling, True)) # convex
+        self.assertTrue(osut.poly(attic_floor, True))  # convex
+        self.assertEqual(o.status(), 0)
+
+        # Insert new 'mini' (2m x 2m) floor/ceiling at the centre of the
+        # existing core space. Initial insertion resorting strictly to adding
+        # leader lines from the initial core floor/ceiling vertices to the new
+        # 'mini' floor/ceiling.
+        centre = openstudio.getCentroid(core_floor.vertices())
+        self.assertTrue(centre)
+        centre = centre.get()
+        mini_w = centre.x() - 1 # 12.845
+        mini_e = centre.x() + 1 # 14.845
+        mini_n = centre.y() + 1 # 10.230
+        mini_s = centre.y() - 1 #  8.230
+
+        mini_floor_vtx = openstudio.Point3dVector()
+        mini_floor_vtx.append(openstudio.Point3d(mini_e, mini_n, 0))
+        mini_floor_vtx.append(openstudio.Point3d(mini_e, mini_s, 0))
+        mini_floor_vtx.append(openstudio.Point3d(mini_w, mini_s, 0))
+        mini_floor_vtx.append(openstudio.Point3d(mini_w, mini_n, 0))
+        mini_floor = openstudio.model.Surface(mini_floor_vtx, model)
+        mini_floor.setName("Mini floor")
+        self.assertEqual(mini_floor.outsideBoundaryCondition(), "Ground")
+        self.assertTrue(mini_floor.setSpace(core))
+
+        mini_ceiling_vtx = openstudio.Point3dVector()
+        mini_ceiling_vtx.append(openstudio.Point3d(mini_w, mini_n, 3.05))
+        mini_ceiling_vtx.append(openstudio.Point3d(mini_w, mini_s, 3.05))
+        mini_ceiling_vtx.append(openstudio.Point3d(mini_e, mini_s, 3.05))
+        mini_ceiling_vtx.append(openstudio.Point3d(mini_e, mini_n, 3.05))
+        mini_ceiling = openstudio.model.Surface(mini_ceiling_vtx, model)
+        mini_ceiling.setName("Mini ceiling")
+        self.assertTrue(mini_ceiling.setSpace(core))
+
+        mini_attic_vtx = openstudio.Point3dVector()
+        mini_attic_vtx.append(openstudio.Point3d(mini_e, mini_n, 3.05))
+        mini_attic_vtx.append(openstudio.Point3d(mini_e, mini_s, 3.05))
+        mini_attic_vtx.append(openstudio.Point3d(mini_w, mini_s, 3.05))
+        mini_attic_vtx.append(openstudio.Point3d(mini_w, mini_n, 3.05))
+        mini_attic = openstudio.model.Surface(mini_attic_vtx, model)
+        mini_attic.setName("Mini attic")
+        self.assertTrue(mini_attic.setSpace(attic))
+
+        self.assertTrue(mini_ceiling.setAdjacentSurface(mini_attic))
+        self.assertEqual(mini_ceiling.outsideBoundaryCondition(), "Surface")
+        self.assertEqual(mini_attic.outsideBoundaryCondition(), "Surface")
+        self.assertEqual(mini_ceiling.outsideBoundaryCondition(), "Surface")
+        self.assertEqual(mini_ceiling.outsideBoundaryCondition(), "Surface")
+        self.assertTrue(mini_ceiling.adjacentSurface())
+        self.assertTrue(mini_attic.adjacentSurface())
+        self.assertEqual(mini_ceiling.adjacentSurface().get(), mini_attic)
+        self.assertEqual(mini_attic.adjacentSurface().get(), mini_ceiling)
+
+        # Reset existing core floor, core ceiling & attic floor vertices to
+        # accommodate 3x new mini 'holes' (filled in by the 3x new 'mini'
+        # surfaces). 'Hole' vertices are defined in the opposite 'winding' of
+        # their 'mini' counterparts (e.g. clockwise if the initial vertex
+        # sequence is counterclockwise). To ensure valid (core and attic) area
+        # & volume calculations (and avoid OpenStudio stdout errors/warnings),
+        # append the last vertex of the original surface: each EnergyPlus edge
+        # must be referenced (at least) twice (i.e. the 'leader line' between
+        # each of the 3x original surfaces and each of the 'mini' holes must
+        # be doubled).
+        vtx = openstudio.Point3dVector()
+        for v in core_floor.vertices(): vtx.append(v)
+        vtx.append(mini_floor_vtx[3])
+        vtx.append(mini_floor_vtx[2])
+        vtx.append(mini_floor_vtx[1])
+        vtx.append(mini_floor_vtx[0])
+        vtx.append(mini_floor_vtx[3])
+        vtx.append(vtx[3])
+        self.assertTrue(core_floor.setVertices(vtx))
+
+        vtx = openstudio.Point3dVector()
+        for v in core_ceiling.vertices(): vtx.append(v)
+        vtx.append(mini_ceiling_vtx[1])
+        vtx.append(mini_ceiling_vtx[0])
+        vtx.append(mini_ceiling_vtx[3])
+        vtx.append(mini_ceiling_vtx[2])
+        vtx .append(mini_ceiling_vtx[1])
+        vtx.append(vtx[3])
+        self.assertTrue(core_ceiling.setVertices(vtx))
+
+        vtx = openstudio.Point3dVector()
+        for v in attic_floor.vertices(): vtx.append(v)
+        vtx .append(mini_attic_vtx[3])
+        vtx.append(mini_attic_vtx[2])
+        vtx.append(mini_attic_vtx[1])
+        vtx.append(mini_attic_vtx[0])
+        vtx.append(mini_attic_vtx[3])
+        vtx.append(vtx[3])
+        self.assertTrue(attic_floor.setVertices(vtx))
+
+        # Generate (temporary) OSM & IDF:
+        model.save("./tests/files/osms/out/miniX.osm", True)
+
+        # ft  = openstudio.energyplus.ForwardTranslator()
+        # idf = ft.translateModel(model)
+        # idf.save("./tests/files/osms/out/miniX.idf", True)
+
+        # Add 2x skylights to attic.
+        attic_south = model.getSurfaceByName("Attic_roof_south")
+        self.assertTrue(attic_south)
+        attic_south = attic_south.get()
+
+        aligned = osut.poly(attic_south, False, False, True, True, "ulc")
+        side    = 1.2
+        offset  = side + 1
+        head    = osut.height(aligned) - 0.2
+        self.assertAlmostEqual(head, 10.16, places=2)
+        
+        del(model)
+        self.assertEqual(o.status(), 0)
 
     def test32_outdoor_roofs(self):
         o = osut.oslg
