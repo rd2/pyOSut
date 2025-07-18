@@ -1298,7 +1298,6 @@ def isFenestrated(s=None) -> bool:
 
     return True
 
-
 # ---- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---- #
 # ---- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---- #
 # This next set of utilities (~850 lines) help distinguish spaces that are
@@ -4606,9 +4605,9 @@ def outline(a=[], bfr=0, flat=True) -> openstudio.Point3dVector:
         return oslg.negative("outline width", mth, CN.DBG, out)
     if yMAX < yMIN:
         return oslg.negative("outline height", mth, Cn.DBG, out)
-    if abs(xMIN - xMAX) < TOL:
+    if abs(xMIN - xMAX) < CN.TOL:
         return oslg.zero("outline width", mth, CN.DBG, out)
-    if abs(yMIN - yMAX) < TOL:
+    if abs(yMIN - yMAX) < CN.TOL:
         return oslg.zero("outline height", mth, CN.DBG, out)
 
     # Generate ULC point 3D vector.
@@ -5003,45 +5002,45 @@ def realignedFace(pts=None, force=False) -> dict:
         return oslg.invalid("clockwise pts", mth, 1, CN.DBG, out)
 
     # Optionally force rotation so bounded box ends up wider than taller.
-    # Strongly suggested for flat surfaces like roofs (see 'sloped?').
+    # Strongly suggested for flat surfaces like roofs (see 'isSloped').
     try:
         force = bool(force)
     except:
         oslg.log(CN.DBG, "Ignoring force input (%s)" % mth)
         force = False
 
-    o = openstudio.Point3d(0, 0, 0)
-    w = width(pts)
-    h = height(pts)
-    d = h if h > w else w
-
-    sgs = {}
+    o   = openstudio.Point3d(0, 0, 0)
+    w   = width(pts)
+    h   = height(pts)
+    d   = h if h > w else w
     box = boundedBox(pts)
 
     if not box:
         return oslg.invalid("bounded box", mth, 0, CN.DBG, out)
 
+    sgs  = []
     segs = segments(box)
 
     if not segs:
         return oslg.invalid("bounded box segments", mth, 0, CN.DBG, out)
 
-    # Deterministic ID of box rotation/translation 'origin'.
-    for idx, sg in enumerate(segs):
-        sgs[sg]       = {}
-        sgs[sg]["idx"] = idx
-        sgs[sg]["mid"] = midpoint(sg[0], sg[1])
-        sgs[sg]["l"  ] = (sg[1] - sg[0]).length()
-        sgs[sg]["mo" ] = (sgs[sg]["mid"] - o).length()
+    # Deterministic identification of box rotation/translation 'origin'.
+    for idx, segment in enumerate(segs):
+        sg        = {}
+        sg["idx"] = idx
+        sg["mid"] = midpoint(segment[0], segment[1])
+        sg["l"  ] = (segment[1] - segment[0]).length()
+        sg["mo" ] = (sg["mid"] - o).length()
+        sgs.append(sg)
 
     if isSquare(box):
-        sgs = dict(sorted(sgs.items(), key=lambda item: item[1]["mo"])[:2])
+        sgs = sorted(sgs, key=lambda x: x["mo"])[:2]
     else:
-        sgs = dict(sorted(sgs.items(), key=lambda item: item[1]["l" ])[:2])
-        sgs = dict(sorted(sgs.items(), key=lambda item: item[1]["mo"])[:2])
+        sgs = sorted(sgs, key=lambda x: x["l" ])[:2]
+        sgs = sorted(sgs, key=lambda x: x["mo"])[:2]
 
-    sg0 = sgs.values[0]
-    sg1 = sgs.values[1]
+    sg0 = sgs[0]
+    sg1 = sgs[1]
 
     i = sg0["idx"]
 

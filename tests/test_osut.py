@@ -2383,7 +2383,265 @@ class TestOSutModuleMethods(unittest.TestCase):
         pts = r * a
         self.assertTrue(osut.areSame(pts, vtx))
 
-        # ... to be completed later.
+        output1 = osut.realignedFace(vtx)
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(isinstance(output1, dict))
+        self.assertTrue("set" in output1)
+        self.assertTrue("box" in output1)
+        self.assertTrue("bbox" in output1)
+        self.assertTrue("t" in output1)
+        self.assertTrue("r" in output1)
+        self.assertTrue("o" in output1)
+
+        ubox1  = output1[ "box"]
+        ubbox1 = output1["bbox"]
+
+        # Realign a previously realigned surface?
+        output2 = osut.realignedFace(ubox1)
+        ubox2   = output1[ "box"]
+        ubbox2  = output1["bbox"]
+
+        # Realigning a previously realigned polygon has no effect (== safe).
+        self.assertTrue(osut.areSame(ubox1, ubox2, False))
+        self.assertTrue(osut.areSame(ubbox1, ubbox2, False))
+
+        bounded_area  = openstudio.getArea(ubox1)
+        bounding_area = openstudio.getArea(ubbox1)
+        self.assertTrue(bounded_area)
+        self.assertTrue(bounding_area)
+        bounded_area  = bounded_area.get()
+        bounding_area = bounding_area.get()
+        self.assertAlmostEqual(bounded_area, bounding_area, places=2)
+
+        bounded_area  = openstudio.getArea(ubox2)
+        bounding_area = openstudio.getArea(ubbox2)
+        self.assertTrue(bounded_area)
+        self.assertTrue(bounding_area)
+        bounded_area  = bounded_area.get()
+        bounding_area = bounding_area.get()
+        self.assertAlmostEqual(bounded_area, bounding_area, places=2)
+        self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Repeat with slight change in orientation.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(  2,  6,  0))
+        vtx.append(openstudio.Point3d(  1,  4,  0))
+        vtx.append(openstudio.Point3d(  5,  2,  0))
+        vtx.append(openstudio.Point3d(  6,  4,  0))
+
+        output3 = osut.realignedFace(vtx)
+        ubox3   = output3[ "box"]
+        ubbox3  = output3["bbox"]
+
+        # Realign a previously realigned surface?
+        output4 = osut.realignedFace(ubox3)
+        ubox4   = output4[ "box"]
+        ubbox4  = output4["bbox"]
+
+        # Realigning a previously realigned polygon has no effect (== safe).
+        self.assertTrue(osut.areSame(ubox1, ubox3, False))
+        self.assertTrue(osut.areSame(ubbox1, ubbox3, False))
+        self.assertTrue(osut.areSame(ubox1, ubox4, False))
+        self.assertTrue(osut.areSame(ubbox1, ubbox4, False))
+
+        bounded_area  = openstudio.getArea(ubox3)
+        bounding_area = openstudio.getArea(ubbox3)
+        self.assertTrue(bounded_area)
+        self.assertTrue(bounding_area)
+        bounded_area  = bounded_area.get()
+        bounding_area = bounding_area.get()
+        self.assertAlmostEqual(bounded_area, bounding_area, places=2)
+
+        bounded_area  = openstudio.getArea(ubox4)
+        bounding_area = openstudio.getArea(ubbox4)
+        self.assertTrue(bounded_area)
+        self.assertTrue(bounding_area)
+        bounded_area  = bounded_area.get()
+        bounding_area = bounding_area.get()
+        self.assertAlmostEqual(bounded_area, bounding_area, places=2)
+        self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Repeat with changes in vertex sequence.
+        # Repeat with slight change in orientation.
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(  6,  4,  0))
+        vtx.append(openstudio.Point3d(  5,  6,  0))
+        vtx.append(openstudio.Point3d(  1,  4,  0))
+        vtx.append(openstudio.Point3d(  2,  2,  0))
+
+        output5 = osut.realignedFace(vtx)
+        ubox5   = output5[ "box"]
+        ubbox5  = output5["bbox"]
+
+        # Realign a previously realigned surface?
+        output6 = osut.realignedFace(ubox5)
+        ubox6   = output6[ "box"]
+        ubbox6  = output6["bbox"]
+
+        # Realigning a previously realigned polygon has no effect (== safe).
+        self.assertTrue(osut.areSame(ubox1, ubox5))
+        self.assertTrue(osut.areSame(ubox1, ubox6))
+        self.assertTrue(osut.areSame(ubbox1, ubbox5))
+        self.assertTrue(osut.areSame(ubbox1, ubbox6))
+        self.assertTrue(osut.areSame(ubox5, ubox6, False))
+        self.assertTrue(osut.areSame(ubox5, ubbox5, False))
+        self.assertTrue(osut.areSame(ubbox5, ubox6, False))
+        self.assertTrue(osut.areSame(ubox6, ubbox6, False))
+
+        bounded_area  = openstudio.getArea(ubox5)
+        bounding_area = openstudio.getArea(ubbox5)
+        self.assertTrue(bounded_area)
+        self.assertTrue(bounding_area)
+        bounded_area  = bounded_area.get()
+        bounding_area = bounding_area.get()
+        self.assertAlmostEqual(bounded_area, bounding_area, places=2)
+
+        bounded_area  = openstudio.getArea(ubox6)
+        bounding_area = openstudio.getArea(ubbox6)
+        self.assertTrue(bounded_area)
+        self.assertTrue(bounding_area)
+        bounded_area  = bounded_area.get()
+        bounding_area = bounding_area.get()
+        self.assertAlmostEqual(bounded_area, bounding_area, places=2)
+        self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Repeat with slight change in orientation (vertices resequenced).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(  5,  2,  0))
+        vtx.append(openstudio.Point3d(  6,  4,  0))
+        vtx.append(openstudio.Point3d(  2,  6,  0))
+        vtx.append(openstudio.Point3d(  1,  4,  0))
+
+        output7 = osut.realignedFace(vtx)
+        ubox7   = output7[ "box"]
+        ubbox7  = output7["bbox"]
+
+        # Realign a previously realigned surface?
+        output8 = osut.realignedFace(ubox7)
+        ubox8   = output8[ "box"]
+        ubbox8  = output8["bbox"]
+
+        # Realigning a previously realigned polygon has no effect (== safe).
+        self.assertTrue(osut.areSame(ubox1, ubox7))
+        self.assertTrue(osut.areSame(ubox1, ubox8))
+        self.assertTrue(osut.areSame(ubbox1, ubbox7))
+        self.assertTrue(osut.areSame(ubbox1, ubbox8))
+        self.assertTrue(osut.areSame(ubox5, ubox7, False))
+        self.assertTrue(osut.areSame(ubbox5, ubbox7, False))
+        self.assertTrue(osut.areSame(ubox5, ubox5, False))
+        self.assertTrue(osut.areSame(ubbox5, ubbox8, False))
+
+        bounded_area  = openstudio.getArea(ubox7)
+        bounding_area = openstudio.getArea(ubbox7)
+        self.assertTrue(bounded_area)
+        self.assertTrue(bounding_area)
+        bounded_area  = bounded_area.get()
+        bounding_area = bounding_area.get()
+        self.assertAlmostEqual(bounded_area, bounding_area, places=2)
+
+        bounded_area  = openstudio.getArea(ubox8)
+        bounding_area = openstudio.getArea(ubbox8)
+        self.assertTrue(bounded_area)
+        self.assertTrue(bounding_area)
+        bounded_area  = bounded_area.get()
+        bounding_area = bounding_area.get()
+        self.assertAlmostEqual(bounded_area, bounding_area, places=2)
+        self.assertEqual(o.status(), 0)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Aligned box (wide).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(  2,  4,  0))
+        vtx.append(openstudio.Point3d(  2,  2,  0))
+        vtx.append(openstudio.Point3d(  6,  2,  0))
+        vtx.append(openstudio.Point3d(  6,  4,  0))
+
+        output9 = osut.realignedFace(vtx)
+        ubox9   = output9[ "box"]
+        ubbox9  = output9["bbox"]
+
+        output10 = osut.realignedFace(vtx, True) # no impact
+        ubox10   = output10[ "box"]
+        ubbox10  = output10["bbox"]
+        self.assertTrue(osut.areSame(ubox9, ubox10))
+        self.assertTrue(osut.areSame(ubbox9, ubbox10))
+
+        # ... vs aligned box (narrow).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(  2,  6,  0))
+        vtx.append(openstudio.Point3d(  2,  2,  0))
+        vtx.append(openstudio.Point3d(  4,  2,  0))
+        vtx.append(openstudio.Point3d(  4,  6,  0))
+
+        output11 = osut.realignedFace(vtx)
+        ubox11   = output11[ "box"]
+        ubbox11  = output11["bbox"]
+
+        output12 = osut.realignedFace(vtx, True) # narrow, now wide
+        ubox12   = output12[ "box"]
+        ubbox12  = output12["bbox"]
+        self.assertFalse(osut.areSame(ubox11, ubox12))
+        self.assertFalse(osut.areSame(ubbox11, ubbox12))
+        self.assertTrue(osut.areSame(ubox12, ubox10))
+        self.assertTrue(osut.areSame(ubbox12, ubbox10))
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Irregular surface (parallelogram).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(  4,  0,  0))
+        vtx.append(openstudio.Point3d(  6,  4,  0))
+        vtx.append(openstudio.Point3d(  3,  8,  0))
+        vtx.append(openstudio.Point3d(  1,  4,  0))
+
+        output13 = osut.realignedFace(vtx)
+        uset13   = output13[ "set"]
+        ubox13   = output13[ "box"]
+        ubbox13  = output13["bbox"]
+
+        # Pre-isolate bounded box (preferable with irregular surfaces).
+        box      = osut.boundedBox(vtx)
+        output14 = osut.realignedFace(box)
+        uset14   = output14[ "set"]
+        ubox14   = output14[ "box"]
+        ubbox14  = output14["bbox"]
+        self.assertTrue(osut.areSame(uset14, ubox14))
+        self.assertTrue(osut.areSame(uset14, ubbox14))
+        self.assertFalse(osut.areSame(uset13, uset14))
+        self.assertFalse(osut.areSame(ubox13, ubox14))
+        self.assertFalse(osut.areSame(ubbox13, ubbox14))
+
+        rset14 = output14["r"] * (output14["t"] * uset14)
+        self.assertTrue(osut.areSame(box, rset14))
+
+        #  --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Bounded box from an irregular, non-convex, "J"-shaped corridor roof.
+        # This is a VERY EXPENSIVE method when dealing with such HIGHLY
+        # CONVOLUTED polygons !
+        # vtx = openstudio.Point3dVector()
+        # vtx.append(openstudio.Point3d(  0.0000000,  0.0000, 3.658))
+        # vtx.append(openstudio.Point3d(  0.0000000, 35.3922, 3.658))
+        # vtx.append(openstudio.Point3d(  7.4183600, 35.3922, 3.658))
+        # vtx.append(openstudio.Point3d(  7.8150800, 35.2682, 3.658))
+        # vtx.append(openstudio.Point3d( 13.8611000, 35.2682, 3.658))
+        # vtx.append(openstudio.Point3d( 13.8611000, 38.9498, 3.658))
+        # vtx.append(openstudio.Point3d(  7.8150800, 38.9498, 3.658))
+        # vtx.append(openstudio.Point3d(  7.8150800, 38.6275, 3.658))
+        # vtx.append(openstudio.Point3d( -0.0674713, 38.6275, 3.658))
+        # vtx.append(openstudio.Point3d( -0.0674713, 48.6247, 3.658))
+        # vtx.append(openstudio.Point3d( -2.5471900, 48.6247, 3.658))
+        # vtx.append(openstudio.Point3d( -2.5471900, 38.5779, 3.658))
+        # vtx.append(openstudio.Point3d( -6.7255500, 38.5779, 3.658))
+        # vtx.append(openstudio.Point3d( -2.5471900,  2.7700, 3.658))
+        # vtx.append(openstudio.Point3d(-14.9024000,  2.7700, 3.658))
+        # vtx.append(openstudio.Point3d(-14.9024000,  0.0000, 3.658))
+        #
+        # bbx = osut.boundedBox(vtx)
+        # self.assertTrue(osut.fits(bbx, vtx))
+        # if o.logs(): print(mod1.logs())
+        self.assertEqual(o.status(), 0)
 
     def test23_fits_overlaps(self):
         o = osut.oslg
