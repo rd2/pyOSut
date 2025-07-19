@@ -7,8 +7,13 @@ requires-python = ">=3.2"
 authors = [ {name = "Denis Bourgeois", email = "denis@rd2.ca"} ]
 maintainers = [ {name = "Denis Bourgeois", email = "denis@rd2.ca"} ]
 dependencies = [
+    "re",
+    "math",
+    "numpy",
+    "collections"
     "oslg",
     "openstudio>=3.6.1",
+    "dataclasses",
 ]
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
