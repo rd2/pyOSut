@@ -29,6 +29,7 @@
 
 import re
 import math
+import numpy
 import collections
 import openstudio
 from oslg import oslg
@@ -43,6 +44,8 @@ class _CN:
     FTL  = oslg.CN.FATAL
     TOL  = 0.01      # default distance tolerance (m)
     TOL2 = TOL * TOL # default area tolerance (m2)
+    HEAD = 2.032     # standard 80" door
+    SILL = 0.762     # standard 30" window sill
 CN = _CN()
 
 # General surface orientations (see 'facets' method).
@@ -5439,6 +5442,685 @@ def roofs(spaces = []) -> list:
                 if ruf not in roofs: roofs.append(ruf)
 
     return roofs
+
+
+def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005):
+    """Adds sub surface(s) (e.g. windows, doors, skylights) to a surface.
+
+    Args:
+        s (openstudio.model.Surface):
+            An OpenStudio surface.
+        subs (list):
+            Requested subsurface attributes (dicts):
+            - "id" (str): identifier e.g. "Window 007"
+            - "type" (str): OpenStudio subsurface type ("FixedWindow")
+            - "count" (int): number of individual subs per array (1)
+            - "multiplier" (int): OpenStudio subsurface multiplier (1)
+            - "frame" (WindowPropertyFrameAndDivider): FD object (None)
+            - "assembly" (ConstructionBase): OpenStudio construction (None)
+            - "ratio" (float): %FWR [0.0, 1.0]
+            - "head" (float): e.g. door height, incl frame (osut.CN.HEAD)
+            - "sill" (float): e.g. door sill (incl frame) (osut.CN.SILL)
+            - "height" (float): door sill-to-head height
+            - "width" (float): e.g. door width
+            - "offset" (float): left-right gap between e.g. doors
+            - "centreline" (float): centreline left-right offset of subs vs base
+            - "r_buffer" (float): gap between subs and right corner
+            - "l_buffer" (float): gap between subs and left corner
+        "clear" (bool):
+            Whether to remove current sub surfaces.
+        "bound" (bool):
+            Whether to add subs with regards to surface's bounded box.
+        "realign" (bool):
+            Whether to first realign bounded box.
+        "bfr" (float):
+            Safety buffer, to maintain near other edges.
+
+    Returns:
+        bool: Whether addition(s) was/were successful.
+        False: If invalid inputs (see logs).
+
+    """
+    mth = "osut.addSubs"
+    cl1 = openstudio.model.Surface
+    cl2 = openstudio.model.WindowPropertyFrameAndDivider
+    cl3 = openstudio.model.ConstructionBase
+    v   = int("".join(openstudio.openStudioVersion().split(".")))
+    min = 0.050 # minimum ratio value ( 5%)
+    max = 0.950 # maximum ratio value (95%)
+    if isinstance(subs, dict): sbs = [subs]
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Exit if mismatched or invalid argument classes.
+    try:
+        subs = list(subs)
+    except:
+        return oslg.mismatch("subs", subs, list, mth, CN.DBG, False)
+
+    if len(subs) == 0:
+        return oslg.empty("subs", mth, CN.DBG, False)
+
+    if not isinstance(s, cl1):
+        return oslg.mismatch("surface", s, cl1, mth, CN.DBG, False)
+
+    if not poly(s):
+        return oslg.empty("surface points", mth, CN.DBG, False)
+
+    nom = s.nameString()
+    mdl = s.model()
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Purge existing sub surfaces?
+    try:
+        clear = bool(clear)
+    except:
+        oslg.log(CN.WRN, "%s: Keeping existing sub surfaces (%s)" % (nom, mth))
+        clear = False
+
+    if clear:
+        for sb in s.subSurfaces(): sb.remove()
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Add sub surfaces with respect to base surface's bounded box? This is
+    # often useful (in some cases necessary) with irregular or concave surfaces.
+    # If true, sub surface parameters (e.g. height, offset, centreline) no
+    # longer apply to the original surface 'bounding' box, but instead to its
+    # largest 'bounded' box. This can be combined with the 'realign' parameter.
+    try:
+        bound = bool(bound)
+    except:
+        oslg.log(CN.WRN, "%s: Ignoring bounded box (%s)" % (nom, mth))
+        bound = False
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Force re-alignment of base surface (or its 'bounded' box)? False by
+    # default (ideal for vertical/tilted walls & sloped roofs). If set to True
+    # for a narrow wall for instance, an array of sub surfaces will be added
+    # from bottom to top (rather from left to right).
+    try:
+        realign = bool(realign)
+    except:
+        oslg.log(CN.WRN, "%s: Ignoring realignment (%s)" % (nom, mth))
+        realign = False
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Ensure minimum safety buffer.
+    try:
+        bfr = float(bfr)
+    except:
+        oslg.log(CN.ERR, "Setting safety buffer to 5mm (%s)" % mth)
+        bfr = 0.005
+
+    if round(bfr, 2) < 0:
+        return oslg.negative("safety buffer", mth, CN.ERR, False)
+
+    if round(bfr, 2) < 0.005:
+        m = "Safety buffer < 5mm may generate invalid geometry (%s)" % mth
+        oslg.log(CN.WRN, m)
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Allowable sub surface types   | Frame&Divider enabled?
+    #   - "FixedWindow"             | True
+    #   - "OperableWindow"          | True
+    #   - "Door"                    | False
+    #   - "GlassDoor"               | True
+    #   - "OverheadDoor"            | False
+    #   - "Skylight"                | False if v < 321
+    #   - "TubularDaylightDome"     | False
+    #   - "TubularDaylightDiffuser" | False
+    type  = "FixedWindow"
+    types = openstudio.model.SubSurface.validSubSurfaceTypeValues()
+    stype = s.surfaceType() # Wall, RoofCeiling or Floor
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    t   = openstudio.Transformation.alignFace(s.vertices())
+    s0  = poly(s, False, False, False, t, "ulc")
+    s00 = None
+
+    # Adapt sandbox if user selects to 'bound' and/or 'realign'.
+    if bound:
+        box = boundedBox(s0)
+
+        if realign:
+            s00 = realignedFace(box, True)
+
+            if not s00["set"]:
+                return oslg.invalid("bound realignment", mth, 0, CN.DBG, False)
+
+    elif realign:
+        s00 = realignedFace(s0, False)
+
+        if not s00["set"]:
+            return oslg.invalid("unbound realignment", mth, 0, CN.DBG, False)
+
+    max_x = width( s00["set"]) if s00 else width(s0)
+    max_y = height(s00["set"]) if s00 else height(s0)
+    mid_x = max_x / 2
+    mid_y = max_y / 2
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Assign default values to certain sub keys (if missing), +more validation.
+    for index, sub in subs:
+        if not isinstance(sub, dict):
+            return oslg.mismatch("sub", sub, dict, mth, CN.DBG, False)
+
+        # Required key:value pairs (either set by the user or defaulted).
+        if "frame"      not in sub: sub["frame"     ] = None
+        if "assembly"   not in sub: sub["assembly"  ] = None
+        if "count"      not in sub: sub["count"     ] = 1
+        if "multiplier" not in sub: sub["multiplier"] = 1
+        if "id"         not in sub: sub["id"        ] = ""
+        if "type"       not in sub: sub["type"      ] = 1
+
+        sub["type"] = trim(sub["type"])
+        sub["id"  ] = trim(sub["id"])
+
+        if not sub["type"]: sub["type"] = type
+        if not sub["id"  ]: sub["id"  ] = "osut:%s:%d" % (nom, index)
+
+        try:
+            sub["count"] = int(sub["count"])
+        except:
+            sub["count"] = 1
+
+        try:
+            sub["multiplier"] = int(sub["multiplier"])
+        except:
+            sub["multiplier"] = 1
+
+        if sub["count"     ] < 1: sub["count"     ] = 1
+        if sub["multiplier"] < 1: sub["multiplier"] = 1
+
+        id = sub["id"]
+
+        # If sub surface type is invalid, log/reset. Additional corrections may
+        # be enabled once a sub surface is actually instantiated.
+        if sub["type"] not in types:
+            m = "Reset invalid '%s' type to '%s' (%s)" % (id, type, mth)
+            oslg.log(CN.WRN, m)
+            sub["type"] = type
+
+        # Log/ignore (optional) frame & divider object.
+        if sub["frame"]:
+            if isinstance(sub["frame"], cl2):
+                if sub["type"].lower() == "skylight" and v < 321:
+                    sub["frame"] = None
+                if sub["type"].lower() == "door":
+                    sub["frame"] = None
+                if sub["type"].lower() == "overheaddoor":
+                    sub["frame"] = None
+                if sub["type"].lower() == "tubulardaylightdome":
+                    sub["frame"] = None
+                if sub["type"].lower() == "tubulardaylightdiffuser":
+                    sub["frame"] = None
+
+                if sub["frame"] is None:
+                    m = "Skip '%s' FrameDivider (%s)" % (id, mth)
+                    oslg.log(CN.WRN, m)
+            else:
+                m = "Skip '%s' invalid FrameDivider object (%s)" % (id, mth)
+                oslg.log(CN.WRN, m)
+                sub["frame"] = None
+
+        # The (optional) "assembly" must reference a valid OpenStudio
+        # construction base, to explicitly assign to each instantiated sub
+        # surface. If invalid, log/reset/ignore. Additional checks are later
+        # activated once a sub surface is actually instantiated.
+        if sub["assembly"]:
+            if not isinstance(sub["assembly"], cl3):
+                m = "Skip invalid '%s' construction (%s)" % (id, mth)
+                log(WRN, m)
+                sub["assembly"] = None
+
+        # Log/reset negative float values. Set ~0.0 values to 0.0.
+        for key, value in subs.items():
+            if key == "count":      continue
+            if key == "multiplier": continue
+            if key == "type":       continue
+            if key == "id":         continue
+            if key == "frame":      continue
+            if key == "assembly":   continue
+
+            try:
+                value = float(value)
+            except:
+                return oslg.mismatch(key, value, float, mth, CN.DBG, False)
+
+            if key == "centreline": continue
+
+            if value < 0: oslg.negative(key, mth, CN.WRN)
+            if abs(value) < CN.TOL: value = 0.0
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Log/reset (or abandon) conflicting user-set geometry key:value pairs:
+    #   "head"       e.g. std 80" door + frame/buffers (+ m)
+    #   "sill"       e.g. std 30" sill + frame/buffers (+ m)
+    #   "height"     any sub surface height, below "head" (+ m)
+    #   "width"      e.g. 1.2 m
+    #   "offset"     if array (+ m)
+    #   "centreline" left or right of base surface centreline (+/- m)
+    #   "r_buffer"   buffer between sub/array and right-side corner (+ m)
+    #   "l_buffer"   buffer between sub/array and left-side corner (+ m)
+    #
+    # If successful, this will generate sub surfaces and add them to the model.
+    for sub in subs:
+        # Set-up unique sub parameters:
+        #   - Frame & Divider "width"
+        #   - minimum "clear glazing" limits
+        #   - buffers, etc.
+        id         = sub["id"]
+        frame      = sub["frame"].frameWidth() if sub["frame"] else 0
+        frames     = 2 * frame
+        buffer     = frame + bfr
+        buffers    = 2 * buffer
+        dim        = 3 * frame if 3 * frame > 0.200 else 0.200
+        glass      = dim - frames
+        min_sill   = buffer
+        min_head   = buffers + glass
+        max_head   = max_y - buffer
+        max_sill   = max_head - (buffers + glass)
+        min_ljamb  = buffer
+        max_ljamb  = max_x - (buffers + glass)
+        min_rjamb  = buffers + glass
+        max_rjamb  = max_x - buffer
+        max_height = max_y - buffers
+        max_width  = max_x - buffers
+
+        # Default sub surface "head" & "sill" height, unless user-specified.
+        typ_head = CN.HEAD
+        typ_sill = CN.SILL
+
+        if "ratio" in sub:
+            if sub["ratio"] > 0.75 or stype.lower() != "wall":
+                typ_head = mid_y * (1 + sub["ratio"])
+                typ_sill = mid_y * (1 - sub["ratio"])
+
+        # Log/reset "height" if beyond min/max.
+        if "height" in sub:
+            if (sub["height"] < glass - CN.TOL2 or
+                sub["height"] > max_height + CN.TOL2):
+
+                m = "(Re)set '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                oslg.log(CN.WRN, m)
+                sub["height"] = numpy.clip(sub["height"], glass, max_height)
+                m = "Height '%s' reset to %.3fm (%s)" % (id, sub["height"], mth)
+                oslg.log(CN.WRN, m)
+
+        # Log/reset "head" height if beyond min/max.
+        if "head" in sub:
+            if (sub["head"] < min_head - CN.TOL2 or
+                sub["head"] > max_head + CN.TOL2):
+
+                m = "(Re)set '%s' head %.3fm (%s)" % (id, sub["head"], mth)
+                oslg.log(CN.WRN, m)
+                sub["head"] = numpy.clip(sub["head"], min_head, max_head)
+                m = "Head '%s' reset to %.3fm (%s)" % (id, sub["head"], mth)
+                oslg.log(CN.WRN, m)
+
+        # Log/reset "sill" height if beyond min/max.
+        if "sill" in sub:
+            if (sub["head"] < min_sill - CN.TOL2 or
+                sub["head"] > max_sill + CN.TOL2):
+
+                m = "(Re)set '%s' sill %.3fm (%s)" % (id, sub["sill"], mth)
+                log(CN.WRN, m)
+                sub["sill"] = numpy.clip(sub["sill"], min_sill, max_sill)
+                m = "Sill '%s reset to %.3fm (%s)" % (id, sub["sill"], mth)
+                log(CN.WRN, m)
+
+        # At this point, "head", "sill" and/or "height" have been tentatively
+        # validated (and/or have been corrected) independently from one another.
+        # Log/reset "head" & "sill" heights if conflicting.
+        if "head" in sub and "sill" in sub and sub["head"] < sub["sill"] + glass:
+            sill = sub["head"] - glass
+
+            if sill < min_sill - CN.TOL2:
+                sub["count"     ] = 0
+                sub["multiplier"] = 0
+
+                if "ratio" in sub: sub["ratio"  ] = 0
+                if "height" in sub: sub["height"] = 0
+                if "width" in sub: sub["width"  ] = 0
+
+                m = "Skip: invalid '%s' head/sill combo (%s)" % (id, mth)
+                oslg.log(CN.ERR, m)
+                continue
+            else:
+                m = "(Re)set '%s' sill %.3fm (%s)" % (id, sub["sill"], mth)
+                oslg.log(CN.WRN, m)
+                sub["sill"] = sill
+                m = "Sill '%s' (re)set to %.3fm (%s)" % (id, sub["sill"], mth)
+                oslg.log(CN.WRN, m)
+
+        # Attempt to reconcile "head", "sill" and/or "height". If successful,
+        # all 3x parameters are set (if missing), or reset if invalid.
+        if "head" in sub and "sill" in sub:
+            height = sub["head"] - sub["sill"]
+
+            if "height" in sub and abs(sub["height"] - height) > CN.TOL2:
+                m1 = "(Re)set '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                m2 = "Height '%s' (re)set %.3fm (%s)" % (id, height, mth)
+                oslg.log(CN.WRN, m1)
+                oslg.log(CN.WRN, m2)
+
+            sub["height"] = height
+
+        elif "head" in sub:# no "sill"
+            if "height" in sub:
+                sill = sub["head"] - sub["height"]
+
+                if sill < min_sill - CN.TOL2:
+                    sill   = min_sill
+                    height = sub["head"] - sill
+
+                    if height < glass:
+                        sub["count"     ] = 0
+                        sub["multiplier"] = 0
+
+                        if "ratio" in sub: sub["ratio"  ] = 0
+                        if "height" in sub: sub["height"] = 0
+                        if "width"  in sub: sub["width" ] = 0
+
+                        m = "Skip: invalid '%s' head/height combo (%s)" % (id, mth)
+                        oslg.log(CN.ERR, m)
+                        continue
+                    else:
+                        m = "(Re)set '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                        log(CN.WRN, m)
+                        sub["sill"  ] = sill
+                        sub["height"] = height
+                        m = "Height '%s' re(set) %.3fm (%s)" % (id, sub["height"], mth)
+                        log(CN.WRN, m)
+                else:
+                    sub["sill"] = sill
+            else:
+                sub["sill"  ] = typ_sill
+                sub["height"] = sub["head"] - sub["sill"]
+
+        elif "sill" in sub: # no "head"
+            if "height" in sub:
+                head = sub["sill"] + sub["height"]
+
+                if head > max_head - CN.TOL2:
+                    head   = max_head
+                    height = head - sub["sill"]
+
+                    if height < glass:
+                        sub["count"     ] = 0
+                        sub["multiplier"] = 0
+
+                        if "ratio"  in sub: sub["ratio" ] = 0
+                        if "height" in sub: sub["height"] = 0
+                        if "width"  in sub: sub["width" ] = 0
+
+                        m = "Skip: invalid '%s' sill/height combo (%s)" % (id, mth)
+                        oslg.log(CN.ERR, m)
+                        continue
+                    else:
+                        m = "(Re)set '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                        oslg.log(CN.WRN, m)
+                        sub["head"  ] = head
+                        sub["height"] = height
+                        m = "Height '%s' reset to %.3fm (%s)" % (id, sub["height"], mth)
+                        oslg.log(CN.WRN, m)
+                else:
+                    sub["head"] = head
+            else:
+                sub["head"  ] = typ_head
+                sub["height"] = sub["head"] - sub["sill"]
+
+        elif "height" in sub: # neither "head" nor "sill"
+            head = mid_y + sub["height"]/2 if s00 else typ_head
+            sill = head - sub["height"]
+
+            if sill < min_sill:
+                sill = min_sill
+                head = sill + sub["height"]
+
+            sub["head"] = head
+            sub["sill"] = sill
+
+        else:
+            sub["head"  ] = typ_head
+            sub["sill"  ] = typ_sill
+            sub["height"] = sub["head"] - sub["sill"]
+
+        # Log/reset "width" if beyond min/max.
+        if "width" in sub:
+            if (sub["width"] < glass - CN.TOL2 or
+                sub["width"] > max_width + CN.TOL2):
+
+                m = "(Re)set '%s' width %.3fm (%s)" % (id, sub["width"], mth)
+                oslg.log(CN.WRN, m)
+                sub["width"] = numpy.clip(sub["width"], glass, max_width)
+                m = "Width '%s' reset to %.3fm ()%s)" % (id, sub["width"], mth)
+                oslg.log(CN.WRN, m)
+
+        # Log/reset "count" if < 1 (or not an Integer)
+        try:
+            sub["count"] = int(sub["count"])
+        except:
+            sub["count"] = 1
+
+        if sub["count"] < 1:
+            sub["count"] = 1
+            oslg.log(CN.WRN, "Reset '%s' count to min 1 (%s)" % (id, mth))
+
+        # Log/reset if left-sided buffer under min jamb position.
+        if "l_buffer" in sub:
+            if sub["l_buffer"] < min_ljamb - CN.TOL:
+                m = "(Re)set '%s' left buffer %.3fm (%s)" % (id, sub["l_buffer"], mth)
+                log(WRN, m)
+                sub["l_buffer"] = min_ljamb
+                m = "Left buffer '%s' reset to %.3fm (%s)" % (id, sub["l_buffer"], mth)
+                log(WRN, m)
+
+        # Log/reset if right-sided buffer beyond max jamb position.
+        if "r_buffer" in sub:
+            if sub["r_buffer"] > max_rjamb - CN.TOL:
+                m = "(Re)set '%s' right buffer %.3fm (%s)" % (id, sub["r_buffer"], mth)
+                log(CN.WRN, m)
+                sub["r_buffer"] = min_rjamb
+                m = "Right buffer '%s' reset to %.3fm (%s)" % (id, sub["r_buffer"], mth)
+                log(CN.WRN, m)
+
+        centre  = mid_x
+        if "centreline" in sub: centre += sub["centreline"]
+
+        n  = sub["count" ]
+        h  = sub["height"] + frames
+        w  = 0 # overall width of sub(s) bounding box (to calculate)
+        x0 = 0 # left-side X-axis coordinate of sub(s) bounding box
+        xf = 0 # right-side X-axis coordinate of sub(s) bounding box
+
+        # Log/reset "offset", if conflicting vs "width".
+        if "ratio" in sub:
+            if sub["ratio"] < CN.TOL:
+                sub["ratio"     ] = 0
+                sub["count"     ] = 0
+                sub["multiplier"] = 0
+
+                if "height" in sub: sub["height"] = 0
+                if "width"  in sub: sub["width" ] = 0
+
+                oslg.log(CN.ERR, "Skip: ratio ~0 (%s)" % mth)
+                continue
+
+            # Log/reset if "ratio" beyond min/max?
+            if sub["ratio"] < min and sub["ratio"] > max:
+                m = "(Re)set ratio %.3f (%s)" % (sub["ratio"], mth)
+                oslg.log(CN.WRN, m)
+                sub["ratio"] = numpy.clip(sub["ratio"], min, max)
+                m = "Ratio reset to %.3f (%s)" % (sub["ratio"], mth)
+                oslg.log(CN.WRN, m)
+
+            # Log/reset "count" unless 1.
+            if sub["count"] != 1:
+                sub["count"] = 1
+                oslg.log(CN.WRN, "Count (ratio) reset to 1 (%s)" % mth)
+
+            area  = s.grossArea() * sub["ratio"] # sub m2, incl. frames
+            w     = area / h
+            width = w - frames
+            x0    = centre - w/2
+            xf    = centre + w/2
+
+            if "l_buffer" in sub:
+                if "centreline" in sub:
+                    m = "Skip '%s' left buffer (vs centreline) (%s)" % (id, mth)
+                    oslg.log(CN.WRN, m)
+                else:
+                    x0     = sub["l_buffer"] - frame
+                    xf     = x0 + w
+                    centre = x0 + w/2
+            elif "r_buffer" in sub:
+                if "centreline" in sub:
+                    m = "Skip '%s' right buffer (vs centreline) (%s)" % (id, mth)
+                    oslg.log(CN.WRN, m)
+                else:
+                    xf     = max_x - sub["r_buffer"] + frame
+                    x0     = xf - w
+                    centre = x0 + w/2
+
+            # Too wide?
+            if x0 < min_ljamb - CN.TOL2 or xf > max_rjamb - CN.TOL2:
+                sub["count"     ] = 0
+                sub["multiplier"] = 0
+
+                if "ratio"  in sub: sub[ratio ] = 0
+                if "height" in sub: sub[height] = 0
+                if "width"  in sub: sub[width ] = 0
+
+                m = "Skip '%s': invalid (ratio) width/centreline (%s)" % (id, mth)
+                oslg.log(CN.ERR, m)
+                continue
+
+            if "width" in sub and abs(sub["width"] - width) > CN.TOL:
+                m = "(Re)set '%s' width (ratio) %.3fm (%s)" % (id, sub["width"], mth)
+                oslg.log(CN.WRN, m)
+                sub["width"] = width
+                m = "Width (ratio) '%s' reset to %.3fm (%s)" % (id, sub["width"], mth)
+                oslg.log(CN.WRN, m)
+
+            if "width" not in sub: sub["width"] = width
+
+        else:
+            if "width" not in sub:
+                sub["count"     ] = 0
+                sub["multiplier"] = 0
+
+                if "ratio"  in sub: sub["ratio" ] = 0
+                if "height" in sub: sub["height"] = 0
+                if "width"  in sub: sub["width" ] = 0
+
+                oslg.log(CN.ERR, "Skip: missing '%s' width (%s})" % (id, mth))
+                continue
+
+            width = sub["width"] + frames
+            gap   = (max_x - n * width) / (n + 1)
+
+            if "offset" in sub: gap = sub["offset"] - width
+            if gap < buffer: gap = 0
+
+            offset = gap + width
+
+            if "offset" in sub and abs(offset - sub["offset"]) > CN.TOL:
+                m = "(Re)set '%s' sub offset %.3fm (%s)" % (id, sub["offset"], mth)
+                log(CN.WRN, m)
+                sub["offset"] = offset
+                m = "Sub offset (%s) reset to %.3fm (%s)" % (id, sub["offset"], mth)
+                log(CN.WRN, m)
+
+            if "offset" not in sub.key: sub["offset"] = offset
+
+            # Overall width (including frames) of bounding box around array.
+            w  = n * width + (n - 1) * gap
+            x0 = centre - w/2
+            xf = centre + w/2
+
+            if "l_buffer" in sub:
+                if "centreline" in sub:
+                    m = "Skip '%s' left buffer (vs centreline) (%s)" % (id, mth)
+                    oslg.log(CN.WRN, m)
+                else:
+                    x0     = sub["l_buffer"] - frame
+                    xf     = x0 + w
+                    centre = x0 + w/2
+            elif "r_buffer" in sub:
+                if "centreline" in sub:
+                    m = "Skip '%s' right buffer (vs centreline) (%s)" % (id, mth)
+                    log(WRN, m)
+                else:
+                    xf     = max_x - sub["r_buffer"] + frame
+                    x0     = xf - w
+                    centre = x0 + w/2
+
+            # Too wide?
+            if x0 < buffer - CN.TOL2 or xf > max_x - buffer - CN.TOL2:
+                sub[:count     ] = 0
+                sub[:multiplier] = 0
+                if "ratio"  in sub: sub["ratio" ] = 0
+                if "height" in sub: sub["height"] = 0
+                if "width"  in sub: sub["width" ] = 0
+                m = "Skip: invalid array width/centreline (%s)" % mth
+                oslg.log(CN.ERR, m)
+                continue
+
+        # Initialize left-side X-axis coordinate of only/first sub.
+        pos = x0 + frame
+
+        # Generate sub(s).
+        for i in range(sub["count"]):
+            name = "%s:%d" % (id, i)
+            fr   = sub["frame"].frameWidth() if sub["frame"] else 0
+            vec  = openstudio.Point3dVector()
+            vec.append(openstudio.Point3d(pos,              sub["head"], 0))
+            vec.append(openstudio.Point3d(pos,              sub["sill"], 0))
+            vec.append(openstudio.Point3d(pos+sub["width"], sub["sill"], 0))
+            vec.append(openstudio.Point3d(pos+sub["width"], sub["head"], 0))
+            vec = t * (s00["r"] * (s00["t"] * vec)) if s00 else t * vec
+
+            # Log/skip if conflict between individual sub and base surface.
+            vc = offset(vc, fr, 300) if fr > 0 else p3Dv(vec)
+
+            if not fits(vc, s):
+                m = "Skip '%s': won't fit in '%s' (%s)" % (name, nom, mth)
+                oslg.log(CN.ERR, m)
+                break
+
+            # Log/skip if conflicts with existing subs (even if same array).
+            conflict = False
+
+            for sb in s.subSurfaces():
+                fd = sb.windowPropertyFrameAndDivider()
+                fr = fd.get().frameWidth() if fd else 0
+                vk = sb.vertices()
+                if fr > 0: vk = offset(vk, fr, 300)
+
+                if overlapping(vc, vk):
+                    nome = sb.nameString()
+                    m = "Skip '%s': overlaps '%s' (%s)" % (name, nome, mth)
+                    oslg.log(CN.ERR, m)
+                    conflict = True
+                    break
+
+            if conflict: break
+
+            sb = openstudio.model.SubSurface(vec, mdl)
+            sb.setName(name)
+            sb.setSubSurfaceType(sub["type"])
+            if sub["assembly"]: sb.setConstruction(sub["assembly"])
+            if sub["multiplier"] > 1: sb.setMultiplier(sub["multiplier"])
+
+            if sub["frame"] and sb.allowWindowPropertyFrameAndDivider():
+                sb.setWindowPropertyFrameAndDivider(sub["frame"])
+
+            sb.setSurface(s)
+
+            # Reset "pos" if array.
+            if offset in sub: pos += sub["offset"]
+
+    return True
 
 
 def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:

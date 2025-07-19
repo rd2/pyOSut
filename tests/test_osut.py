@@ -3843,7 +3843,222 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(osut.isClockwise(v))
         self.assertEqual(o.status(), 0)
 
-    # def test28_subsurface_insertions(self):
+    def test28_subsurface_insertions(self):
+        # Examples of how to harness OpenStudio's Boost geometry methods to
+        # safely insert subsurfaces along rotated/tilted/slanted base surfaces.
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(INF), INF)
+        self.assertEqual(o.level(), INF)
+        self.assertEqual(o.status(), 0)
+        translator = openstudio.osversion.VersionTranslator()
+
+        v = int("".join(openstudio.openStudioVersion().split(".")))
+
+        # Successful test.
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        openarea = model.getSpaceByName("Open area 1")
+        self.assertTrue(openarea)
+        openarea = openarea.get()
+
+        if v >= 350:
+            self.assertTrue(openarea.isEnclosedVolume())
+            self.assertTrue(openarea.isVolumeDefaulted())
+            self.assertTrue(openarea.isVolumeAutocalculated())
+
+        w5 = model.getSurfaceByName("Openarea 1 Wall 5")
+        self.assertTrue(w5)
+        w5 = w5.get()
+
+        w5_space = w5.space()
+        self.assertTrue(w5_space)
+        w5_space = w5_space.get()
+        self.assertEqual(w5_space, openarea)
+        self.assertEqual(len(w5.vertices()), 4)
+
+        # Delete w5, and replace with 1x slanted roof + 3x walls (1x tilted).
+        # Keep w5 coordinates in memory (before deleting), as anchor points for
+        # the 4x new surfaces.
+        w5_0 = w5.vertices()[0]
+        w5_1 = w5.vertices()[1]
+        w5_2 = w5.vertices()[2]
+        w5_3 = w5.vertices()[3]
+
+        w5.remove()
+
+        # 2x new points.
+        roof_left  = openstudio.Point3d( 0.2166, 12.7865, 2.3528)
+        roof_right = openstudio.Point3d(-5.4769, 11.2626, 2.3528)
+        length     = (roof_left - roof_right).length()
+
+
+        # New slanted roof.
+        vec = openstudio.Point3dVector()
+        vec.append(w5_0)
+        vec.append(roof_left)
+        vec.append(roof_right)
+        vec.append(w5_3)
+        roof = openstudio.model.Surface(vec, model)
+        roof.setName("Openarea slanted roof")
+        self.assertTrue(roof.setSurfaceType("RoofCeiling"))
+        self.assertTrue(roof.setSpace(openarea))
+
+        # Side-note test: genConstruction --- --- --- --- --- --- --- --- --- #
+        self.assertTrue(roof.isConstructionDefaulted())
+        lc = roof.construction()
+        self.assertTrue(lc)
+        lc = lc.get().to_LayeredConstruction()
+        self.assertTrue(lc)
+        lc = lc.get()
+        c  = osut.genConstruction(model, dict(type="roof", uo=1/5.46))
+        self.assertEqual(o.status(), 0)
+        self.assertTrue(isinstance(c, openstudio.model.LayeredConstruction))
+        self.assertTrue(roof.setConstruction(c))
+        self.assertFalse(roof.isConstructionDefaulted())
+        r1 = osut.rsi(lc)
+        r2 = osut.rsi(c)
+        d1 = osut.rsi(lc)
+        d2 = osut.rsi(c)
+        self.assertTrue(abs(r1 - r2) > 0)
+        self.assertTrue(abs(d1 - d2) > 0)
+        # ... end of genConstruction test --- --- --- --- --- --- --- --- --- #
+
+        # New, inverse-tilted wall (i.e. cantilevered), under new slanted roof.
+        vec = openstudio.Point3dVector()
+        # vec.append(roof_left)  # TOPLEFT
+        # vec.append(w5_1)       # BOTTOMLEFT
+        # vec.append(w5_2)       # BOTTOMRIGHT
+        # vec.append(roof_right) # TOPRIGHT
+
+        # Test if starting instead from BOTTOMRIGHT (i.e. upside-down "U").
+        vec.append(w5_2)       # BOTTOMRIGHT
+        vec.append(roof_right) # TOPRIGHT
+        vec.append(roof_left)  # TOPLEFT
+        vec.append(w5_1)       # BOTTOMLEFT
+
+        tilt_wall = openstudio.model.Surface(vec, model)
+        tilt_wall.setName("Openarea tilted wall")
+        self.assertTrue(tilt_wall.setSurfaceType("Wall"))
+        self.assertTrue(tilt_wall.setSpace(openarea))
+
+        # New, left side wall.
+        vec = openstudio.Point3dVector()
+        vec.append(w5_0)
+        vec.append(w5_1)
+        vec.append(roof_left)
+        left_wall = openstudio.model.Surface(vec, model)
+        left_wall.setName("Openarea left side wall")
+        self.assertTrue(left_wall.setSpace(openarea))
+
+        # New, right side wall.
+        vec = openstudio.Point3dVector()
+        vec.append(w5_3)
+        vec.append(roof_right)
+        vec.append(w5_2)
+        right_wall = openstudio.model.Surface(vec, model)
+        right_wall.setName("Openarea right side wall")
+        self.assertTrue(right_wall.setSpace(openarea))
+
+        if v >= 350:
+            self.assertTrue(openarea.isEnclosedVolume)
+            self.assertTrue(openarea.isVolumeDefaulted)
+            self.assertTrue(openarea.isVolumeAutocalculated)
+
+        model.save("./tests/files/osms/out/seb_mod.osm", True)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---  #
+        # Fetch transform if tilted wall vertices were to "align", i.e.:
+        #   - rotated/tilted
+        #   - then flattened along XY plane
+        #   - all Z-axis coordinates == ~0
+        #   - vertices with the lowest X-axis values are aligned along X-axis (0)
+        #   - vertices with the lowest Z-axis values ares aligned along Y-axis (0)
+        #   - Z-axis values are represented as Y-axis values
+        tr = openstudio.Transformation.alignFace(tilt_wall.vertices())
+        aligned_tilt_wall = tr.inverse() * tilt_wall.vertices()
+        # for pt in aligned_tilt_wall: print(pt)
+        #   [4.89, 0.00, 0.00] # if BOTTOMRIGHT, i.e. upside-down "U"
+        #   [5.89, 3.09, 0.00]
+        #   [0.00, 3.09, 0.00]
+        #   [1.00, 0.00, 0.00]
+        # ... no change in results (once sub surfaces are added below), as
+        # 'addSubs' does not rely 'directly' on World or Relative XYZ
+        # coordinates of the base surface. It instead relies on base surface
+        # width/height (once 'aligned'), regardless of the user-defined
+        # sequence of vertices.
+
+        # Find centerline along "aligned" X-axis, and upper Y-axis limit.
+        min_x = 0
+        max_x = 0
+        max_y = 0
+
+        for vec in aligned_tilt_wall:
+            if vec.x() < min_x: min_x = vec.x()
+            if vec.x() > max_x: max_x = vec.x()
+            if vec.y() > max_y: max_y = vec.y()
+
+        centerline = (max_x - min_x) / 2
+        self.assertAlmostEqual(centerline * 2, length, places=2)
+
+        # Subsurface dimensions (e.g. window/skylight).
+        width  = 0.5
+        height = 1.0
+
+        # Add 3x new, tilted windows along the tilted wall upper horizontal edge
+        # (i.e. max_Y), then realign with original tilted wall. Insert using 5mm
+        # buffer, IF inserted along any host/parent/base surface edge, e.g. door
+        # sill. Boost-based alignement/realignment does introduce small errors,
+        # and EnergyPlus may raise warnings of overlaps between host/base/parent
+        # surface and any of its new subsurface(s). Why 5mm (vs 25mm)? Keeping
+        # buffer under 10mm, see: https://rd2.github.io/tbd/pages/subs.html.
+        y = max_y - 0.005
+
+        x = centerline - width / 2 # center window
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(x,         y,          0))
+        vec.append(openstudio.Point3d(x,         y - height, 0))
+        vec.append(openstudio.Point3d(x + width, y - height, 0))
+        vec.append(openstudio.Point3d(x + width, y,          0))
+
+        tilt_window1 = openstudio.model.SubSurface(tr * vec, model)
+        tilt_window1.setName("Tilted window (center)")
+        self.assertTrue(tilt_window1.setSubSurfaceType("FixedWindow"))
+        self.assertTrue(tilt_window1.setSurface(tilt_wall))
+
+        x    = centerline - 3*width/2 - 0.15 # window to the left of the first one
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(x,         y,          0))
+        vec.append(openstudio.Point3d(x,         y - height, 0))
+        vec.append(openstudio.Point3d(x + width, y - height, 0))
+        vec.append(openstudio.Point3d(x + width, y,          0))
+
+        tilt_window2 = openstudio.model.SubSurface(tr * vec, model)
+        tilt_window2.setName("Tilted window (left)")
+        self.assertTrue(tilt_window2.setSubSurfaceType("FixedWindow"))
+        self.assertTrue(tilt_window2.setSurface(tilt_wall))
+
+        x    = centerline + width/2 + 0.15 # window to the right of the first one
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(x,         y,          0))
+        vec.append(openstudio.Point3d(x,         y - height, 0))
+        vec.append(openstudio.Point3d(x + width, y - height, 0))
+        vec.append(openstudio.Point3d(x + width, y,          0))
+
+        tilt_window3 = openstudio.model.SubSurface(tr * vec, model)
+        tilt_window3.setName("Tilted window (right)")
+        self.assertTrue(tilt_window3.setSubSurfaceType("FixedWindow"))
+        self.assertTrue(tilt_window3.setSurface(tilt_wall))
+
+        # model.save("./tests/files/osms/out/seb_fen.osm", True)
+        del(model)
+
+        self.assertEqual(o.status(), 0)
+
 
     # def test29_surface_width_height(self):
 
