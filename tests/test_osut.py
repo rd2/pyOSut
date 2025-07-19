@@ -4055,10 +4055,81 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(tilt_window3.setSurface(tilt_wall))
 
         # model.save("./tests/files/osms/out/seb_fen.osm", True)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Repeat for 3x skylights. Fetch transform if slanted roof vertices were
+        # also to "align". Recover the (default) window construction.
+        self.assertTrue(tilt_window1.isConstructionDefaulted())
+        construction = tilt_window1.construction()
+        self.assertTrue(construction)
+        construction = construction.get()
+
+        tr = openstudio.Transformation.alignFace(roof.vertices())
+        aligned_roof = tr.inverse() * roof.vertices()
+
+        # Find centerline along "aligned" X-axis, and lower Y-axis limit.
+        min_x = 0
+        max_x = 0
+        min_y = 0
+
+        for vec in aligned_tilt_wall:
+            if vec.x() < min_x: min_x = vec.x()
+            if vec.x() > max_x: max_x = vec.x()
+            if vec.y() < min_y: min_y = vec.y()
+
+        centerline = (max_x - min_x) / 2
+        self.assertAlmostEqual(centerline * 2, length, places=2)
+
+        # Add 3x new, slanted skylights aligned along upper horizontal edge of
+        # roof (i.e. min_Y), then realign with original roof.
+        y = min_y + 0.005
+
+        x   = centerline - width / 2 # center skylight
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(x,         y + height, 0))
+        vec.append(openstudio.Point3d(x,         y,          0))
+        vec.append(openstudio.Point3d(x + width, y,          0))
+        vec.append(openstudio.Point3d(x + width, y + height, 0))
+
+        skylight1 = openstudio.model.SubSurface(tr * vec, model)
+        skylight1.setName("Skylight (center)")
+        self.assertTrue(skylight1.setSubSurfaceType("Skylight"))
+        self.assertTrue(skylight1.setConstruction(construction))
+        self.assertTrue(skylight1.setSurface(roof))
+
+        x   = centerline - 3*width/2 - 0.15 # skylight to the left of center
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(x,         y + height, 0))
+        vec.append(openstudio.Point3d(x,         y         , 0))
+        vec.append(openstudio.Point3d(x + width, y         , 0))
+        vec.append(openstudio.Point3d(x + width, y + height, 0))
+
+        skylight2 = openstudio.model.SubSurface(tr * vec, model)
+        skylight2.setName("Skylight (left)")
+        self.assertTrue(skylight2.setSubSurfaceType("Skylight"))
+        self.assertTrue(skylight2.setConstruction(construction))
+        self.assertTrue(skylight2.setSurface(roof))
+
+        x   = centerline + width/2 + 0.15 # skylight to the right of center
+        vec = openstudio.Point3dVector()
+        vec.append(openstudio.Point3d(x,         y + height, 0))
+        vec.append(openstudio.Point3d(x,         y         , 0))
+        vec.append(openstudio.Point3d(x + width, y         , 0))
+        vec.append(openstudio.Point3d(x + width, y + height, 0))
+
+        skylight3 = openstudio.model.SubSurface(tr * vec, model)
+        skylight3.setName("Skylight (right)")
+        self.assertTrue(skylight3.setSubSurfaceType("Skylight"))
+        self.assertTrue(skylight3.setConstruction(construction))
+        self.assertTrue(skylight3.setSurface(roof))
+
+        model.save("./tests/files/osms/out/seb_ext1.osm", True)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Now test the same result when relying on OSut::addSub TO DO.
+
         del(model)
-
         self.assertEqual(o.status(), 0)
-
 
     # def test29_surface_width_height(self):
 
@@ -4246,7 +4317,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         offset  = side + 1
         head    = osut.height(aligned) - 0.2
         self.assertAlmostEqual(head, 10.16, places=2)
-        
+
         del(model)
         self.assertEqual(o.status(), 0)
 
