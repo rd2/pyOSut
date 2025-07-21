@@ -40,6 +40,8 @@ ERR  = osut.CN.ERR
 FTL  = osut.CN.FTL
 TOL  = osut.CN.TOL
 TOL2 = osut.CN.TOL2
+HEAD = osut.CN.HEAD
+SILL = osut.CN.SILL
 
 class TestOSutModuleMethods(unittest.TestCase):
     def test00_oslg_constants(self):
@@ -4254,7 +4256,219 @@ class TestOSutModuleMethods(unittest.TestCase):
         del model
         self.assertEqual(o.status(), 0)
 
-    # def test30_wwr_insertions(self):
+    def test30_wwr_insertions(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/out/seb_ext2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+        wwr   = 0.10
+
+        # Fetch "Openarea Wall 3".
+        wall3 = model.getSurfaceByName("Openarea 1 Wall 3")
+        self.assertTrue(wall3)
+        wall3 = wall3.get()
+        area  = wall3.grossArea() * wwr
+
+        # Fetch "Openarea Wall 4".
+        wall4 = model.getSurfaceByName("Openarea 1 Wall 4")
+        self.assertTrue(wall4)
+        wall4 = wall4.get()
+
+        # Fetch transform if wall3 vertices were to 'align'.
+        tr      = openstudio.Transformation.alignFace(wall3.vertices())
+        a_wall3 = tr.inverse() * wall3.vertices()
+        ymax    = max([pt.y() for pt in a_wall3])
+        xmax    = max([pt.x() for pt in a_wall3])
+        xmid    = xmax / 2 # centreline
+
+        # Fetch 'head'/'sill' heights of nearby "Sub Surface 1".
+        sub1 = model.getSubSurfaceByName("Sub Surface 1")
+        self.assertTrue(sub1)
+        sub1 = sub1.get()
+
+        sub1_min = min([pt.z() for pt in sub1.vertices()])
+        sub1_max = max([pt.z() for pt in sub1.vertices()])
+
+        # Add 2x window strips, each representing 10% WWR of wall3 (20% total).
+        #   - 1x constrained to sub1 'head' & 'sill'
+        #   - 1x contrained only to 2nd 'sill' height
+        wwr1         = {}
+        wwr1["id"   ] = "OA1 W3 wwr1|10"
+        wwr1["ratio"] = 0.1
+        wwr1["head" ] = sub1_max
+        wwr1["sill" ] = sub1_min
+
+        wwr2         = {}
+        wwr2["id"   ] = "OA1 W3 wwr2|10"
+        wwr2["ratio"] = 0.1
+        wwr2["sill" ] = wwr1["head"] + 0.1
+
+        sbz = [wwr1, wwr2]
+        self.assertTrue(osut.addSubs(wall3, sbz))
+        self.assertEqual(o.status(), 0)
+        sbz = wall3.subSurfaces()
+        self.assertEqual(len(sbz), 2)
+
+        for sb in sbz:
+            self.assertAlmostEqual(sb.grossArea(), area, places=2)
+            sb_sill = min([pt.z() for pt in sb.vertices()])
+            sb_head = max([pt.z() for pt in sb.vertices()])
+
+            if "wwr1" in sb.nameString():
+                self.assertAlmostEqual(sb_sill, wwr1["sill"], places=2)
+                self.assertAlmostEqual(sb_head, wwr1["head"], places=2)
+                self.assertNotEqual(sb_head, HEAD)
+            else:
+                self.assertAlmostEqual(sb_sill, wwr2["sill"], places=2)
+                self.assertAlmostEqual(sb_head, HEAD, places=2) # defaulted
+
+        self.assertAlmostEqual(wall3.windowToWallRatio(), wwr * 2, places=2)
+
+        # Fetch transform if wall4 vertices were to 'align'.
+        tr      = openstudio.Transformation.alignFace(wall4.vertices())
+        a_wall4 = tr.inverse() * wall4.vertices()
+        ymax    = max([pt.y() for pt in a_wall4])
+        xmax    = max([pt.x() for pt in a_wall4])
+        xmid    = xmax / 2 # centreline
+
+        # Add 4x sub surfaces (with frame & dividers) to wall4:
+        #   1. w1: 0.8m-wide opening (head defaulted to HEAD, sill @0m)
+        #   2. w2: 0.4m-wide sidelite, to the immediate right of w2 (HEAD, sill@0)
+        #   3. t1: 0.8m-wide transom above w1 (0.4m in height)
+        #   4. t2: 0.5m-wide transom above w2 (0.4m in height)
+        #
+        # All 4x sub surfaces are intended to share frame edges (once frame &
+        # divider frame widths are taken into account). Postulating a 50mm frame,
+        # meaning 100mm between w1, w2, t1 vs t2 vertices. In addition, all 4x
+        # openings (grouped together) should align towards the left of wall4,
+        # leaving a 200mm gap between the left vertical wall edge and the left
+        # frame jamb edge of w1 & t1. First initialize Frame & Divider object.
+        gap    = 0.200
+        frame  = 0.050
+        frames = 2 * frame
+
+        fd = openstudio.model.WindowPropertyFrameAndDivider(model)
+        self.assertTrue(fd.setFrameWidth(frame))
+        self.assertTrue(fd.setFrameConductance(2.500))
+
+        w1              = {}
+        w1["id"        ] = "OA1 W4 w1"
+        w1["frame"     ] = fd
+        w1["width"     ] = 0.8
+        w1["head"      ] = HEAD
+        w1["sill"      ] = 0.005 + frame # to avoid generating a warning
+        w1["centreline"] = -xmid + gap + frame + w1["width"]/2
+
+        w2              = {}
+        w2["id"        ] = "OA1 W4 w2"
+        w2["frame"     ] = fd
+        w2["width"     ] = w1["width"     ]/2
+        w2["head"      ] = w1["head"      ]
+        w2["sill"      ] = w1["sill"      ]
+        w2["centreline"] = w1["centreline"] + w1["width"]/2 + frames + w2["width"]/2
+
+        t1              = {}
+        t1["id"        ] = "OA1 W4 t1"
+        t1["frame"     ] = fd
+        t1["width"     ] = w1["width"     ]
+        t1["height"    ] = w2["width"     ]
+        t1["sill"      ] = w1["head"      ] + frames
+        t1["centreline"] = w1["centreline"]
+
+        t2              = {}
+        t2["id"        ] = "OA1 W4 t2"
+        t2["frame"     ] = fd
+        t2["width"     ] = w2["width"     ]
+        t2["height"    ] = t1["height"    ]
+        t2["sill"      ] = t1["sill"      ]
+        t2["centreline"] = w2["centreline"]
+
+        sbz = [w1, w2, t1, t2]
+        self.assertTrue(osut.addSubs(wall4, sbz))
+        if o.status() > 0: print(o.logs())
+        self.assertEqual(o.status(), 0)
+
+        # Add another 5x (frame&divider-enabled) fixed windows, from either
+        # left- or right-corner of base surfaces. Fetch "Openarea Wall 6".
+        wall6 = model.getSurfaceByName("Openarea 1 Wall 6")
+        self.assertTrue(wall6)
+        wall6 = wall6.get()
+
+        # Fetch "Openarea Wall 7".
+        wall7 = model.getSurfaceByName("Openarea 1 Wall 7")
+        self.assertTrue(wall7)
+        wall7 = wall7.get()
+
+        # Fetch 'head'/'sill' heights of nearby "Sub Surface 6".
+        sub6 = model.getSubSurfaceByName("Sub Surface 6")
+        self.assertTrue(sub6)
+        sub6 = sub6.get()
+
+        sub6_min = min([pt.z() for pt in sub6.vertices()])
+        sub6_max = max([pt.z() for pt in sub6.vertices()])
+
+        # 1x Array of 3x windows, 8" from the left corner of wall6.
+        a6             = {}
+        a6["id"      ] = "OA1 W6 a6"
+        a6["count"   ] = 3
+        a6["frame"   ] = fd
+        a6["head"    ] = sub6_max
+        a6["sill"    ] = sub6_min
+        a6["width"   ] = a6["head" ] - a6["sill"]
+        a6["offset"  ] = a6["width"] + gap
+        a6["l_buffer"] = gap
+
+        self.assertTrue(osut.addSubs(wall6, a6))
+
+        # 1x Array of 2x square windows, 8" from the right corner of wall7.
+        a7             = {}
+        a7["id"      ] = "OA1 W6 a7"
+        a7["count"   ] = 2
+        a7["frame"   ] = fd
+        a7["head"    ] = sub6_max
+        a7["sill"    ] = sub6_min
+        a7["width"   ] = a7["head" ] - a7["sill"]
+        a7["offset"  ] = a7["width"] + gap
+        a7["r_buffer"] = gap
+
+        self.assertTrue(osut.addSubs(wall7, a7))
+
+        model.save("./tests/files/osms/out/seb_ext3.osm", True)
+
+        # Fetch a (flat) plenum roof surface, and add a single skylight.
+        id = "Level 0 Open area 1 ceiling Plenum RoofCeiling"
+        ruf1 = model.getSurfaceByName(id)
+        self.assertTrue(ruf1)
+        ruf1 = ruf1.get()
+
+        construction = [cc for cc in model.getConstructions() if cc.isFenestration()]
+        self.assertEqual(len(construction), 1)
+        construction = construction[0]
+
+        a8            = {}
+        a8["id"      ] = "ruf skylight"
+        a8["type"    ] = "Skylight"
+        a8["count"   ] = 1
+        a8["width"   ] = 1.2
+        a8["height"  ] = 1.2
+        a8["assembly"] = construction
+
+        self.assertTrue(osut.addSubs(ruf1, a8))
+
+        # The plenum roof inherits a single skylight (without any skylight well).
+        # See "checks generated skylight wells": "seb_ext3a" vs "seb_sky"
+        #   - more sensible alignment of skylight(s) wrt to roof geometry
+        #   - automated skylight well generation
+        model.save("./tests/files/osms/out/seb_ext3a.osm", True)
+
+        del model
+        self.assertEqual(o.status(), 0)
 
     def test31_convexity(self):
         o = osut.oslg

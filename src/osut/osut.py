@@ -4314,12 +4314,12 @@ def offset(p1=None, w=0, v=0) -> openstudio.Point3dVector:
 
     if v >= 340:
         t = openstudio.Transformation.alignFace(p1)
-        offset = openstudio.buffer(pts, w, CN.TOL)
-        if not offset: return p1
+        offst = openstudio.buffer(pts, w, CN.TOL)
+        if not offst: return p1
 
-        offset = offset.get()
-        offset.reverse()
-        return p3Dv(list(t * offset))
+        offst = offst.get()
+        offst.reverse()
+        return p3Dv(list(t * offst))
     else: # brute force approach
         pz      = {}
         pz["A"] = {}
@@ -6022,16 +6022,16 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if "offset" in sub: gap = sub["offset"] - wdth
             if gap < buffer: gap = 0
 
-            offset = gap + wdth
+            offst = gap + wdth
 
-            if "offset" in sub and abs(offset - sub["offset"]) > CN.TOL:
+            if "offset" in sub and abs(offst - sub["offset"]) > CN.TOL:
                 m = "Reset '%s' sub offset %.3fm (%s)" % (id, sub["offset"], mth)
                 oslg.log(CN.WRN, m)
-                sub["offset"] = offset
+                sub["offset"] = offst
                 m = "Sub offset (%s) reset to %.3fm (%s)" % (id, sub["offset"], mth)
                 oslg.log(CN.WRN, m)
 
-            if "offset" not in sub: sub["offset"] = offset
+            if "offset" not in sub: sub["offset"] = offst
 
             # Overall width (including frames) of bounding box around array.
             w  = n * wdth + (n - 1) * gap
@@ -6081,7 +6081,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             vec = t * (s00["r"] * (s00["t"] * vec)) if s00 else t * vec
 
             # Log/skip if conflict between individual sub and base surface.
-            vc = offset(vc, fr, 300) if fr > 0 else p3Dv(vec)
+            vc = offset(vec, fr, 300) if fr > 0 else p3Dv(vec)
 
             if not fits(vc, s):
                 m = "Skip '%s': won't fit in '%s' (%s)" % (name, nom, mth)
