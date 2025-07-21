@@ -4165,7 +4165,94 @@ class TestOSutModuleMethods(unittest.TestCase):
         del model
         self.assertEqual(o.clean(), DBG)
 
-    # def test29_surface_width_height(self):
+    def test29_surface_width_height(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        translator = openstudio.osversion.VersionTranslator()
+
+        # Successful test.
+        path  = openstudio.path("./tests/files/osms/out/seb_ext2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        # Extension holds:
+        #   - 2x vertical side walls
+        #   - tilted (cantilevered) wall
+        #   - sloped roof
+        tilted = model.getSurfaceByName("Openarea tilted wall")
+        left   = model.getSurfaceByName("Openarea left side wall")
+        right  = model.getSurfaceByName("Openarea right side wall")
+        self.assertTrue(tilted)
+        self.assertTrue(left)
+        self.assertTrue(right)
+        tilted = tilted.get()
+        left   = left.get()
+        right  = right.get()
+
+        self.assertFalse(osut.facingUp(tilted))
+        self.assertFalse(osut.shareXYZ(tilted))
+
+        # Neither wall has coordinates that align with the model grid. Without
+        # some transformation (eg alignFace), OSut's 'width' of a given surface
+        # is of limited utility. A vertical surface's 'height' is also somewhat
+        # valid/useful.
+        w1 = osut.width(tilted)
+        h1 = osut.height(tilted)
+        self.assertAlmostEqual(w1, 5.69, places=2)
+        self.assertAlmostEqual(h1, 2.35, places=2)
+
+        # Aligned, a vertical or sloped (or tilted) surface's 'width' and
+        # 'height' correctly report what a tape measurement would reveal
+        # (from left to right, when looking at the surface perpendicularly).
+        t = openstudio.Transformation.alignFace(tilted.vertices())
+        tilted_aligned = t.inverse() * tilted.vertices()
+        w01 = osut.width(tilted_aligned)
+        h01 = osut.height(tilted_aligned)
+        self.assertTrue(osut.facingUp(tilted_aligned))
+        self.assertTrue(osut.shareXYZ(tilted_aligned))
+        self.assertAlmostEqual(w01, 5.89, places=2)
+        self.assertAlmostEqual(h01, 3.09, places=2)
+
+        w2 = osut.width(left)
+        h2 = osut.height(left)
+        self.assertAlmostEqual(w2, 0.45, places=2)
+        self.assertAlmostEqual(h2, 3.35, places=2)
+        t = openstudio.Transformation.alignFace(left.vertices())
+        left_aligned = t.inverse() * left.vertices()
+        w02 = osut.width(left_aligned)
+        h02 = osut.height(left_aligned)
+        self.assertAlmostEqual(w02, 2.24, places=2)
+        self.assertAlmostEqual(h02, h2, places=2) # 'height' based on Y-axis (vs Z-axis)
+
+        w3 = osut.width(right)
+        h3 = osut.height(right)
+        self.assertAlmostEqual(w3, 1.48, places=2)
+        self.assertAlmostEqual(h3, h2) # same as left
+        t = openstudio.Transformation.alignFace(right.vertices())
+        right_aligned = t.inverse() * right.vertices()
+        w03 = osut.width(right_aligned)
+        h03 = osut.height(right_aligned)
+        self.assertAlmostEqual(w03, w02, places=2) # same as aligned left
+        self.assertAlmostEqual(h03, h02, places=2) # same as aligned left
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # What if wall vertex sequences were no longer ULC (e.g. URC)?
+        vec = openstudio.Point3dVector()
+        vec.append(tilted.vertices()[3])
+        vec.append(tilted.vertices()[0])
+        vec.append(tilted.vertices()[1])
+        vec.append(tilted.vertices()[2])
+        self.assertTrue(tilted.setVertices(vec))
+        self.assertAlmostEqual(osut.width(tilted), w1, places=2)  # same result
+        self.assertAlmostEqual(osut.height(tilted), h1, places=2) # same result
+
+        model.save("./tests/files/osms/out/seb_ext4.osm", True)
+
+        del model
+        self.assertEqual(o.status(), 0)
 
     # def test30_wwr_insertions(self):
 
