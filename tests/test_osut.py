@@ -5014,7 +5014,76 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         del model
 
-    # def test37_roller_shades(self):
+    def test37_roller_shades(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        translator = openstudio.osversion.VersionTranslator()
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+
+        path = openstudio.path("./tests/files/osms/out/seb_ext4.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+        spaces = model.getSpaces()
+
+        slanted = osut.facets(spaces, "Outdoors", "RoofCeiling", ["top", "north"])
+        self.assertEqual(len(slanted), 1)
+        slanted = slanted[0]
+        self.assertEqual(slanted.nameString(), "Openarea slanted roof")
+        skylights = slanted.subSurfaces()
+
+        tilted = osut.facets(spaces, "Outdoors", "Wall", "bottom")
+        self.assertEqual(len(tilted), 1)
+        tilted = tilted[0]
+        self.assertEqual(tilted.nameString(), "Openarea tilted wall")
+        windows = tilted.subSurfaces()
+
+        # 2x control groups:
+        #   - 3x windows as a single control group
+        #   - 3x skylight as another single control group
+        skies = openstudio.model.SubSurfaceVector()
+        wins  = openstudio.model.SubSurfaceVector()
+        for sub in skylights: skies.append(sub)
+        for sub in windows: wins.append(sub)
+
+        if version < 321:
+            self.assertFalse(osut.genShade(skies))
+        else:
+            self.assertTrue(osut.genShade(skies))
+            self.assertTrue(osut.genShade(wins))
+            ctls = model.getShadingControls()
+            self.assertEqual(len(ctls), 2)
+
+            for ctl in ctls:
+                self.assertEqual(ctl.shadingType(), "InteriorShade")
+                type = "OnIfHighOutdoorAirTempAndHighSolarOnWindow"
+                self.assertEqual(ctl.shadingControlType(), type)
+                self.assertTrue(ctl.isControlTypeValueNeedingSetpoint1())
+                self.assertTrue(ctl.isControlTypeValueNeedingSetpoint2())
+                self.assertTrue(ctl.isControlTypeValueAllowingSchedule())
+                self.assertFalse(ctl.isControlTypeValueRequiringSchedule())
+                spt1 = ctl.setpoint()
+                spt2 = ctl.setpoint2()
+                self.assertTrue(spt1)
+                self.assertTrue(spt2)
+                spt1 = spt1.get()
+                spt2 = spt2.get()
+                self.assertAlmostEqual(spt1, 18, places=2)
+                self.assertAlmostEqual(spt2, 100, places=2)
+                self.assertEqual(ctl.multipleSurfaceControlType(), "Group")
+
+                for sub in ctl.subSurfaces():
+                    surface = sub.surface()
+                    self.assertTrue(surface)
+                    surface = surface.get()
+                    self.assertTrue(surface in [slanted, tilted])
+
+        model.save("./tests/files/osms/out/seb_ext5.osm", True)
+
+        del model
+        self.assertEqual(o.status(), 0)
 
 if __name__ == "__main__":
     unittest.main()

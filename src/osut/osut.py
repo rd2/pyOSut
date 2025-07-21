@@ -677,12 +677,12 @@ def genShade(subs=None) -> bool:
     if onoff:
         onoff = onoff.get()
     else:
-      onoff = openstudio.model.ScheduleTypeLimits(model)
-      onoff.setName(id)
-      onoff.setLowerLimitValue(0)
-      onoff.setUpperLimitValue(1)
-      onoff.setNumericType("Discrete")
-      onoff.setUnitType("Availability")
+        onoff = openstudio.model.ScheduleTypeLimits(model)
+        onoff.setName(id)
+        onoff.setLowerLimitValue(0)
+        onoff.setUpperLimitValue(1)
+        onoff.setNumericType("Discrete")
+        onoff.setUnitType("Availability")
 
     # Shading schedule.
     id  = "OSut.SHADE.Ruleset"
@@ -691,10 +691,10 @@ def genShade(subs=None) -> bool:
     if sch:
         sch = sch.get()
     else:
-      sch = openstudio.model.ScheduleRuleset(model, 0)
-      sch.setName(id)
-      sch.setScheduleTypeLimits(onoff)
-      sch.defaultDaySchedule.setName("OSut.SHADE.Ruleset.Default")
+        sch = openstudio.model.ScheduleRuleset(model, 0)
+        sch.setName(id)
+        sch.setScheduleTypeLimits(onoff)
+        sch.defaultDaySchedule().setName("OSut.SHADE.Ruleset.Default")
 
     # Summer cooling rule.
     id   = "OSut.SHADE.ScheduleRule"
@@ -703,28 +703,28 @@ def genShade(subs=None) -> bool:
     if rule:
         rule = rule.get()
     else:
-      may     = openstudio.MonthOfYear("May")
-      october = openstudio.MonthOfYear("Oct")
-      start   = openstudio.Date(may, 1)
-      finish  = openstudio.Date(october, 31)
+        may     = openstudio.MonthOfYear("May")
+        october = openstudio.MonthOfYear("Oct")
+        start   = openstudio.Date(may, 1)
+        finish  = openstudio.Date(october, 31)
 
-      rule = openstudio.model.ScheduleRule(sch)
-      rule.setName(id)
-      rule.setStartDate(start)
-      rule.setEndDate(finish)
-      rule.setApplyAllDays(True)
-      rule.daySchedule.setName("OSut.SHADE.Rule.Default")
-      rule.daySchedule.addValue(openstudio.Time(0,24,0,0), 1)
+        rule = openstudio.model.ScheduleRule(sch)
+        rule.setName(id)
+        rule.setStartDate(start)
+        rule.setEndDate(finish)
+        rule.setApplyAllDays(True)
+        rule.daySchedule().setName("OSut.SHADE.Rule.Default")
+        rule.daySchedule().addValue(openstudio.Time(0,24,0,0), 1)
 
     # Shade object.
     id  = "OSut.SHADE"
-    shd = mdl.getShadeByName(id)
+    shd = model.getShadeByName(id)
 
     if shd:
         shd = shd.get()
     else:
-      shd = openstudio.model.Shade(mdl)
-      shd.setName(id)
+        shd = openstudio.model.Shade(model)
+        shd.setName(id)
 
     # Shading control (unique to each call).
     id  = "OSut.ShadingControl"
