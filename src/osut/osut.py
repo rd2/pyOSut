@@ -2264,7 +2264,7 @@ def setpoints(space=None):
                 space = dad.get()
                 cnd   = tg2
             else:
-                log(ERR, "Unknown space %s (%s)" % (id, mth))
+                oslg.log(ERR, "Unknown space %s (%s)" % (id, mth))
 
     # 3. Fetch space setpoints (if model indeed holds valid setpoints).
     heated = hasHeatingTemperatureSetpoints(space.model())
@@ -2347,7 +2347,7 @@ def isRefrigerated(space=None):
     if status:
         status = status.get()
         if isinstance(status, bool): return status
-        log(ERR, "Unknown %s REFRIGERATED %s (%s)" % (id, status, mth))
+        oslg.log(ERR, "Unknown %s REFRIGERATED %s (%s)" % (id, status, mth))
 
     # 2. Else, compare design heating/cooling setpoints.
     stps = setpoints(space)
@@ -3023,7 +3023,7 @@ def width(pts=None) -> float:
 
 
 def height(pts=None) -> float:
-    """Returns 'width' of a set of OpenStudio 3D points.
+    """Returns 'height' of a set of OpenStudio 3D points.
 
     Args:
         pts (openstudio.Point3dVector):
@@ -5105,7 +5105,7 @@ def alignedWidth(pts=None, force=False) -> float:
 
     """
     mth = "osut.alignedWidth"
-    pts = osut.poly(pts, False, True, True, True)
+    pts = poly(pts, False, True, True, True)
     if len(pts) < 2: return 0
 
     try:
@@ -5114,7 +5114,7 @@ def alignedWidth(pts=None, force=False) -> float:
         oslg.log(CN.DBG, "Ignoring force input (%s)" % mth)
         force = False
 
-    pts = osut.realignedFace(pts, force)["set"]
+    pts = realignedFace(pts, force)["set"]
     if len(pts) < 2: return 0
 
     xs = [pt.x() for pt in pts]
@@ -5138,7 +5138,7 @@ def alignedHeight(pts=None, force=False) -> float:
     """
 
     mth = "osut.alignedHeight"
-    pts = osut.poly(pts, False, True, True, True)
+    pts = poly(pts, False, True, True, True)
     if len(pts) < 2: return 0
 
     try:
@@ -5147,7 +5147,7 @@ def alignedHeight(pts=None, force=False) -> float:
         oslg.log(CN.DBG, "Ignoring force input (%s)" % mth)
         force = False
 
-    pts = osut.realignedFace(pts, force)["set"]
+    pts = realignedFace(pts, force)["set"]
     if len(pts) < 2: return 0
 
     ys = [pt.y() for pt in pts]
@@ -5488,7 +5488,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
     v   = int("".join(openstudio.openStudioVersion().split(".")))
     min = 0.050 # minimum ratio value ( 5%)
     max = 0.950 # maximum ratio value (95%)
-    if isinstance(subs, dict): sbs = [subs]
+    if isinstance(subs, dict): subs = [subs]
 
     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
     # Exit if mismatched or invalid argument classes.
@@ -5600,7 +5600,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
     # Assign default values to certain sub keys (if missing), +more validation.
-    for index, sub in subs:
+    for index, sub in enumerate(subs):
         if not isinstance(sub, dict):
             return oslg.mismatch("sub", sub, dict, mth, CN.DBG, False)
 
@@ -5610,10 +5610,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
         if "count"      not in sub: sub["count"     ] = 1
         if "multiplier" not in sub: sub["multiplier"] = 1
         if "id"         not in sub: sub["id"        ] = ""
-        if "type"       not in sub: sub["type"      ] = 1
+        if "type"       not in sub: sub["type"      ] = type
 
-        sub["type"] = trim(sub["type"])
-        sub["id"  ] = trim(sub["id"])
+        sub["type"] = oslg.trim(sub["type"])
+        sub["id"  ] = oslg.trim(sub["id"])
 
         if not sub["type"]: sub["type"] = type
         if not sub["id"  ]: sub["id"  ] = "osut:%s:%d" % (nom, index)
@@ -5669,11 +5669,11 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
         if sub["assembly"]:
             if not isinstance(sub["assembly"], cl3):
                 m = "Skip invalid '%s' construction (%s)" % (id, mth)
-                log(WRN, m)
+                oslg.log(WRN, m)
                 sub["assembly"] = None
 
         # Log/reset negative float values. Set ~0.0 values to 0.0.
-        for key, value in subs.items():
+        for key, value in sub.items():
             if key == "count":      continue
             if key == "multiplier": continue
             if key == "type":       continue
@@ -5740,7 +5740,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if (sub["height"] < glass - CN.TOL2 or
                 sub["height"] > max_height + CN.TOL2):
 
-                m = "(Re)set '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                m = "Reset '%s' height %.3fm (%s)" % (id, sub["height"], mth)
                 oslg.log(CN.WRN, m)
                 sub["height"] = numpy.clip(sub["height"], glass, max_height)
                 m = "Height '%s' reset to %.3fm (%s)" % (id, sub["height"], mth)
@@ -5751,7 +5751,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if (sub["head"] < min_head - CN.TOL2 or
                 sub["head"] > max_head + CN.TOL2):
 
-                m = "(Re)set '%s' head %.3fm (%s)" % (id, sub["head"], mth)
+                m = "Reset '%s' head %.3fm (%s)" % (id, sub["head"], mth)
                 oslg.log(CN.WRN, m)
                 sub["head"] = numpy.clip(sub["head"], min_head, max_head)
                 m = "Head '%s' reset to %.3fm (%s)" % (id, sub["head"], mth)
@@ -5759,14 +5759,14 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
         # Log/reset "sill" height if beyond min/max.
         if "sill" in sub:
-            if (sub["head"] < min_sill - CN.TOL2 or
-                sub["head"] > max_sill + CN.TOL2):
+            if (sub["sill"] < min_sill - CN.TOL2 or
+                sub["sill"] > max_sill + CN.TOL2):
 
-                m = "(Re)set '%s' sill %.3fm (%s)" % (id, sub["sill"], mth)
-                log(CN.WRN, m)
+                m = "Reset '%s' sill %.3fm (%s)" % (id, sub["sill"], mth)
+                oslg.log(CN.WRN, m)
                 sub["sill"] = numpy.clip(sub["sill"], min_sill, max_sill)
                 m = "Sill '%s reset to %.3fm (%s)" % (id, sub["sill"], mth)
-                log(CN.WRN, m)
+                oslg.log(CN.WRN, m)
 
         # At this point, "head", "sill" and/or "height" have been tentatively
         # validated (and/or have been corrected) independently from one another.
@@ -5786,34 +5786,34 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 oslg.log(CN.ERR, m)
                 continue
             else:
-                m = "(Re)set '%s' sill %.3fm (%s)" % (id, sub["sill"], mth)
+                m = "Reset '%s' sill %.3fm (%s)" % (id, sub["sill"], mth)
                 oslg.log(CN.WRN, m)
                 sub["sill"] = sill
-                m = "Sill '%s' (re)set to %.3fm (%s)" % (id, sub["sill"], mth)
+                m = "Sill '%s' reset to %.3fm (%s)" % (id, sub["sill"], mth)
                 oslg.log(CN.WRN, m)
 
         # Attempt to reconcile "head", "sill" and/or "height". If successful,
         # all 3x parameters are set (if missing), or reset if invalid.
         if "head" in sub and "sill" in sub:
-            height = sub["head"] - sub["sill"]
+            hght = sub["head"] - sub["sill"]
 
-            if "height" in sub and abs(sub["height"] - height) > CN.TOL2:
-                m1 = "(Re)set '%s' height %.3fm (%s)" % (id, sub["height"], mth)
-                m2 = "Height '%s' (re)set %.3fm (%s)" % (id, height, mth)
+            if "height" in sub and abs(sub["height"] - hght) > CN.TOL2:
+                m1 = "Reset '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                m2 = "Height '%s' reset %.3fm (%s)" % (id, hght, mth)
                 oslg.log(CN.WRN, m1)
                 oslg.log(CN.WRN, m2)
 
-            sub["height"] = height
+            sub["height"] = hght
 
         elif "head" in sub:# no "sill"
             if "height" in sub:
                 sill = sub["head"] - sub["height"]
 
                 if sill < min_sill - CN.TOL2:
-                    sill   = min_sill
-                    height = sub["head"] - sill
+                    sill = min_sill
+                    hght = sub["head"] - sill
 
-                    if height < glass:
+                    if hght < glass:
                         sub["count"     ] = 0
                         sub["multiplier"] = 0
 
@@ -5825,12 +5825,12 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                         oslg.log(CN.ERR, m)
                         continue
                     else:
-                        m = "(Re)set '%s' height %.3fm (%s)" % (id, sub["height"], mth)
-                        log(CN.WRN, m)
+                        m = "Reset '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                        oslg.log(CN.WRN, m)
                         sub["sill"  ] = sill
-                        sub["height"] = height
+                        sub["height"] = hght
                         m = "Height '%s' re(set) %.3fm (%s)" % (id, sub["height"], mth)
-                        log(CN.WRN, m)
+                        oslg.log(CN.WRN, m)
                 else:
                     sub["sill"] = sill
             else:
@@ -5842,10 +5842,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 head = sub["sill"] + sub["height"]
 
                 if head > max_head - CN.TOL2:
-                    head   = max_head
-                    height = head - sub["sill"]
+                    head = max_head
+                    hght = head - sub["sill"]
 
-                    if height < glass:
+                    if hght < glass:
                         sub["count"     ] = 0
                         sub["multiplier"] = 0
 
@@ -5857,10 +5857,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                         oslg.log(CN.ERR, m)
                         continue
                     else:
-                        m = "(Re)set '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                        m = "Reset '%s' height %.3fm (%s)" % (id, sub["height"], mth)
                         oslg.log(CN.WRN, m)
                         sub["head"  ] = head
-                        sub["height"] = height
+                        sub["height"] = hght
                         m = "Height '%s' reset to %.3fm (%s)" % (id, sub["height"], mth)
                         oslg.log(CN.WRN, m)
                 else:
@@ -5890,7 +5890,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if (sub["width"] < glass - CN.TOL2 or
                 sub["width"] > max_width + CN.TOL2):
 
-                m = "(Re)set '%s' width %.3fm (%s)" % (id, sub["width"], mth)
+                m = "Reset '%s' width %.3fm (%s)" % (id, sub["width"], mth)
                 oslg.log(CN.WRN, m)
                 sub["width"] = numpy.clip(sub["width"], glass, max_width)
                 m = "Width '%s' reset to %.3fm ()%s)" % (id, sub["width"], mth)
@@ -5909,20 +5909,20 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
         # Log/reset if left-sided buffer under min jamb position.
         if "l_buffer" in sub:
             if sub["l_buffer"] < min_ljamb - CN.TOL:
-                m = "(Re)set '%s' left buffer %.3fm (%s)" % (id, sub["l_buffer"], mth)
-                log(WRN, m)
+                m = "Reset '%s' left buffer %.3fm (%s)" % (id, sub["l_buffer"], mth)
+                oslg.log(WRN, m)
                 sub["l_buffer"] = min_ljamb
                 m = "Left buffer '%s' reset to %.3fm (%s)" % (id, sub["l_buffer"], mth)
-                log(WRN, m)
+                oslg.log(WRN, m)
 
         # Log/reset if right-sided buffer beyond max jamb position.
         if "r_buffer" in sub:
             if sub["r_buffer"] > max_rjamb - CN.TOL:
-                m = "(Re)set '%s' right buffer %.3fm (%s)" % (id, sub["r_buffer"], mth)
-                log(CN.WRN, m)
+                m = "Reset '%s' right buffer %.3fm (%s)" % (id, sub["r_buffer"], mth)
+                oslg.log(CN.WRN, m)
                 sub["r_buffer"] = min_rjamb
                 m = "Right buffer '%s' reset to %.3fm (%s)" % (id, sub["r_buffer"], mth)
-                log(CN.WRN, m)
+                oslg.log(CN.WRN, m)
 
         centre  = mid_x
         if "centreline" in sub: centre += sub["centreline"]
@@ -5948,7 +5948,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
             # Log/reset if "ratio" beyond min/max?
             if sub["ratio"] < min and sub["ratio"] > max:
-                m = "(Re)set ratio %.3f (%s)" % (sub["ratio"], mth)
+                m = "Reset ratio %.3f (%s)" % (sub["ratio"], mth)
                 oslg.log(CN.WRN, m)
                 sub["ratio"] = numpy.clip(sub["ratio"], min, max)
                 m = "Ratio reset to %.3f (%s)" % (sub["ratio"], mth)
@@ -5959,11 +5959,11 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 sub["count"] = 1
                 oslg.log(CN.WRN, "Count (ratio) reset to 1 (%s)" % mth)
 
-            area  = s.grossArea() * sub["ratio"] # sub m2, incl. frames
-            w     = area / h
-            width = w - frames
-            x0    = centre - w/2
-            xf    = centre + w/2
+            area = s.grossArea() * sub["ratio"] # sub m2, incl. frames
+            w    = area / h
+            wdth = w - frames
+            x0   = centre - w/2
+            xf   = centre + w/2
 
             if "l_buffer" in sub:
                 if "centreline" in sub:
@@ -5987,22 +5987,22 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 sub["count"     ] = 0
                 sub["multiplier"] = 0
 
-                if "ratio"  in sub: sub[ratio ] = 0
-                if "height" in sub: sub[height] = 0
-                if "width"  in sub: sub[width ] = 0
+                if "ratio"  in sub: sub["ratio" ] = 0
+                if "height" in sub: sub["height"] = 0
+                if "width"  in sub: sub["width" ] = 0
 
                 m = "Skip '%s': invalid (ratio) width/centreline (%s)" % (id, mth)
                 oslg.log(CN.ERR, m)
                 continue
 
-            if "width" in sub and abs(sub["width"] - width) > CN.TOL:
-                m = "(Re)set '%s' width (ratio) %.3fm (%s)" % (id, sub["width"], mth)
+            if "width" in sub and abs(sub["width"] - wdth) > CN.TOL:
+                m = "Reset '%s' width (ratio) %.3fm (%s)" % (id, sub["width"], mth)
                 oslg.log(CN.WRN, m)
-                sub["width"] = width
+                sub["width"] = wdth
                 m = "Width (ratio) '%s' reset to %.3fm (%s)" % (id, sub["width"], mth)
                 oslg.log(CN.WRN, m)
 
-            if "width" not in sub: sub["width"] = width
+            if "width" not in sub: sub["width"] = wdth
 
         else:
             if "width" not in sub:
@@ -6016,25 +6016,25 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 oslg.log(CN.ERR, "Skip: missing '%s' width (%s})" % (id, mth))
                 continue
 
-            width = sub["width"] + frames
-            gap   = (max_x - n * width) / (n + 1)
+            wdth = sub["width"] + frames
+            gap  = (max_x - n * wdth) / (n + 1)
 
-            if "offset" in sub: gap = sub["offset"] - width
+            if "offset" in sub: gap = sub["offset"] - wdth
             if gap < buffer: gap = 0
 
-            offset = gap + width
+            offset = gap + wdth
 
             if "offset" in sub and abs(offset - sub["offset"]) > CN.TOL:
-                m = "(Re)set '%s' sub offset %.3fm (%s)" % (id, sub["offset"], mth)
-                log(CN.WRN, m)
+                m = "Reset '%s' sub offset %.3fm (%s)" % (id, sub["offset"], mth)
+                oslg.log(CN.WRN, m)
                 sub["offset"] = offset
                 m = "Sub offset (%s) reset to %.3fm (%s)" % (id, sub["offset"], mth)
-                log(CN.WRN, m)
+                oslg.log(CN.WRN, m)
 
-            if "offset" not in sub.key: sub["offset"] = offset
+            if "offset" not in sub: sub["offset"] = offset
 
             # Overall width (including frames) of bounding box around array.
-            w  = n * width + (n - 1) * gap
+            w  = n * wdth + (n - 1) * gap
             x0 = centre - w/2
             xf = centre + w/2
 
@@ -6049,7 +6049,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             elif "r_buffer" in sub:
                 if "centreline" in sub:
                     m = "Skip '%s' right buffer (vs centreline) (%s)" % (id, mth)
-                    log(WRN, m)
+                    oslg.log(WRN, m)
                 else:
                     xf     = max_x - sub["r_buffer"] + frame
                     x0     = xf - w
@@ -6057,8 +6057,8 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
             # Too wide?
             if x0 < buffer - CN.TOL2 or xf > max_x - buffer - CN.TOL2:
-                sub[:count     ] = 0
-                sub[:multiplier] = 0
+                sub["count"     ] = 0
+                sub["multiplier"] = 0
                 if "ratio"  in sub: sub["ratio" ] = 0
                 if "height" in sub: sub["height"] = 0
                 if "width"  in sub: sub["width" ] = 0
@@ -6099,7 +6099,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
                 if overlapping(vc, vk):
                     nome = sb.nameString()
-                    m = "Skip '%s': overlaps '%s' (%s)" % (name, nome, mth)
+                    m    = "Skip '%s': overlaps '%s' (%s)" % (name, nome, mth)
                     oslg.log(CN.ERR, m)
                     conflict = True
                     break
@@ -6118,7 +6118,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             sb.setSurface(s)
 
             # Reset "pos" if array.
-            if offset in sub: pos += sub["offset"]
+            if "offset" in sub: pos += sub["offset"]
 
     return True
 

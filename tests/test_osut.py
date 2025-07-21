@@ -48,7 +48,7 @@ class TestOSutModuleMethods(unittest.TestCase):
     def test01_osm_instantiation(self):
         model = openstudio.model.Model()
         self.assertTrue(isinstance(model, openstudio.model.Model))
-        del(model)
+        del model
 
     def test02_tuples(self):
         self.assertEqual(len(osut.sidz()), 6)
@@ -90,7 +90,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         # Unsuccessful try: 2nd argument not a 'dict' (see 'm1').
         model = openstudio.model.Model()
@@ -102,7 +101,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.clean(), DBG)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Unsuccessful try: 1st argument not a model (see 'm2').
         model = openstudio.model.Model()
@@ -114,7 +113,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.clean(), DBG)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Defaulted specs (2nd argument).
         specs = dict()
@@ -136,7 +135,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/u, places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Typical uninsulated, framed cavity wall - suitable for light
         # interzone assemblies (i.e. symmetrical, 3-layer construction).
@@ -157,7 +156,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(specs["uo"], None)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Alternative to (uninsulated) partition (more inputs, same outcome).
         specs = dict(type="wall", clad="none", uo=None)
@@ -177,7 +176,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(specs["uo"], None)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Insulated partition variant.
         specs = dict(type="partition", uo=0.214)
@@ -199,7 +198,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Alternative to (insulated) partition (more inputs, similar outcome).
         specs = dict(type="wall", uo=0.214, clad="none")
@@ -221,7 +220,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # A wall inherits a 4th (cladding) layer, by default.
         specs = dict(type="wall", uo=0.214)
@@ -244,7 +243,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Otherwise, a wall has a minimum of 2 layers.
         specs = dict(type="wall", uo=0.214, clad="none", finish="none")
@@ -265,7 +264,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Default shading material.
         specs = dict(type="shading")
@@ -281,7 +280,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # A single-layered, 5/8" partition (alternative: "shading").
         specs = dict(type="partition", clad="none", finish="none")
@@ -297,7 +296,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # A single-layered 4" concrete partition.
         specs = dict(type="partition", clad="none", finish="none", frame="medium")
@@ -313,7 +312,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.concrete.100")
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # A single-layered 8" concrete partition.
         specs = dict(type="partition", clad="none", finish="none", frame="heavy")
@@ -329,7 +328,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.concrete.200")
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # A light (1x layer), uninsulated attic roof (alternative: "shading").
         specs = dict(type="roof", uo=None, clad="none", finish="none")
@@ -345,7 +344,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Insulated, cathredral ceiling construction.
         specs = dict(type="roof", uo=0.214)
@@ -367,7 +366,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Insulated, unfinished outdoor-facing plenum roof (polyiso + 4" slab).
         specs = dict(type="roof", uo=0.214, frame="medium", finish="medium")
@@ -389,7 +388,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Insulated (conditioned), parking garage roof (polyiso under 8" slab).
         specs = dict(type="roof", uo=0.214, clad="heavy", frame="medium", finish="none")
@@ -410,7 +409,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Uninsulated plenum ceiling tiles (alternative: "shading").
         specs = dict(type="roof", uo=None, clad="none", finish="none")
@@ -426,7 +425,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Unfinished, insulated, framed attic floor (blown cellulose).
         specs = dict(type="floor", uo=0.214, frame="heavy", finish="none")
@@ -447,7 +446,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/0.214, places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Finished, insulated exposed floor (e.g. wood-framed, residential).
         specs = dict(type="floor", uo=0.214)
@@ -469,7 +468,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Finished, insulated exposed floor (e.g. 4" slab, steel web joists).
         specs = dict(type="floor", uo=0.214, finish="medium")
@@ -491,7 +490,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Uninsulated slab-on-grade.
         specs = dict(type="slab", frame="none", finish="none")
@@ -508,7 +507,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[1].nameString(), "OSut.concrete.100")
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Insulated slab-on-grade.
         specs = dict(type="slab", uo=0.214, finish="none")
@@ -530,7 +529,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # 8" uninsulated basement wall.
         specs = dict(type="basement", clad="none", finish="none")
@@ -546,7 +545,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(c.layers()[0].nameString(), "OSut.concrete.200")
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # 8" interior-insulated, finished basement wall.
         specs = dict(type="basement", uo=0.428, clad="none")
@@ -568,7 +567,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Standard, insulated steel door (default Uo = 1.8 W/K•m).
         specs = dict(type="door")
@@ -588,7 +587,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         # Better-insulated door, window & skylight.
         specs = dict(type="door", uo=0.900)
@@ -608,7 +607,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         specs = dict(type="window", uo=0.900, shgc=0.35)
         model = openstudio.model.Model()
@@ -627,7 +626,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
         specs = dict(type="skylight", uo=0.900)
         model = openstudio.model.Model()
@@ -646,14 +645,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
     def test06_internal_mass(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         ratios   = dict(entrance=0.10, lobby=0.30, meeting=1.00)
         model    = openstudio.model.Model()
@@ -724,13 +722,12 @@ class TestOSutModuleMethods(unittest.TestCase):
             if not material: material = m
             self.assertEqual(material, m)
 
-        del(model)
+        del model
 
     def test07_construction_thickness(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -854,14 +851,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertFalse(o.logs())
 
-        del(model)
+        del model
 
     def test08_holds_constructions(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -956,15 +952,14 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(m3 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
-        del(mdl)
+        del model
+        del mdl
 
     def test09_construction_set(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -982,7 +977,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(set)
             self.assertEqual(o.status(), 0)
 
-        del(model)
+        del model
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         path  = openstudio.path("./tests/files/osms/out/seb2.osm")
@@ -999,14 +994,13 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
+        del model
 
     def test10_glazing_airfilms(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -1093,14 +1087,13 @@ class TestOSutModuleMethods(unittest.TestCase):
             #   1c6fe48c49987c16e95e90ee3bd088ad0649ab9c/src/model/
             #   PlanarSurface.cpp#L878
 
-        del(model)
+        del model
 
     def test11_rsi(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -1182,14 +1175,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.logs()[0]["message"], m6)
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
+        del model
 
     def test12_insulating_layer(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -1270,14 +1262,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(m0 in o.logs()[0]["message"])
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
+        del model
 
     def test13_spandrels(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         # version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -1331,14 +1322,13 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         self.assertEqual(o.status(), 0)
 
-        del(model)
+        del model
 
     def test14_schedule_ruleset_minmax(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -1413,14 +1403,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.logs()[0]["message"], m3)
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
+        del model
 
     def test15_schedule_constant_minmax(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -1495,14 +1484,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.logs()[0]["message"], m3)
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
+        del model
 
     def test16_schedule_compact_minmax(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -1575,14 +1563,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.logs()[0]["message"], m3)
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
+        del model
 
     def test17_minmax_heatcool_setpoints(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -1746,14 +1733,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(stpts["heating"])
         self.assertAlmostEqual(stpts["heating"], 22.78, places=2)
 
-        del(model)
+        del model
 
     def test18_hvac_airloops(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         msg = "'model' str? expecting Model (osut.hasAirLoopsHVAC)"
         version = int("".join(openstudio.openStudioVersion().split(".")))
@@ -1774,7 +1760,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.logs()[0]["message"], msg)
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
+        del model
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         path  = openstudio.path("./tests/files/osms/in/5ZoneNoHVAC.osm")
@@ -1791,14 +1777,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.logs()[0]["message"], msg)
         self.assertEqual(o.clean(), DBG)
 
-        del(model)
+        del model
 
     def test19_vestibules(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         translator = openstudio.osversion.VersionTranslator()
 
@@ -1862,14 +1847,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(entry.additionalProperties().resetFeature(tag))
         self.assertEqual(o.status(), 0)
 
-        del(model)
+        del model
 
     def test20_setpoints_plenums_attics(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         cl1 = openstudio.model.Space
         cl2 = openstudio.model.Model
@@ -1979,7 +1963,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(osut.setpoints(plenum)["cooling"])
         self.assertEqual(o.status(), 0)
 
-        del(model)
+        del model
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         path  = openstudio.path("./tests/files/osms/in/warehouse.osm")
@@ -1994,7 +1978,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertFalse(osut.isRefrigerated(space))
             self.assertFalse(osut.isSemiheated(space))
 
-        del(model)
+        del model
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         path  = openstudio.path("./tests/files/osms/in/smalloffice.osm")
@@ -2094,7 +2078,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(cnd.get(), val)
         self.assertEqual(o.status(), 0)
 
-        del(model)
+        del model
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Consider adding LargeOffice model to test SDK's "isPlenum" ... @todo
 
@@ -2103,7 +2087,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         v = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
@@ -2311,14 +2294,13 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertEqual(int(day_schedule.getValue(am01)), 0)
             self.assertEqual(int(day_schedule.getValue(pm11)), 0)
 
-        del(model)
+        del model
 
     def test22_model_transformation(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
         translator = openstudio.osversion.VersionTranslator()
 
         # Successful test.
@@ -2648,7 +2630,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         v = int("".join(openstudio.openStudioVersion().split(".")))
 
@@ -2850,7 +2831,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(osut.fits(wall, glazing))
         self.assertTrue(osut.overlapping(wall, glazing))
 
-        del(model)
+        del model
         self.assertEqual(o.clean(), DBG)
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
@@ -3038,7 +3019,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(int(100 * area2 / area1), 68) # %
         self.assertEqual(o.status(), 0)
 
-        del(model)
+        del model
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Testing more complex cases, e.g. triangular windows, irregular 4-side
@@ -3205,7 +3186,7 @@ class TestOSutModuleMethods(unittest.TestCase):
                 self.assertFalse(osut.overlapping(w1o, w3o))
                 self.assertFalse(osut.overlapping(w2o, w3o))
 
-        del(model)
+        del model
         self.assertEqual(o.clean(), DBG)
 
     def test24_triangulation(self):
@@ -3213,7 +3194,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         holes = openstudio.Point3dVectorVector()
 
@@ -3256,7 +3236,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         # Enclosed polygon.
         p0 = openstudio.Point3d(-5, -5, -5)
@@ -3457,7 +3436,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Regular polygon, counterclockwise yet not UpperLeftCorner (ULC).
@@ -3631,7 +3609,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(INF), INF)
         self.assertEqual(o.level(), INF)
-        self.assertEqual(o.status(), 0)
 
         # 2x points (not a polygon).
         vtx = openstudio.Point3dVector()
@@ -3849,9 +3826,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         o = osut.oslg
         self.assertEqual(o.status(), 0)
-        self.assertEqual(o.reset(INF), INF)
-        self.assertEqual(o.level(), INF)
-        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
         translator = openstudio.osversion.VersionTranslator()
 
         v = int("".join(openstudio.openStudioVersion().split(".")))
@@ -3895,7 +3871,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         roof_left  = openstudio.Point3d( 0.2166, 12.7865, 2.3528)
         roof_right = openstudio.Point3d(-5.4769, 11.2626, 2.3528)
         length     = (roof_left - roof_right).length()
-
 
         # New slanted roof.
         vec = openstudio.Point3dVector()
@@ -4018,7 +3993,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         # buffer under 10mm, see: https://rd2.github.io/tbd/pages/subs.html.
         y = max_y - 0.005
 
-        x = centerline - width / 2 # center window
+        x   = centerline - width / 2 # center window
         vec = openstudio.Point3dVector()
         vec.append(openstudio.Point3d(x,         y,          0))
         vec.append(openstudio.Point3d(x,         y - height, 0))
@@ -4030,7 +4005,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(tilt_window1.setSubSurfaceType("FixedWindow"))
         self.assertTrue(tilt_window1.setSurface(tilt_wall))
 
-        x    = centerline - 3*width/2 - 0.15 # window to the left of the first one
+        x   = centerline - 3*width/2 - 0.15 # window to the left of the first one
         vec = openstudio.Point3dVector()
         vec.append(openstudio.Point3d(x,         y,          0))
         vec.append(openstudio.Point3d(x,         y - height, 0))
@@ -4042,7 +4017,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(tilt_window2.setSubSurfaceType("FixedWindow"))
         self.assertTrue(tilt_window2.setSurface(tilt_wall))
 
-        x    = centerline + width/2 + 0.15 # window to the right of the first one
+        x   = centerline + width/2 + 0.15 # window to the right of the first one
         vec = openstudio.Point3dVector()
         vec.append(openstudio.Point3d(x,         y,          0))
         vec.append(openstudio.Point3d(x,         y - height, 0))
@@ -4126,10 +4101,69 @@ class TestOSutModuleMethods(unittest.TestCase):
         model.save("./tests/files/osms/out/seb_ext1.osm", True)
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
-        # Now test the same result when relying on OSut::addSub TO DO.
+        # Now test the same result when relying on osut.addSub:
+        path  = openstudio.path("./tests/files/osms/out/seb_mod.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
 
-        del(model)
+        roof = model.getSurfaceByName("Openarea slanted roof")
+        self.assertTrue(roof)
+        roof = roof.get()
+
+        tilt_wall = model.getSurfaceByName("Openarea tilted wall")
+        self.assertTrue(tilt_wall)
+        tilt_wall = tilt_wall.get()
+
+        head   = max_y - 0.005
+        offset = width + 0.15
+
+        # Add array of 3x windows to tilted wall.
+        sub           = {}
+        sub["id"    ] = "Tilted window"
+        sub["height"] = height
+        sub["width" ] = width
+        sub["head"  ] = head
+        sub["count" ] = 3
+        sub["offset"] = offset
+
+        # The simplest argument set for 'addSubs' is:
+        self.assertTrue(osut.addSubs(tilt_wall, sub))
         self.assertEqual(o.status(), 0)
+
+        # As the base surface is tilted, OpenStudio's 'alignFace' and
+        # 'alignZPrime' behave in a very intuitive manner: there is no point
+        # requesting 'addSubs' first realigns and/or concentrates on the
+        # polygon's bounded box - the outcome would be the same in all cases:
+        #
+        # self.assertTrue(osut.addSubs(tilt_wall, sub, False, False, True))
+        # self.assertTrue(osut.addSubs(tilt_wall, sub, False, True))
+        tilted = model.getSubSurfaceByName("Tilted window:0")
+        self.assertTrue(tilted)
+        tilted = tilted.get()
+
+        construction = tilted.construction()
+        self.assertTrue(construction)
+        construction = construction.get()
+        sub["assembly"] = construction
+
+        del sub["head"]
+        self.assertFalse("head" in sub)
+        sub["id"  ] = ""
+        sub["sill"] = 0.0 # will be reset to 5mm
+        sub["type"] = "Skylight"
+        self.assertTrue(osut.addSubs(roof, sub))
+        self.assertTrue(o.is_warn())
+        self.assertEqual(len(o.logs()), 2)
+
+        for lg in o.logs():
+            self.assertTrue("reset" in lg["message"].lower())
+            self.assertTrue("sill"  in lg["message"].lower())
+
+        model.save("./tests/files/osms/out/seb_ext2.osm", True)
+
+        del model
+        self.assertEqual(o.clean(), DBG)
 
     # def test29_surface_width_height(self):
 
@@ -4140,7 +4174,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(INF), INF)
         self.assertEqual(o.level(), INF)
-        self.assertEqual(o.status(), 0)
+
         translator = openstudio.osversion.VersionTranslator()
         version = int("".join(openstudio.openStudioVersion().split(".")))
 
@@ -4318,7 +4352,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         head    = osut.height(aligned) - 0.2
         self.assertAlmostEqual(head, 10.16, places=2)
 
-        del(model)
+        del model
         self.assertEqual(o.status(), 0)
 
     def test32_outdoor_roofs(self):
@@ -4326,8 +4360,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(INF), INF)
         self.assertEqual(o.level(), INF)
-        self.assertEqual(o.status(), 0)
-
         translator = openstudio.osversion.VersionTranslator()
 
         path  = openstudio.path("./tests/files/osms/in/5ZoneNoHVAC.osm")
@@ -4368,7 +4400,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(id in roofs.keys())
             self.assertEqual(roofs[id], surface)
 
-        del(model)
+        del model
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # CASE 2: None of the occupied spaces have outdoor-facing roofs, yet
@@ -4413,7 +4445,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             self.assertTrue(occ in roofs.keys())
             self.assertTrue("plenum" in roofs[occ].lower())
 
-        del(model)
+        del model
         self.assertEqual(o.status(), 0)
 
     # def test33_leader_line_anchors_inserts(self):
@@ -4425,7 +4457,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
 
         translator = openstudio.osversion.VersionTranslator()
 
@@ -4492,14 +4523,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         # Without arguments, the method returns ALL surfaces and subsurfaces.
         self.assertEqual(len(osut.facets(spaces)), len(surfs) + len(subs))
 
-        del(model)
+        del model
 
     def test36_slab_generation(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-        self.assertEqual(o.status(), 0)
         model = openstudio.model.Model()
 
         x0 = 1
@@ -4681,7 +4711,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(surface.grossArea(), 5 * 20 - 1, places=2)
 
         self.assertEqual(o.status(), 0)
-        del(model)
+        del model
 
     # def test37_roller_shades(self):
 
