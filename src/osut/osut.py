@@ -3941,6 +3941,7 @@ def isRoof(pts=None) -> bool:
     Returns:
         bool: If considered a roof surface.
         False: If invalid input (see logs).
+
     """
     ray = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
     dut = math.cos(60 * math.pi / 180)
@@ -5259,7 +5260,7 @@ def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
     return faces
 
 
-def genSlab(pltz=[], z=0):
+def genSlab(pltz=[], z=0) -> openstudio.Point3dVector:
     """Generates an OpenStudio 3D point vector of a composite floor "slab", a
     'union' of multiple rectangular, horizontal floor "plates". Each plate
     must either share an edge with (or encompass or overlap) any of the
@@ -5275,7 +5276,7 @@ def genSlab(pltz=[], z=0):
             - "z" (float): Z-axis coordinate.
 
     Returns:
-        openstudio.point3dVector: Slab vertices (see logs if empty).
+        openstudio.Point3dVector: Slab vertices (see logs if empty).
     """
     mth = "osut.genSlab"
     slb = openstudio.Point3dVector()
@@ -6121,6 +6122,218 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if "offset" in sub: pos += sub["offset"]
 
     return True
+
+
+def grossRoofArea(spaces=[]) -> float:
+    """Returns the 'gross' roof surface area above selected conditioned,
+    occupied spaces. This includes all roof surfaces of indirectly-conditioned,
+    unoccupied spaces like plenums (if located above any of the selected
+    spaces). This also includes roof surfaces of unconditioned or unenclosed
+    spaces like attics, if vertically-overlapping any ceiling of occupied
+    spaces below; attic roof sections above uninsulated soffits are excluded,
+    for instance. It does not include surfaces labelled as 'RoofCeiling', which
+    do not comply with ASHRAE 90.1 or NECB tilt criteria - see 'isRoof'.
+
+    Args:
+        spaces (list):
+            Set of openstudio.model.Space instances.
+
+    Returns:
+        float: Gross roof surface area.
+        0: If invalid inputs (see logs).
+
+    """
+    mth = "osut.grossRoofArea"
+    up  = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
+    rm2 = 0
+    rfs = {}
+
+    if isinstance(spaces, openstudio.modelSpace): spaces = [spaces]
+
+    try:
+        spaces = list(spaces)
+    except:
+        return oslg.invalid("spaces", mth, 1, CN.DBG, rm2)
+
+    spaces = [s for s in spaces if isinstance(s, openstudio.model.Space)]
+    spaces = [s for s in spaces if s.partofTotalFloorArea()]
+    spaces = [s for s in spaces if not isUnconditioned(s)]
+
+    # The method is very similar to OpenStudio-Standards' :
+    #   find_exposed_conditioned_roof_surfaces(model)
+    #
+    # github.com/NREL/openstudio-standards/blob/
+    # be81bd88dc55a44d8cce3ee6daf29c768032df6a/lib/openstudio-standards/
+    # standards/Standards.Surface.rb#L99
+    #
+    # ... yet differs with regards to attics with overhangs/soffits.
+    #
+    # @todo: recursive call for stacked spaces as atria (via AirBoundaries).
+    #
+    # The overlap calculations below fail for roof and ceiling surfaces
+    # holding previously-added leader lines.
+    #
+    # @todo: revise approach for attics ONCE skylight wells have been added.
+
+    # Start with roof surfaces of occupied, conditioned spaces.
+    for space in spaces:
+        for roof in facets(space, "Outdoors", "RoofCeiling"):
+            id = roof.nameString()
+            if id in rfs: continue
+            if not isRoof(roof): continue
+
+            rfs[id] = dict(m2=roof.grossArea(), m=space.multiplier())
+
+    # Roof surfaces of unoccupied, conditioned spaces above (e.g. plenums)?
+    for space in spaces:
+        for ceiling in facets(space, "Surface", "RoofCeiling"):
+            floor = ceiling.adjacentSurface()
+            if not floor: continue
+
+            other = floor.get().space()
+            if not other: continue
+
+            other = other.get()
+            if other.partofTotalFloorArea(): continue
+            if isUnconditioned(other): continue
+
+            for roof in facets(other, "Outdoors", "RoofCeiling"):
+                id = roof.nameString()
+                if id in rfs: continue
+                if not isRoof(roof): continue
+
+                rfs[id] = dict(m2=roof.grossArea(), m=other.multiplier())
+
+    # Roof surfaces of unoccupied, unconditioned spaces above (e.g. attics)?
+    for space in spaces:
+        # When taking overlaps into account, target spaces often do not share
+        # the same local transformation as the space(s) above.
+        t0 = transforms(space)
+        if t0["t"] is None: continue
+
+        t0 = t0["t"]
+
+        for ceiling in facets(space, "Surface", "RoofCeiling"):
+            cv0 = t0 * ceiling.vertices()
+
+            floor = ceiling.adjacentSurface()
+            if not floor: continue
+
+            other = floor.get().space()
+            if not other: continue
+
+            other = other.get()
+            if other.partofTotalFloorArea(): continue
+            if not isUnconditioned(other): continue
+
+            ti = transforms(other)
+            if ti["t"] is None: continue
+
+            ti = ti["t"]
+
+            for roof in facets(other, "Outdoors", "RoofCeiling"):
+                id = roof.nameString()
+                if not isRoof(roof): continue
+
+                rvi  = ti * roof.vertices()
+                cst  = cast(cv0, rvi, up)
+                if not cst: continue
+
+                olap = None
+                olap = overlap(cst, rvi, False)
+                if not olap: continue
+
+                m2 = openstudio.getArea(olap)
+                if not m2: continue
+
+                m2 = m2.get()
+                if m2 < CN.TOL2: continue
+
+                if id not in rfs:
+                    rfs[id] = dict(m2=0, m=other.multiplier())
+
+                rfs[id]["m2"] += m2
+
+    for rf in rfs.values(): rm2 += rf["m2"] * rf["m"]
+
+    return rm2
+
+
+def getHorizontalRidges(roofs=[]) -> list:
+    """Identifies horizontal ridges along 2x sloped 'roof' surfaces (same
+    space) - see 'isRoof'. Harmonized with OpenStudio's "alignZPrime" - see
+    'isSloped'.
+
+    Args:
+        roofs (list):
+            A set of 'roof' openstudio.model.Surface instances.
+
+    Returns:
+        list: A set of horizontal roof ridge dictionaries:
+        - "edge" (openstudio.Point3dVector): both edge endpoints
+        - "length" (float): individual horizontal roof ridge length
+        - "roofs" (list): 2x linked roof surfaces, on either side of the edge
+
+    """
+    mth    = "osut.getHorizontalRidges"
+    ridges = []
+
+    try:
+        roofs = list(roofs)
+    except:
+        return ridges
+
+    roofs = [s for s in roofs if isinstance(s, openstudio.model.Surface)]
+    roofs = [s for s in roofs if isSloped(s)]
+    roofs = [s for s in roofs if isRoof(s)]
+
+    for roof in roofs:
+        if not roof.space(): continue
+
+        space = roof.space().get()
+        maxZ  = max([pt.z() for pt in roof.vertices()])
+
+        for edge in segments(roof):
+            if not shareXYZ(edge, "z", maxZ): continue
+
+            # Skip if already tracked.
+            match = False
+
+            for ridge in ridges:
+                if match: break
+
+                edg   = list(ridge["edge"])
+                edg2  = edg.reverse()
+                match = areSame(edge, edg) or areSame(edge, edg2)
+
+            if match: continue
+
+            ridge           = {}
+            ridge["edge"  ] = edge
+            ridge["length"] = (edge[1] - edge[0]).length()
+            ridge["roofs" ] = [roof]
+
+            # Links another roof (same space)?
+            match = False
+
+            for ruf in roofs:
+                if match: break
+                if ruf == roof: continue
+                if not ruf.space(): continue
+                if ruf.space().get() != space: continue
+
+                for edg in segments(ruf):
+                    if match: break
+
+                    edg1 = list(edg)
+                    edg2 = edg.reverse()
+
+                    if areSame(edge, edg1) or areSame(edge, edg2):
+                        ridge["roofs"].append(ruf)
+                        ridges.append(ridge)
+                        match = True
+
+    return ridges
 
 
 def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
