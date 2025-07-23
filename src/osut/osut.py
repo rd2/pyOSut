@@ -6336,6 +6336,140 @@ def getHorizontalRidges(roofs=[]) -> list:
     return ridges
 
 
+def toToplit(spaces=[], opts={}) -> list:
+    """Preselects ideal spaces to toplight, based on 'addSkylights' options and
+    key building model geometry attributes. This can be called from within
+    'addSkylights' by setting opts["ration"] to True (False by default).
+    Alternatively, the method can be called prior to 'addSkylights'. The
+    optional filters stem from previous rounds of 'addSkylights' stress testing.
+    The goal is to allow users to prune away less ideal candidate spaces
+    (irregular, smaller) in favour of (larger) candidates (notably with more
+    suitable roof geometries). This is key when dealing with attic and plenums,
+    where 'addSkylights' seeks to add skylight wells (relying on roof cut-outs
+    and leader lines). Another check/outcome is whether to prioritize skylight
+    allocation in already sidelit spaces: opts["sidelit"] may be set to True.
+
+    Args:
+        spaces (list):
+            Set of openstudio.model.Space instances.
+        opts (dict):
+            Requested skylight attributes (similar to 'addSkylights').
+            - "size" (float): Template skylight width/depth (1.22m, min 0.4m)
+
+    Returns:
+        list: Favoured openstudio.model.Space candidates (see logs if empty).
+
+    """
+    mth  = "osut.toToplit"
+    gap4 = 0.4  # minimum skylight 16" width/depth (excluding frame width)
+    w    = 1.22 # default 48" x 48" skylight base
+
+    if not isinstance(opts, dict):
+        return oslg.mismatch("opts", opts, dict, mth, CN.DBG, [])
+
+    # Validate skylight size, if provided.
+    if "size" in opts:
+        try:
+            w = float(opts["size"])
+        except:
+            return oslg.mismatch("size", opts["size"], float, mth, CN.DBG, [])
+
+    if round(w, 2) < gap4: return oslg.invalid("size", mth, 0, CN.ERR, [])
+
+    w2 = w * w
+
+    # Accept single 'OpenStudio::Model::Space' (vs an array of spaces). Filter.
+    if isinstance(spaces, openstudio.model.Space): spaces = [spaces]
+
+    try:
+        spaces = list(spaces)
+    except:
+        return oslg.mismatch("spaces", spaces, list, mth, CN.DBG, [])
+
+    # Whether individual spaces are UNCONDITIONED (e.g. attics, unheated areas)
+    # or flagged as NOT being part of the total floor area (e.g. unoccupied
+    # plenums), should of course reflect actual design intentions. It's up to
+    # modellers to correctly flag such cases - can't safely guess in lieu of
+    # design/modelling team.
+    #
+    # A friendly reminder: 'addSkylights' should be called separately for
+    # strictly SEMIHEATED spaces vs REGRIGERATED spaces vs all other CONDITIONED
+    # spaces, as per 90.1 and NECB requirements.
+    spaces = [s for s in spaces if isinstance(s, openstudio.model.Space)]
+    spaces = [s for s in spaces if s.partofTotalFloorArea()]
+    spaces = [s for s in spaces if not isUnconditioned(s)]
+    spaces = [s for s in spaces if not isVestibule(s)]
+    spaces = [s for s in spaces if roofs(s)]
+    spaces = [s for s in spaces if s.floorArea() < 4 * w2]
+    spaces = sorted(spaces, key=floorArea(), reverse=True)
+    if not spaces: return oslg.empty("spaces", mth, CN.WRN, [])
+
+    # Unfenestrated spaces have no windows, glazed doors or skylights. By
+    # default, 'addSkylights' will prioritize unfenestrated spaces (over all
+    # existing sidelit ones) and maximize skylight sizes towards achieving the
+    # required skylight area target. This concentrates skylights for instance in
+    # typical (large) core spaces, vs (narrower) perimeter spaces. However, for
+    # less conventional spatial layouts, this default approach can produce less
+    # optimal skylight distributions. A balance is needed to prioritize large
+    # unfenestrated spaces when appropriate on one hand, while excluding smaller
+    # unfenestrated ones on the other. Here, exclusion is based on the average
+    # floor area of spaces to toplight.
+    fm2  = sum([s.floorArea() for s in spaces])
+    afm2 = fm2 / len(spaces)
+
+    unfen = [s for s in spaces if not isDaylit(s)]
+    unfen = sorted(unfen, key=floorArea(), reverse=True)
+
+    # Target larger unfenestrated spaces, if sufficient in area.
+    if unfen:
+        if len(spaces) > len(unfen):
+            ufm2  = sum([s.floorArea() for s in unfen])
+            u0fm2 = unfen[0].floorArea()
+
+            if ufm2 > 0.33 * fm2 and u0fm2 > 3 * afm2:
+                unfen  = [s for s in unfen  if s.floorArea() < 0.25 * afm2]
+                spaces = [s for s in spaces if s not in unfen]
+            else:
+                opts["sidelit"] = True
+    else:
+        opts["sidelit"] = True
+
+    espaces = {}
+    rooms   = []
+    toits   = []
+
+    # Gather roof surfaces - possibly those of attics or plenums above.
+    for s in spaces:
+        id = s.nameString()
+        m2 = s.floorArea()
+
+        for rf in roofs(s):
+            if id not in espaces: espaces[id] = dict(m2=m2, roofs=[])
+            if rf not in espaces[id]["roofs"]: espaces[id]["roofs"].append(rf)
+
+    # Priortize larger spaces.
+    espaces = dict(sorted(espaces.items(), key=lambda s: s[1]["m2"], reverse=True))
+
+    # Prioritize larger roof surfaces.
+    for s in espaces.values():
+        s["roofs"] = sorted(s["roofs"], key=grossArea(), reverse=True)
+
+    # Single out largest roof in largest space, key when dealing with shared
+    # attics or plenum roofs.
+    for s in espaces.values():
+        rfs = [ruf for ruf in s["roofs"] if ruf not in toits]
+        if not rfs: continue
+
+        rfs = sorted(rfs, key=grossArea(), reverse=True)
+
+        toits.append(rfs[0])
+        rooms.append(s)
+
+    if not rooms: oslg.log(CN.INF, "No ideal toplit candidates (%s)" % mth)
+
+    return rooms
+
+
 def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
     """Validates whether space has outdoor-facing surfaces with fenestration.
 
