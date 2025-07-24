@@ -5156,6 +5156,203 @@ def alignedHeight(pts=None, force=False) -> float:
     return max(ys) - min(ys)
 
 
+def genAnchors(s=None, set=[], tag="box") -> int:
+    """Identifies 'leader line anchors', i.e. specific 3D points of a (larger)
+    set (e.g. delineating a larger, parent polygon), each anchor linking the
+    BLC corner of one or more (smaller) subsets (free-floating within the
+    parent) - see follow-up 'genInserts'. Subsets may hold several 'tagged'
+    vertices (e.g. "box", "cbox"). By default, the solution seeks to anchor
+    subset "box" vertices. Users can select other tags, e.g. tag == "cbox". The
+    solution minimally validates individual subsets (e.g. no self-intersecting
+    polygons, coplanarity, no inter-subset conflicts, must fit within larger
+    set). Potential leader lines cannot intersect each other, similarly tagged
+    subsets or (parent) polygon edges. For highly-articulated cases (e.g. a
+    narrow parent polygon with multiple concavities, holding multiple subsets),
+    such leader line conflicts are likely unavoidable. It is recommended to
+    first sort subsets (e.g. based on surface areas), given the solution's
+    'first-come-first-served' policy. Subsets without valid leader lines are
+    ultimately ignored (check for new set "void" keys, see error logs). The
+    larger set of points is expected to be in space coordinates - not building
+    or site coordinates, while subset points are expected to 'fit' in the larger
+    set.
+
+    Args:
+        s (openstudio.Point3dVector):
+            A (larger) parent set of points.
+        set (list):
+            A collection of (smaller) sequenced points.
+        tag (str):
+            Selected subset vertices to target.
+
+    Returns:
+        int: Number of successfully anchored subsets (see logs if missing).
+
+    """
+    mth = "osut.genAnchors"
+    n   = 0
+    id  = s.nameString() if hasattr(s, "nameString") else ""
+    pts = poly(s)
+    ts  = tuple(s)
+
+    if not pts:
+        return oslg.invalid("%s polygon" % id, mth, 1, CN.DBG, n)
+
+    try:
+        set = list(set)
+    except:
+        return oslg.mismatch("set", set, list, mth, CN.DBG, n)
+
+    origin = openstudio.Point3d(0,0,0)
+    zenith = openstudio.Point3d(0,0,1)
+    ray    = zenith - origin
+
+    # Validate individual subsets. Purge surface-specific leader line anchors.
+    for i, st in enumerate(set):
+        str1 = id + "subset %d" % i+1
+        str2 = str1 + " %s" % str(tag)
+
+        if not isinstance(st, dict):
+            return oslg.mismatch(str1, st, dict, mth, CN.DBG, n)
+
+        if tag not in st:
+            return oslg.hashkey(str1, st, tag, mth, CN.DBG, n)
+
+        if not st[tag]:
+            return oslg.empty("%s vertices" % str2, mth, CN.DBG, n)
+
+        if "out" in st:
+            if "t" not in st:
+                return oslg.hashkey(str1, st, "t", mth, CN.DBG, n)
+            if "ti" not in st:
+                return oslg.hashkey(str1, st, "ti", mth, CN. DBG, n)
+            if "t0" not in st:
+                return oslg.hashkey(str1, st, "t0", mth, CN.DBG, n)
+
+        stt = poly(st[tag])
+
+        if not stt:
+            return oslg.invalid("%s polygon" % str2, mth, 0, CN.DBG, n)
+
+        if not fits(stt, pts, True):
+            return oslg.invalid("%s gap % str2", mth, 0, CN.DBG, n)
+
+        if "ld" in st:
+            ld = st["ld"]
+
+            if not isinstance(ld, dict):
+                return oslg.invalid("%s leaders" % str1, mth, 0, CN.DBG, n)
+
+            ld = dict(ld.items(), key=lambda k: k[0] == ts)
+        else:
+            st["ld"] = {}
+
+    for i, st in enumerate(set):
+        # When a subset already holds a leader line anchor (from an initial call
+        # to 'genAnchors'), it inherits key "out" - a dictionary holding (among
+        # others) a 'realigned' set of points (by default a 'realigned' "box").
+        # The latter is typically generated from an outdoor-facing roof.
+        # Subsequent calls to 'genAnchors' may send (as first argument) a
+        # corresponding ceiling tile below (both may be called from
+        # 'addSkylights'). Roof vs ceiling may neither share alignment
+        # transformation nor space/site transformation identities. All
+        # subsequent calls to 'genAnchors' shall recover the "out" points,
+        # apply a succession of de/alignments and transformations in sync, and
+        # overwrite tagged points.
+        #
+        # Although 'genAnchors' and 'genInserts' have both been developed to
+        # support anchor insertions in other cases (e.g. bay window in a wall),
+        # variables and terminology here continue pertain to roofs, ceilings,
+        # skylights and wells - less abstract, simpler to follow.
+        if "out" in st:
+            ti   = st["ti" ] # unoccupied attic/plenum space site transformation
+            t0   = st["t0" ] # occupied space site transformation
+            t    = st["t"  ] # initial alignment transformation of roof surface
+            o    = st["out"]
+            tpts = t0.inverse() * (ti * (t * (o["r"] * (o["t"] * o["set"]))))
+            tpts = cast(tpts, pts, ray)
+
+            st[tag] = tpts
+        else:
+            if "t" not in st:
+                st["t"] = openstudio.Transformation.alignFace(pts)
+
+            tpts = st["t"].inverse() * st[tag]
+            o    = realignedFace(tpts, True)
+            tpts = st["t"] * (o["r"] * (o["t"] * o["set"]))
+
+            st["out"] = o
+            st[tag  ] = tpts
+
+    # Identify candidate leader line anchors for each subset.
+    for i, st in enumerate(set):
+        candidates = []
+        tpts = st[tag]
+
+        for pt in pts:
+            ld = [pt, tpts[0]]
+            nb = 0
+
+            # Intersections between leader line and polygon edges.
+            for sg in segments(pts):
+                if nb != 0: break
+                if holds(sg, pt): continue
+                if doesLineIntersect(sg, ld): nb += 1
+
+            # Intersections between candidate leader line vs other subsets?
+            for other in set:
+                if nb != 0: break
+                if st == other: continue
+
+                ost = other[tag]
+
+                for sg in segments(ost):
+                    if doesLineIntersect(ld, sg): nb += 1
+
+            # ... and previous leader lines (first come, first serve basis).
+            for other in set:
+                if nb != 0: break
+                if st == other: continue
+                if "ld" not in other: continue
+                if ts not in other["ld"]: continue
+
+                ost = other[tag]
+                pld = other["ld"][ts]
+                if areSame(pld, pt): continue
+                if doesLineIntersect(ld, [pld, ost[0]]): nb += 1
+
+            # Finally, check for self-intersections.
+            for sg in segments(tpts):
+                if nb != 0: break
+                if holds(sg, tpts[0]): continue
+                if doesLineIntersect(sg, ld): nb += 1
+
+                if (sg[0] - sg[0]).cross(ld[0] - ld[0]).length() < TOL:
+                    nb += 1
+
+            if nb == 0: candidates.append(pt)
+
+        if candidates:
+            p0 = candidates[0]
+            l0 = (p0 - tpts[0]).length()
+
+            for j, pt in enumerate(candidates):
+                if j == 0: continue
+                lj = (pt - tpts[0]).length()
+
+                if lj < l0:
+                    p0 = pt
+                    l0 = lj
+            n += 1
+            st["ld"][s] = p0
+        else:
+            str = id + ("set #%d" % i+1)
+            msg = "%s: unable to anchor %s leader line (%s)" % (str, tag, mth)
+            oslg.log(WRN, msg)
+            st["void"] = True
+
+    return n
+
+
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
     """Returns an array of OpenStudio space surfaces or subsurfaces that match
     criteria, e.g. exterior, north-east facing walls in hotel "lobby". Note

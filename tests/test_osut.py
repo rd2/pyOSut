@@ -4749,7 +4749,144 @@ class TestOSutModuleMethods(unittest.TestCase):
         del model
         self.assertEqual(o.status(), 0)
 
-    # def test33_leader_line_anchors_inserts(self):
+    def test33_leader_line_anchors_inserts(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        translator = openstudio.osversion.VersionTranslator()
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        o0 = openstudio.Point3d( 0, 0, 0)
+
+        # A larger polygon (s0, an upside-down "U"), defined ULC.
+        s0 = openstudio.Point3dVector()
+        s0.append(openstudio.Point3d( 2, 16, 20))
+        s0.append(openstudio.Point3d( 2,  2, 20))
+        s0.append(openstudio.Point3d( 8,  2, 20))
+        s0.append(openstudio.Point3d( 8, 10, 20))
+        s0.append(openstudio.Point3d(16, 10, 20))
+        s0.append(openstudio.Point3d(16,  2, 20))
+        s0.append(openstudio.Point3d(20,  2, 20))
+        s0.append(openstudio.Point3d(20, 16, 20))
+
+        # Polygon s0 entirely encompasses 4x smaller  polygons, s1 to s4.
+        s1 = openstudio.Point3dVector()
+        s1.append(openstudio.Point3d( 7,  3, 20))
+        s1.append(openstudio.Point3d( 7,  7, 20))
+        s1.append(openstudio.Point3d( 5,  7, 20))
+        s1.append(openstudio.Point3d( 5,  3, 20))
+
+        s2 = openstudio.Point3dVector()
+        s2.append(openstudio.Point3d( 3, 11, 20))
+        s2.append(openstudio.Point3d(10, 11, 20))
+        s2.append(openstudio.Point3d(10, 15, 20))
+        s2.append(openstudio.Point3d( 3, 15, 20))
+
+        s3 = openstudio.Point3dVector()
+        s3.append(openstudio.Point3d(12, 13, 20))
+        s3.append(openstudio.Point3d(16, 11, 20))
+        s3.append(openstudio.Point3d(17, 13, 20))
+        s3.append(openstudio.Point3d(13, 15, 20))
+
+        s4 = openstudio.Point3dVector()
+        s4.append(openstudio.Point3d(19,  3, 20))
+        s4.append(openstudio.Point3d(19,  6, 20))
+        s4.append(openstudio.Point3d(17,  6, 20))
+        s4.append(openstudio.Point3d(17,  3, 20))
+
+        area0 = openstudio.getArea(s0)
+        area1 = openstudio.getArea(s1)
+        area2 = openstudio.getArea(s2)
+        area3 = openstudio.getArea(s3)
+        area4 = openstudio.getArea(s4)
+        self.assertTrue(area0)
+        self.assertTrue(area1)
+        self.assertTrue(area2)
+        self.assertTrue(area3)
+        self.assertTrue(area4)
+        area0 = area0.get()
+        area1 = area1.get()
+        area2 = area2.get()
+        area3 = area3.get()
+        area4 = area4.get()
+        self.assertAlmostEqual(area0, 188, places=2)
+        self.assertAlmostEqual(area1, 8, places=2)
+        self.assertAlmostEqual(area2, 28, places=2)
+        self.assertAlmostEqual(area3, 10, places=2)
+        self.assertAlmostEqual(area4, 6, places=2)
+
+        # Side tests: index of nearest/farthest box coordinate to grid origin.
+        self.assertEqual(osut.nearest(s1), 3)
+        self.assertEqual(osut.nearest(s2), 0)
+        self.assertEqual(osut.nearest(s3), 0)
+        self.assertEqual(osut.nearest(s4), 3)
+        self.assertEqual(osut.farthest(s1), 1)
+        self.assertEqual(osut.farthest(s2), 2)
+        self.assertEqual(osut.farthest(s3), 2)
+        self.assertEqual(osut.farthest(s4), 1)
+
+        self.assertEqual(osut.nearest(s1, o0), 3)
+        self.assertEqual(osut.nearest(s2, o0), 0)
+        self.assertEqual(osut.nearest(s3, o0), 0)
+        self.assertEqual(osut.nearest(s4, o0), 3)
+        self.assertEqual(osut.farthest(s1, o0), 1)
+        self.assertEqual(osut.farthest(s2, o0), 2)
+        self.assertEqual(osut.farthest(s3, o0), 2)
+        self.assertEqual(osut.farthest(s4, o0), 1)
+
+        # Box-specific grid instructions, i.e. 'subsets'.
+        set = []
+        set.append(dict(box=s1, rows=1, cols=2, w0=1.4, d0=1.4, dX=0.2, dY=0.2))
+        set.append(dict(box=s2, rows=2, cols=3, w0=1.4, d0=1.4, dX=0.2, dY=0.2))
+        set.append(dict(box=s3, rows=1, cols=1, w0=2.6, d0=1.4, dX=0.2, dY=0.2))
+        set.append(dict(box=s4, rows=1, cols=1, w0=2.6, d0=1.4, dX=0.2, dY=0.2))
+
+        area_s1 = set[0]["rows"] * set[0]["cols"] * set[0]["w0"] * set[0]["d0"]
+        area_s2 = set[1]["rows"] * set[1]["cols"] * set[1]["w0"] * set[1]["d0"]
+        area_s3 = set[2]["rows"] * set[2]["cols"] * set[2]["w0"] * set[2]["d0"]
+        area_s4 = set[3]["rows"] * set[3]["cols"] * set[3]["w0"] * set[3]["d0"]
+        area_s  = area_s1 + area_s2 + area_s3 + area_s4
+        self.assertAlmostEqual(area_s1, 3.92, places=2)
+        self.assertAlmostEqual(area_s2, 11.76, places=2)
+        self.assertAlmostEqual(area_s3, 3.64, places=2)
+        self.assertAlmostEqual(area_s4, 3.64, places=2)
+        self.assertAlmostEqual(area_s, 22.96, places=2)
+
+        # Side test.
+        ld1 = openstudio.Point3d(18,  0, 0)
+        ld2 = openstudio.Point3d( 8,  3, 0)
+        sg1 = openstudio.Point3d(12, 14, 0)
+        sg2 = openstudio.Point3d(12,  6, 0)
+        self.assertFalse(osut.lineIntersection([sg1, sg2], [ld1, ld2]))
+
+        # To support multiple polygon inserts within a larger polygon, subset
+        # boxes must be first 'aligned' (along a temporary XY plane) in a
+        # systematic way to ensure consistent treatment between sequential
+        # methods, e.g.:
+        t = openstudio.Transformation.alignFace(s0)
+        s00 = t.inverse() * s0
+        s01 = t.inverse() * s4
+
+        for pt in s01: self.assertTrue(osut.isPointWithinPolygon(pt, s00, True))
+
+        # Reiterating that if one simply 'aligns' an already flat surface, what
+        # ends up being considered a BottomLeftCorner (BLC) vs ULC is contingent
+        # on how OpenStudio's 'alignFace' rotates the original surface. Although
+        # 'alignFace' operates in a systematic and reliable way, its output
+        # isn't always intuitive when dealing with flat surfaces. Here, instead
+        # of the original upside-down "U" shape of s0, an aligned s00 presents a
+        # conventional "U" shape (i.e. 180° rotation).
+        #
+        # for sv in s00: print(sv)
+        #   [18,  0, 0] ... vs [ 2, 16, 20]
+        #   [18, 14, 0] ... vs [ 2,  2, 20]
+        #   [12, 14, 0] ... vs [ 8,  2, 20]
+        #   [12,  6, 0] ... vs [ 8, 10, 20]
+        #   [ 4,  6, 0] ... vs [16, 10, 20]
+        #   [ 4, 14, 0] ... vs [16,  2, 20]
+        #   [ 0, 14, 0] ... vs [20,  2, 20]
+        #   [ 0,  0, 0] ... vs [20, 16, 20]
 
     # def test34_generated_skylight_wells(self):
 
