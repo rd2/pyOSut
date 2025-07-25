@@ -5190,7 +5190,7 @@ def genAnchors(s=None, set=[], tag="box") -> int:
     """
     mth = "osut.genAnchors"
     n   = 0
-    id  = s.nameString() if hasattr(s, "nameString") else ""
+    id  = "%s " % s.nameString() if hasattr(s, "nameString") else ""
     pts = poly(s)
     ts  = tuple(s)
 
@@ -5208,7 +5208,7 @@ def genAnchors(s=None, set=[], tag="box") -> int:
 
     # Validate individual subsets. Purge surface-specific leader line anchors.
     for i, st in enumerate(set):
-        str1 = id + "subset %d" % i+1
+        str1 = id + "subset %d" % (i+1)
         str2 = str1 + " %s" % str(tag)
 
         if not isinstance(st, dict):
@@ -5220,14 +5220,6 @@ def genAnchors(s=None, set=[], tag="box") -> int:
         if not st[tag]:
             return oslg.empty("%s vertices" % str2, mth, CN.DBG, n)
 
-        if "out" in st:
-            if "t" not in st:
-                return oslg.hashkey(str1, st, "t", mth, CN.DBG, n)
-            if "ti" not in st:
-                return oslg.hashkey(str1, st, "ti", mth, CN. DBG, n)
-            if "t0" not in st:
-                return oslg.hashkey(str1, st, "t0", mth, CN.DBG, n)
-
         stt = poly(st[tag])
 
         if not stt:
@@ -5235,6 +5227,14 @@ def genAnchors(s=None, set=[], tag="box") -> int:
 
         if not fits(stt, pts, True):
             return oslg.invalid("%s gap % str2", mth, 0, CN.DBG, n)
+
+        if "out" in st:
+            if "t" not in st:
+                return oslg.hashkey(str1, st, "t", mth, CN.DBG, n)
+            if "ti" not in st:
+                return oslg.hashkey(str1, st, "ti", mth, CN. DBG, n)
+            if "t0" not in st:
+                return oslg.hashkey(str1, st, "t0", mth, CN.DBG, n)
 
         if "ld" in st:
             ld = st["ld"]
@@ -5345,12 +5345,103 @@ def genAnchors(s=None, set=[], tag="box") -> int:
             n += 1
             st["ld"][s] = p0
         else:
-            str = id + ("set #%d" % i+1)
+            str = id + ("set #%d" % (i+1))
             msg = "%s: unable to anchor %s leader line (%s)" % (str, tag, mth)
             oslg.log(WRN, msg)
             st["void"] = True
 
     return n
+
+
+def genExtendedVertices(s=None, set=[], tag="vtx") -> openstudio.Point3dVector:
+    """Extends (larger) polygon vertices to circumscribe one or more (smaller)
+    subsets of vertices, based on previously-generated 'leader line' anchors.
+    The solution minimally validates individual subsets (e.g. no
+    self-intersecting polygons, coplanarity, no inter-subset conflicts, must fit
+    within larger set). Valid leader line anchors (set key "ld") need to be
+    generated prior to calling the method - see 'genAnchors'. Subsets may hold
+    several 'tag'ged vertices (e.g. "box", "vtx"). By default, the solution
+    seeks to anchor subset "vtx" vertices. Users can select other tags, e.g.
+    tag == "box").
+
+    Args:
+        s (openstudio.Point3dVector):
+            A (larger) parent set of points.
+        set (list):
+            A collection of (smaller) sequenced points.
+        tag (str):
+            Selected subset vertices to target.
+
+    Returns:
+        openstudio.Point3dVector: Extended vertices (see logs if empty).
+
+    """
+    mth = "osut.genExtendedVertices"
+    id  = "%s " % s.nameString() if hasattr(s, "nameString") else ""
+    f   = False
+    pts = poly(s)
+    ts  = tuple(s)
+    cl  = openstudio.Point3d
+    a   = openstudio.Point3dVector()
+    v   = []
+
+    if not pts:
+        return oslg.invalid("%s polygon" % id, mth, 1, CN.DBG, a)
+
+    try:
+        set = list(set)
+    except:
+        return oslg.mismatch("set", set, list, mth, CN.DBG, a)
+
+    # Validate individual sets.
+    for i, st in enumerate(set):
+        str1 = id + "subset %d" % (i+1)
+        str2 = str1 + " %s" % str(tag)
+
+        if not isinstance(st, dict):
+            return oslg.mismatch(str1, st, dict, mth, CN.DBG, a)
+
+        if "void" in st and st["void"]: continue
+
+        if tag not in st:
+            return oslg.hashkey(str1, st, tag, mth, CN.DBG, a)
+
+        if not st[tag]:
+            return oslg.empty("%s vertices" % str2, mth, CN.DBG, a)
+
+        stt = poly(st[tag])
+
+        if not stt:
+            return oslg.invalid("%s polygon" % str2, mth, 0, CN.DBG, a)
+
+        if "ld" not in st:
+            return oslg.hashkey(str1, st, "ld", mth, CN.DBG, a)
+
+        ld = st["ld"]
+
+        if not isinstance(ld, dict):
+            return oslg.invalid("%s leaders" % str2, mth, 0, CN.DBG, a)
+
+        if ts not in ld:
+            return oslg.hashkey("%s leader?" % str2, ld, ts, mth, CN.DBG, a)
+
+        if not isinstance(ld[ts], cl):
+            return oslg.mismatch("%s point" % str2, ld[ts], cl, mth, CN.DBG, a)
+
+    # Re-sequence polygon vertices.
+    for pt in pts:
+        v.append(pt)
+
+        # Loop through each valid set; concatenate circumscribing vertices.
+        for st in set:
+            if "void" in st and st["void"]: continue
+            if not areSame(st["ld"][ts], pt): continue
+            if tag not in st: continue
+
+            v += list(st[tag])
+            v.append(pt)
+
+    return p3Dv(v)
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
