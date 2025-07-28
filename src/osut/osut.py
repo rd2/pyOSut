@@ -4140,7 +4140,6 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
 
     """
     mth  = "osut.overlap"
-    t    = None
     face = openstudio.Point3dVector()
     p01  = poly(p1)
     p02  = poly(p2)
@@ -4151,21 +4150,47 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
     if not isinstance(flat, bool): flat = False
 
     if shareXYZ(p01, "z"):
-        a1 = list(p01)
-        a2 = list(p02)
-        if isClockwise(p01): a1.reverse()
+        t   = None
+        a1  = list(p01)
+        a2  = list(p02)
+        cw1 = isClockwise(p01)
+
+        if cw1:
+            a1.reverse()
+            a1 = list(a1)
     else:
-        t   = openstudio.Transformation.alignFace(p01)
-        cw1 = False
-        a1  = list(t.inverse() * p01)
-        a2  = list(t.inverse() * p02)
+        t  = openstudio.Transformation.alignFace(p01)
+        a1 = list(t.inverse() * p01)
+        a2 = list(t.inverse() * p02)
 
     if flat: a2 = list(flatten(a2))
 
     if not shareXYZ(a2, "z"):
         return invalid("points 2", mth, 2, CN.DBG, face)
 
-    if isClockwise(a2): a2.reverse()
+    cw2 = isClockwise(a2)
+
+    if cw2:
+        a2.reverse()
+        a2 = list(a2)
+
+    # Return either (transformed) polygon if one fits into the other.
+    p02 = list(a2)
+
+    if t:
+        if not cw2: p02.reverse()
+
+        p02 = p3Dv(t * p02)
+    else:
+        if cw1:
+            if cw2: p02.reverse()
+        else:
+            if not cw2: p02.reverse()
+
+        p02 = p3Dv(p02)
+
+    if fits(a1, a2): return p01
+    if fits(a2, a1): return p02
 
     area1 = openstudio.getArea(a1)
     area2 = openstudio.getArea(a2)
@@ -4188,7 +4213,9 @@ def overlap(p1=None, p2=None, flat=False) -> bool:
     delta = area1 + area2 - area
 
     if area > CN.TOL:
-        if round(delta, 2) == 0: return face
+        if round(area,  2) == round(area1, 2): return face
+        if round(area,  2) == round(area1, 2): return face
+        if round(delta, 2) == 0:               return face
 
     res = openstudio.intersect(a1, a2, CN.TOL)
     if not res: return face
@@ -6436,7 +6463,7 @@ def grossRoofArea(spaces=[]) -> float:
     rm2 = 0
     rfs = {}
 
-    if isinstance(spaces, openstudio.modelSpace): spaces = [spaces]
+    if isinstance(spaces, openstudio.model.Space): spaces = [spaces]
 
     try:
         spaces = list(spaces)
@@ -6455,13 +6482,6 @@ def grossRoofArea(spaces=[]) -> float:
     # standards/Standards.Surface.rb#L99
     #
     # ... yet differs with regards to attics with overhangs/soffits.
-    #
-    # @todo: recursive call for stacked spaces as atria (via AirBoundaries).
-    #
-    # The overlap calculations below fail for roof and ceiling surfaces
-    # holding previously-added leader lines.
-    #
-    # @todo: revise approach for attics ONCE skylight wells have been added.
 
     # Start with roof surfaces of occupied, conditioned spaces.
     for space in spaces:
@@ -6493,6 +6513,7 @@ def grossRoofArea(spaces=[]) -> float:
                 rfs[id] = dict(m2=roof.grossArea(), m=other.multiplier())
 
     # Roof surfaces of unoccupied, unconditioned spaces above (e.g. attics)?
+    # @todo: recursive call for stacked spaces as atria (via AirBoundaries).
     for space in spaces:
         # When taking overlaps into account, target spaces often do not share
         # the same local transformation as the space(s) above.
@@ -6527,7 +6548,11 @@ def grossRoofArea(spaces=[]) -> float:
                 cst  = cast(cv0, rvi, up)
                 if not cst: continue
 
-                olap = None
+                # The overlap calculations below fail for roof and ceiling
+                # surfaces holding previously-added leader lines.
+                #
+                # @todo: revise approach for attics ONCE skylight wells have
+                # been added.
                 olap = overlap(cst, rvi, False)
                 if not olap: continue
 
@@ -6536,13 +6561,12 @@ def grossRoofArea(spaces=[]) -> float:
 
                 m2 = m2.get()
                 if m2 < CN.TOL2: continue
-
-                if id not in rfs:
-                    rfs[id] = dict(m2=0, m=other.multiplier())
+                if id not in rfs: rfs[id] = dict(m2=0, m=other.multiplier())
 
                 rfs[id]["m2"] += m2
 
-    for rf in rfs.values(): rm2 += rf["m2"] * rf["m"]
+    for rf in rfs.values():
+        rm2 += rf["m2"] * rf["m"]
 
     return rm2
 
@@ -6808,6 +6832,6 @@ def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
         for sub in surface.subSurfaces():
             # All fenestrated subsurface types are considered, as user can set
             # these explicitly (e.g. skylight in a wall) in OpenStudio.
-            if isFenestration(sub): return True
+            if isFenestrated(sub): return True
 
     return False

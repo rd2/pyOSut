@@ -2633,7 +2633,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
 
-        v = int("".join(openstudio.openStudioVersion().split(".")))
+        version = int("".join(openstudio.openStudioVersion().split(".")))
 
         p1 = openstudio.Point3dVector()
         p2 = openstudio.Point3dVector()
@@ -2645,7 +2645,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         t = openstudio.Transformation.alignFace(p1)
 
-        if v < 340:
+        if version < 340:
             p2.append(openstudio.Point3d(3.63, 0, 2.49))
             p2.append(openstudio.Point3d(3.63, 0, 1.00))
             p2.append(openstudio.Point3d(7.34, 0, 1.00))
@@ -4888,7 +4888,129 @@ class TestOSutModuleMethods(unittest.TestCase):
         #   [ 0, 14, 0] ... vs [20,  2, 20]
         #   [ 0,  0, 0] ... vs [20, 16, 20]
 
-    # def test34_generated_skylight_wells(self):
+    def test34_generated_skylight_wells(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
+        translator = openstudio.osversion.VersionTranslator()
+
+        path  = openstudio.path("./tests/files/osms/in/smalloffice.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        srr = 0.05
+        core  = []
+        attic = []
+
+        # Fetch default construction sets.
+        oID = "90.1-2010 - SmOffice - ASHRAE 169-2013-3B" # building
+        aID = "90.1-2010 -  - Attic - ASHRAE 169-2013-3B" # attic spacetype level
+        o_set = model.getDefaultConstructionSetByName(oID)
+        a_set = model.getDefaultConstructionSetByName(oID)
+        self.assertTrue(o_set)
+        self.assertTrue(a_set)
+        o_set = o_set.get()
+        a_set = a_set.get()
+        self.assertTrue(o_set.defaultInteriorSurfaceConstructions())
+        self.assertTrue(a_set.defaultInteriorSurfaceConstructions())
+        io_set = o_set.defaultInteriorSurfaceConstructions().get()
+        ia_set = a_set.defaultInteriorSurfaceConstructions().get()
+        self.assertTrue(io_set.wallConstruction())
+        self.assertTrue(ia_set.wallConstruction())
+        io_wall = io_set.wallConstruction().get().to_LayeredConstruction()
+        ia_wall = ia_set.wallConstruction().get().to_LayeredConstruction()
+        self.assertTrue(io_wall)
+        self.assertTrue(ia_wall)
+        io_wall = io_wall.get()
+        ia_wall = ia_wall.get()
+        self.assertEqual(io_wall, ia_wall) # 2x drywall layers
+        self.assertAlmostEqual(osut.rsi(io_wall, 0.150), 0.31, places=2)
+
+        for space in model.getSpaces():
+            id = space.nameString()
+
+            if not space.partofTotalFloorArea():
+                attic.append(space)
+                continue
+
+            sidelit = osut.isDaylit(space, True, False)
+            toplit  = osut.isDaylit(space, False)
+            self.assertFalse(toplit)
+
+            if "Perimeter" in id:
+                self.assertTrue(sidelit)
+            elif "Core" in id:
+                self.assertFalse(sidelit)
+                core.append(space)
+
+        self.assertEqual(len(core), 1)
+        self.assertEqual(len(attic), 1)
+        core  = core[0]
+        attic = attic[0]
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertTrue(osut.isUnconditioned(attic))
+
+        # TOTAL attic roof area, including overhangs.
+        roofs  = osut.facets(attic, "Outdoors", "RoofCeiling")
+        rufs   = osut.roofs(model.getSpaces())
+        total1 = sum([roof.grossArea() for roof in roofs])
+        total2 = sum([roof.grossArea() for roof in rufs])
+        self.assertAlmostEqual(total1, total2, places=2)
+        self.assertAlmostEqual(total2, 598.76, places=2)
+
+        # attic = model.getSpaceByName("Attic")
+        # pZN4  = model.getSpaceByName("Perimeter_ZN_4")
+        # self.assertTrue(attic)
+        # self.assertTrue(pZN4)
+        # attic = attic.get()
+        # pZN4  = pZN4.get()
+        # pZN4_ceiling = model.getSurfaceByName("Perimeter_ZN_4_ceiling")
+        # aSouth_roof  = model.getSurfaceByName("Attic_roof_south")
+        # self.assertTrue(pZN4_ceiling)
+        # self.assertTrue(aSouth_roof)
+        # pZN4_ceiling = pZN4_ceiling.get()
+        # aSouth_roof  = aSouth_roof.get()
+        #
+        # up = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
+        # t0 = osut.transforms(attic)
+        # ti = osut.transforms(pZN4)
+        #
+        # roof0 = t0["t"] * aSouth_roof.vertices()
+        # ceili = ti["t"] * pZN4_ceiling.vertices()
+        #
+        # print(" --- ROOF0 --- --- --- --- --- ")
+        # for pt in roof0: print(pt)
+        # print(" --- CEILI --- --- --- --- --- ")
+        # for pt in ceili: print(pt)
+        #
+        # cst = osut.cast(ceili, roof0, up)
+        # print(" --- CST --- --- --- --- --- ")
+        # for pt in cst: print(pt)
+        #
+        # olap = osut.overlap(cst, roof0, False)
+        # print(olap.__class__.__name__)
+        # print(len(olap))
+        # for pt in olap: print(pt)
+        # self.assertTrue(olap)
+        # print(" --- OLAP --- --- --- --- --- ")
+        # for pt in olap: print(pt)
+        #
+        # m2 = openstudio.getArea(olap)
+        # self.assertTrue(m2)
+        # m2 = m2.get()
+        # print(" --- m2 --- --- --- --- --- ")
+        # print(m2)
+
+        # "GROSS ROOF AREA" (GRA), as per 90.1/NECB - excludes overhangs (60m2)
+        gra1 = osut.grossRoofArea(model.getSpaces())
+        self.assertAlmostEqual(gra1, 538.86, places=2)
+
+        self.assertEqual(o.status(), 0)
+        del model
 
     def test35_facet_retrieval(self):
         o = osut.oslg
