@@ -286,10 +286,10 @@ def genConstruction(model=None, specs=dict()):
     if "type" not in specs: specs["type"] = "wall"
     if "id"   not in specs: specs["id"  ] = ""
 
-    id = oslg.trim(specs["id"])
+    ide = oslg.trim(specs["id"])
 
-    if not id:
-        id = "OSut.CON." + specs["type"]
+    if not ide:
+        ide = "OSut.CON." + specs["type"]
     if specs["type"] not in uo():
         return oslg.invalid("surface type", mth, 2, CN.ERR)
     if "uo" not in specs:
@@ -593,7 +593,7 @@ def genConstruction(model=None, specs=dict()):
             layers.append(lyr)
 
     c  = openstudio.model.Construction(layers)
-    c.setName(id)
+    c.setName(ide)
 
     # Adjust insulating layer thickness or conductivity to match requested Uo.
     if not a["glazing"]:
@@ -671,34 +671,34 @@ def genShade(subs=None) -> bool:
 
     # Shading availability period.
     model = subs[0].model()
-    id    = "onoff"
-    onoff = model.getScheduleTypeLimitsByName(id)
+    ide   = "onoff"
+    onoff = model.getScheduleTypeLimitsByName(ide)
 
     if onoff:
         onoff = onoff.get()
     else:
         onoff = openstudio.model.ScheduleTypeLimits(model)
-        onoff.setName(id)
+        onoff.setName(ide)
         onoff.setLowerLimitValue(0)
         onoff.setUpperLimitValue(1)
         onoff.setNumericType("Discrete")
         onoff.setUnitType("Availability")
 
     # Shading schedule.
-    id  = "OSut.SHADE.Ruleset"
-    sch = model.getScheduleRulesetByName(id)
+    ide = "OSut.SHADE.Ruleset"
+    sch = model.getScheduleRulesetByName(ide)
 
     if sch:
         sch = sch.get()
     else:
         sch = openstudio.model.ScheduleRuleset(model, 0)
-        sch.setName(id)
+        sch.setName(ide)
         sch.setScheduleTypeLimits(onoff)
         sch.defaultDaySchedule().setName("OSut.SHADE.Ruleset.Default")
 
     # Summer cooling rule.
-    id   = "OSut.SHADE.ScheduleRule"
-    rule = model.getScheduleRuleByName(id)
+    ide  = "OSut.SHADE.ScheduleRule"
+    rule = model.getScheduleRuleByName(ide)
 
     if rule:
         rule = rule.get()
@@ -709,7 +709,7 @@ def genShade(subs=None) -> bool:
         finish  = openstudio.Date(october, 31)
 
         rule = openstudio.model.ScheduleRule(sch)
-        rule.setName(id)
+        rule.setName(ide)
         rule.setStartDate(start)
         rule.setEndDate(finish)
         rule.setApplyAllDays(True)
@@ -717,19 +717,19 @@ def genShade(subs=None) -> bool:
         rule.daySchedule().addValue(openstudio.Time(0,24,0,0), 1)
 
     # Shade object.
-    id  = "OSut.SHADE"
-    shd = model.getShadeByName(id)
+    ide = "OSut.SHADE"
+    shd = model.getShadeByName(ide)
 
     if shd:
         shd = shd.get()
     else:
         shd = openstudio.model.Shade(model)
-        shd.setName(id)
+        shd.setName(ide)
 
     # Shading control (unique to each call).
-    id  = "OSut.ShadingControl"
+    ide = "OSut.ShadingControl"
     ctl = openstudio.model.ShadingControl(shd)
-    ctl.setName(id)
+    ctl.setName(ide)
     ctl.setSchedule(sch)
     ctl.setShadingControlType("OnIfHighOutdoorAirTempAndHighSolarOnWindow")
     ctl.setSetpoint(18)   # °C
@@ -776,14 +776,14 @@ def genMass(sps=None, ratio=2.0) -> bool:
 
     # A single material.
     mdl = sps[0].model()
-    id  = "OSut.MASS.Material"
-    mat = mdl.getOpaqueMaterialByName(id)
+    ide = "OSut.MASS.Material"
+    mat = mdl.getOpaqueMaterialByName(ide)
 
     if mat:
         mat = mat.get()
     else:
         mat = openstudio.model.StandardOpaqueMaterial(mdl)
-        mat.setName(id)
+        mat.setName(ide)
         mat.setRoughness("MediumRough")
         mat.setThickness(0.15)
         mat.setConductivity(1.12)
@@ -794,26 +794,26 @@ def genMass(sps=None, ratio=2.0) -> bool:
         mat.setVisibleAbsorptance(0.17)
 
     # A single, 1x layered construction.
-    id  = "OSut.MASS.Construction"
-    con = mdl.getConstructionByName(id)
+    ide = "OSut.MASS.Construction"
+    con = mdl.getConstructionByName(ide)
 
     if con:
         con = con.get()
     else:
         con = openstudio.model.Construction(mdl)
-        con.setName(id)
+        con.setName(ide)
         layers = openstudio.model.MaterialVector()
         layers.append(mat)
         con.setLayers(layers)
 
-    id = "OSut.InternalMassDefinition.%.2f" % ratio
-    df = mdl.getInternalMassDefinitionByName(id)
+    ide = "OSut.InternalMassDefinition.%.2f" % ratio
+    df  = mdl.getInternalMassDefinitionByName(ide)
 
     if df:
         df = df.get
     else:
         df = openstudio.model.InternalMassDefinition(mdl)
-        df.setName(id)
+        df.setName(ide)
         df.setConstruction(con)
         df.setSurfaceAreaperSpaceFloorArea(ratio)
 
@@ -1198,11 +1198,11 @@ def insulatingLayer(lc=None) -> dict:
     if not isinstance(lc, cl):
         return oslg.mismatch("lc", lc, cl, mth, CN.DBG, res)
 
-    for m in lc.layers():
-        if m.to_MasslessOpaqueMaterial():
-            m = m.to_MasslessOpaqueMaterial().get()
+    for l in lc.layers():
+        if l.to_MasslessOpaqueMaterial():
+            l = l.to_MasslessOpaqueMaterial().get()
 
-            if m.thermalResistance() < 0.001 or m.thermalResistance() < res["r"]:
+            if l.thermalResistance() < 0.001 or l.thermalResistance() < res["r"]:
                 i += 1
                 continue
             else:
@@ -1210,10 +1210,10 @@ def insulatingLayer(lc=None) -> dict:
                 res["index"] = i
                 res["type" ] = "massless"
 
-        if m.to_StandardOpaqueMaterial():
-            m = m.to_StandardOpaqueMaterial().get()
-            k = m.thermalConductivity()
-            d = m.thickness()
+        if l.to_StandardOpaqueMaterial():
+            l = l.to_StandardOpaqueMaterial().get()
+            k = l.thermalConductivity()
+            d = l.thickness()
 
             if (d < 0.003) or (k > 3.0) or (d / k < res["r"]):
                 i += 1
@@ -2151,7 +2151,7 @@ def arePlenums(set=None):
     # CASE A: it includes the substring "plenum" (case insensitive) in its
     #         spaceType's name, or in the latter's standardsSpaceType string;
     #
-    # CASE B: "isPlenum" == TRUE in an OpenStudio model WITH HVAC airloops; OR
+    # CASE B: "isPlenum" is TRUE in an OpenStudio model WITH HVAC airloops; OR
     #
     # CASE C: its zone holds an 'inactive' thermostat (i.e. can't extract valid
     #         setpoints) in an OpenStudio model with setpoint temperatures.
@@ -2185,7 +2185,7 @@ def arePlenums(set=None):
                 type = type.standardsSpaceType().get().lower()
                 if "plenum" in type: continue
 
-        # CASE B: "isPlenum" == TRUE if airloops.
+        # CASE B: "isPlenum" is TRUE if airloops.
         if hasAirLoopsHVAC(space.model()):
             if space.isPlenum(): continue
 
@@ -2253,18 +2253,18 @@ def setpoints(space=None):
 
     # 2. Check instead OSut's INDIRECTLYCONDITIONED (parent space) link.
     if cnd is None:
-        id = space.additionalProperties().getFeatureAsString(tg2)
+        ide = space.additionalProperties().getFeatureAsString(tg2)
 
-        if id:
-            id  = id.get()
-            dad = space.model().getSpaceByName(id)
+        if ide:
+            ide = ide.get()
+            dad = space.model().getSpaceByName(ide)
 
             if dad:
                 # Now focus on 'parent' space of INDIRECTLYCONDITIONED space.
                 space = dad.get()
                 cnd   = tg2
             else:
-                oslg.log(ERR, "Unknown space %s (%s)" % (id, mth))
+                oslg.log(ERR, "Unknown space %s (%s)" % (ide, mth))
 
     # 3. Fetch space setpoints (if model indeed holds valid setpoints).
     heated = hasHeatingTemperatureSetpoints(space.model())
@@ -2339,7 +2339,7 @@ def isRefrigerated(space=None):
     if not isinstance(space, cl):
         return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
 
-    id = space.nameString()
+    ide = space.nameString()
 
     # 1. First check OSut's REFRIGERATED status.
     status = space.additionalProperties().getFeatureAsString(tg0)
@@ -2347,7 +2347,7 @@ def isRefrigerated(space=None):
     if status:
         status = status.get()
         if isinstance(status, bool): return status
-        oslg.log(ERR, "Unknown %s REFRIGERATED %s (%s)" % (id, status, mth))
+        oslg.log(ERR, "Unknown %s REFRIGERATED %s (%s)" % (ide, status, mth))
 
     # 2. Else, compare design heating/cooling setpoints.
     stps = setpoints(space)
@@ -2413,7 +2413,7 @@ def availabilitySchedule(model=None, avl=""):
 
     # Either fetch availability ScheduleTypeLimits object, or create one.
     for l in model.getScheduleTypeLimitss():
-        id = l.nameString().lower()
+        ide = l.nameString().lower()
 
         if limits: break
         if not l.lowerLimitValue(): continue
@@ -2423,7 +2423,7 @@ def availabilitySchedule(model=None, avl=""):
         if not int(l.upperLimitValue().get()) == 1: continue
         if not l.numericType().get().lower() == "discrete": continue
         if not l.unitType().lower() == "availability": continue
-        if id != "hvac operation scheduletypelimits": continue
+        if ide != "hvac operation scheduletypelimits": continue
 
         limits = l
 
@@ -2617,7 +2617,7 @@ def trueNormal(s=None, r=0):
     return openstudio.Point3d(vx, vy, vz) - openstudio.Point3d(0, 0, 0)
 
 
-def scalar(v=None, m=0) -> openstudio.Vector3d:
+def scalar(v=None, mag=0) -> openstudio.Vector3d:
     """Returns scalar product of an OpenStudio Vector3d.
 
     Args:
@@ -2638,11 +2638,11 @@ def scalar(v=None, m=0) -> openstudio.Vector3d:
         return oslg.mismatch("vector", v, cl, mth, CN.DBG, v0)
 
     try:
-        m = float(m)
+        mag = float(mag)
     except:
-        return oslg.mismatch("scalar", m, float, mth, CN.DBG, v0)
+        return oslg.mismatch("scalar", mag, float, mth, CN.DBG, v0)
 
-    v0 = openstudio.Vector3d(m * v.x(), m * v.y(), m * v.z())
+    v0 = openstudio.Vector3d(mag * v.x(), mag * v.y(), mag * v.z())
 
     return v0
 
@@ -5183,6 +5183,105 @@ def alignedHeight(pts=None, force=False) -> float:
     return max(ys) - min(ys)
 
 
+def spacHeight(space=None) -> float:
+    """Fetch a space's full height.
+
+    Args:
+        space (openstudio.model.Space):
+            An OpenStudio space.
+
+    Returns:
+        (float): Full height of space (0.0 if invalid input).
+
+    """
+    if not isinstance(space, openstudio.model.Space):
+        return 0
+
+    hght =  0
+    minZ =  10000
+    maxZ = -10000
+
+    # The solution considers all surface types: "Floor", "Wall", "RoofCeiling".
+    # No presumption that floor are necessarily at ground level.
+    for surface in space.surfaces():
+        for pts in surface.vertices():
+            zs = [pt.z() for pt in pts]
+
+            minZ = min(minZ, min(zs))
+            maxZ = max(maxZ, max(zs))
+
+    hght = maxZ - minZ
+    if hght < 0: hght = 0
+
+    return maxZ - minZ
+
+
+def spaceWidth(space=None) -> float:
+    """Fetches a space's 'width', i.e. at its narrowest. For instance, an 100m
+    (long) hospital corridor may only have a 'width' of 2.4m. This is a common
+    requirement for LPD calculations (e.g. 90.1, NECB). Not to confuse with
+    vertical wall widths in methods 'width' & 'alignedWidth'.
+
+    Args:
+        space (openstudio.model.Space):
+            An OpenStudio space.
+
+    Returns:
+        (float): Width of space (0.0 if invalid input).
+
+    """
+    if not isinstance(space, openstudio.model.Space):
+        return 0
+
+    floors = facets(space, "all", "Floor")
+    if not floors: return 0
+
+    # Automatically determining a space's "width" is not so straightforward:
+    #   - a space may hold multiple floor surfaces at various Z-axis levels
+    #   - a space may hold multiple floor surfaces, with unique "widths"
+    #   - a floor surface may expand/contract (in "width") along its length.
+    #
+    # First, attempt to merge all floor surfaces together as 1x polygon:
+    #   - select largest floor surface (in area)
+    #   - determine its 3D plane
+    #   - retain only other floor surfaces sharing same 3D plane
+    #   - recover potential union between floor surfaces
+    #   - fall back to largest floor surface if invalid union
+    floors = sorted(floors, key=lambda fl: fl.grossArea(), reverse=True)
+    floor  = floors[0]
+    plane  = floor.plane()
+    t      = openstudio.Transformation.alignFace(floor.vertices())
+    polyg  = list(poly(floor, False, True, True, t, "ulc"))
+
+    if not polyg:
+        oslg.clean()
+        return 0
+
+    polyg.reverse()
+    polyg = p3Dv(polyg)
+
+    if len(floors) > 1:
+        floors = [flr for flr in floors if plane.equal(fl.plane(), 0.001)]
+
+        if len(floors) > 1:
+            polygs = [poly(flr, False, True, True, t, "ulc") for flr in floors]
+            polygs = [plg for plg in polygs if plg]
+
+            for plg in polygs:
+                plg = list(plg)
+                plg.reverse()
+                plg = p3Dv(plg)
+
+            union = openstudio.joinAll(polygs, 0.01)[0]
+            polyg = poly(union, False, True, True)
+
+    box = boundedBox(polyg)
+    oslg.clean()
+
+    # A bounded box's 'height', at its narrowest, is its 'width'.
+    return height(box)
+
+
 def genAnchors(s=None, set=[], tag="box") -> int:
     """Identifies 'leader line anchors', i.e. specific 3D points of a (larger)
     set (e.g. delineating a larger, parent polygon), each anchor linking the
@@ -5207,7 +5306,7 @@ def genAnchors(s=None, set=[], tag="box") -> int:
         s (openstudio.Point3dVector):
             A (larger) parent set of points.
         set (list):
-            A collection of (smaller) sequenced points.
+            A collection of (smaller) sequenced points, to 'anchor'.
         tag (str):
             Selected subset vertices to target.
 
@@ -5217,12 +5316,12 @@ def genAnchors(s=None, set=[], tag="box") -> int:
     """
     mth = "osut.genAnchors"
     n   = 0
-    id  = "%s " % s.nameString() if hasattr(s, "nameString") else ""
+    ide = "%s " % s.nameString() if hasattr(s, "nameString") else ""
     pts = poly(s)
-    ts  = tuple(s)
+    ids = id(s)
 
     if not pts:
-        return oslg.invalid("%s polygon" % id, mth, 1, CN.DBG, n)
+        return oslg.invalid("%s polygon" % ide, mth, 1, CN.DBG, n)
 
     try:
         set = list(set)
@@ -5235,15 +5334,13 @@ def genAnchors(s=None, set=[], tag="box") -> int:
 
     # Validate individual subsets. Purge surface-specific leader line anchors.
     for i, st in enumerate(set):
-        str1 = id + "subset %d" % (i+1)
+        str1 = ide + "subset %d" % (i+1)
         str2 = str1 + " %s" % str(tag)
 
         if not isinstance(st, dict):
             return oslg.mismatch(str1, st, dict, mth, CN.DBG, n)
-
         if tag not in st:
             return oslg.hashkey(str1, st, tag, mth, CN.DBG, n)
-
         if not st[tag]:
             return oslg.empty("%s vertices" % str2, mth, CN.DBG, n)
 
@@ -5251,7 +5348,6 @@ def genAnchors(s=None, set=[], tag="box") -> int:
 
         if not stt:
             return oslg.invalid("%s polygon" % str2, mth, 0, CN.DBG, n)
-
         if not fits(stt, pts, True):
             return oslg.invalid("%s gap % str2", mth, 0, CN.DBG, n)
 
@@ -5264,12 +5360,10 @@ def genAnchors(s=None, set=[], tag="box") -> int:
                 return oslg.hashkey(str1, st, "t0", mth, CN.DBG, n)
 
         if "ld" in st:
-            ld = st["ld"]
-
-            if not isinstance(ld, dict):
+            if not isinstance(st["ld"], dict):
                 return oslg.invalid("%s leaders" % str1, mth, 0, CN.DBG, n)
 
-            ld = dict(ld.items(), key=lambda k: k[0] == ts)
+            st["ld"] = dict(st["ld"].items(), key=lambda k: k[0] != ids)
         else:
             st["ld"] = {}
 
@@ -5300,8 +5394,7 @@ def genAnchors(s=None, set=[], tag="box") -> int:
 
             st[tag] = tpts
         else:
-            if "t" not in st:
-                st["t"] = openstudio.Transformation.alignFace(pts)
+            if "t" not in st: st["t"] = openstudio.Transformation.alignFace(pts)
 
             tpts = st["t"].inverse() * st[tag]
             o    = realignedFace(tpts, True)
@@ -5340,7 +5433,7 @@ def genAnchors(s=None, set=[], tag="box") -> int:
                 if nb != 0: break
                 if st == other: continue
                 if "ld" not in other: continue
-                if ts not in other["ld"]: continue
+                if ids not in other["ld"]: continue
 
                 ost = other[tag]
                 pld = other["ld"][ts]
@@ -5353,8 +5446,7 @@ def genAnchors(s=None, set=[], tag="box") -> int:
                 if holds(sg, tpts[0]): continue
                 if doesLineIntersect(sg, ld): nb += 1
 
-                if (sg[0] - sg[0]).cross(ld[0] - ld[0]).length() < TOL:
-                    nb += 1
+                if (sg[0] - sg[0]).cross(ld[0] - ld[0]).length() < TOL: nb += 1
 
             if nb == 0: candidates.append(pt)
 
@@ -5369,12 +5461,13 @@ def genAnchors(s=None, set=[], tag="box") -> int:
                 if lj < l0:
                     p0 = pt
                     l0 = lj
+
+            st["ld"][ids] = p0
             n += 1
-            st["ld"][s] = p0
         else:
-            str = id + ("set #%d" % (i+1))
-            msg = "%s: unable to anchor %s leader line (%s)" % (str, tag, mth)
-            oslg.log(WRN, msg)
+            str = ide + ("set #%d" % (i+1))
+            m   = "%s: unable to anchor %s leader line (%s)" % (str, tag, mth)
+            oslg.log(WRN, m)
             st["void"] = True
 
     return n
@@ -5404,16 +5497,15 @@ def genExtendedVertices(s=None, set=[], tag="vtx") -> openstudio.Point3dVector:
 
     """
     mth = "osut.genExtendedVertices"
-    id  = "%s " % s.nameString() if hasattr(s, "nameString") else ""
+    ide = "%s " % s.nameString() if hasattr(s, "nameString") else ""
     f   = False
     pts = poly(s)
-    ts  = tuple(s)
+    ids = id(s)
     cl  = openstudio.Point3d
     a   = openstudio.Point3dVector()
     v   = []
 
-    if not pts:
-        return oslg.invalid("%s polygon" % id, mth, 1, CN.DBG, a)
+    if not pts: return oslg.invalid("%s polygon" % ide, mth, 1, CN.DBG, a)
 
     try:
         set = list(set)
@@ -5422,7 +5514,7 @@ def genExtendedVertices(s=None, set=[], tag="vtx") -> openstudio.Point3dVector:
 
     # Validate individual sets.
     for i, st in enumerate(set):
-        str1 = id + "subset %d" % (i+1)
+        str1 = ide + "subset %d" % (i+1)
         str2 = str1 + " %s" % str(tag)
 
         if not isinstance(st, dict):
@@ -5446,14 +5538,14 @@ def genExtendedVertices(s=None, set=[], tag="vtx") -> openstudio.Point3dVector:
 
         ld = st["ld"]
 
-        if not isinstance(ld, dict):
+        if not isinstance(st["ld"], dict):
             return oslg.invalid("%s leaders" % str2, mth, 0, CN.DBG, a)
 
-        if ts not in ld:
-            return oslg.hashkey("%s leader?" % str2, ld, ts, mth, CN.DBG, a)
+        if ids not in st["ld"]:
+            return oslg.hashkey("%s leader?" % str2, st["ld"], ide, mth, CN.DBG, a)
 
-        if not isinstance(ld[ts], cl):
-            return oslg.mismatch("%s point" % str2, ld[ts], cl, mth, CN.DBG, a)
+        if not isinstance(ld[ids], cl):
+            return oslg.mismatch("%s point" % str2, st["ld"][ids], cl, mth, CN.DBG, a)
 
     # Re-sequence polygon vertices.
     for pt in pts:
@@ -5462,13 +5554,280 @@ def genExtendedVertices(s=None, set=[], tag="vtx") -> openstudio.Point3dVector:
         # Loop through each valid set; concatenate circumscribing vertices.
         for st in set:
             if "void" in st and st["void"]: continue
-            if not areSame(st["ld"][ts], pt): continue
+            if not areSame(st["ld"][ids], pt): continue
             if tag not in st: continue
 
             v += list(st[tag])
             v.append(pt)
 
     return p3Dv(v)
+
+
+def genInserts(s=None, set=[]) -> openstudio.Point3dVector:
+    """Generates (1D or 2D) arrays of (smaller) rectangular collection of
+    points (e.g. arrays of polygon inserts) from subset parameters, within a
+    (larger) set (e.g. parent polygon). If successful, each subset inherits
+    additional key:value pairs: namely "vtx" (collection of circumscribing
+    vertices), and "vts" (collection of individual insert vertices). Valid
+    leader line anchors (set key "ld") need to be generated prior to calling
+    the solution - see 'genAnchors'.
+
+    Args:
+        s (openstudio.Point3dVector):
+            A (larger) parent set of points.
+        set (list):
+            A collection of (smaller) sequenced points (dictionnaries). Each
+            collection shall/may hold the following key:value pairs.
+            - "box" (openstudio.Point3dVector): bounding box of each subset
+            - "ld" (dict): a collection of leader line anchors
+            - "rows" (int): number of rows of inserts
+            - "cols" (int): number of columns of inserts
+            - "w0" (float): width of individual inserts (wrt cols) min 0.4
+            - "d0" (float): depth of individual inserts (wrt rows) min 0.4
+            - "dX" (float): optional left/right X-axis buffer
+            - "dY" (float): optional top/bottom Y-axis buffer
+
+    Returns:
+        openstudio.Point3dVector: New polygon vertices (see logs if empty).
+
+    """
+    mth = "osut.genInserts"
+    ide = "%s:" % s.nameString() if hasattr(s, "nameString") else ""
+    pts = poly(s)
+    cl  = openstudio.Point3d
+    a   = openstudio.Point3dVector()
+    if not pts: return a
+
+    try:
+        set = list(set)
+    except:
+        return oslg.mismatch("set", set, list, mth, CN.DBG, a)
+
+    gap  = 0.1
+    gap4 = 0.4 # minimum insert width/depth
+
+    # Validate/reset individual set collections.
+    for i, st in enumerate(set):
+        str1 = ide + "subset #%d" % (i+1)
+        if "void" in st and st["void"]: continue
+
+        if not isinstance(st, dict):
+            return oslg.mismatch(str1, st, dict, mth, CN.DBG, a)
+        if "box" not in st:
+            return oslg.hashkey(str1, st, "box", mth, CN.DBG, a)
+        if "ld" not in st:
+            return oslg.hashkey(str1, st, "ld", mth, CN.DBG, a)
+        if "out" not in st:
+            return oslg.hashkey(str1, st, "out", mth, CN.DBG, a)
+
+        str2 = str1 + " anchor"
+        ld = st["ld"]
+
+        if not isinstance(ld, dict):
+            return oslg.mismatch(str2, "ld", dict, mth, CN.DBG, a)
+        if id(s) not in ld:
+            return oslg.hashkey(str2, ld, s, mth, CN.DBG, a)
+        if not isinstance(ld[id(s)], cl):
+            return oslg.mismatch(str2, ld[id(s)], cl, mth, CN.DBG, a)
+
+        # Ensure each set bounding box is safely within larger polygon
+        # boundaries.
+        # @todo: In line with related addSkylights' @todo, expand solution to
+        #        safely handle 'side' cutouts (i.e. no need for leader lines).
+        #        In so doing, boxes could eventually align along surface edges.
+        str3 = str1 + " box"
+        bx = poly(st["box"])
+
+        if not bx:
+            return invalid(str3, mth, 0, CN.DBG, a)
+        if not isRectangular(bx):
+            return oslg.invalid("%s rectangle" % str3, mth, 0, CN.DBG, a)
+        if not fits(bx, pts, True):
+            return invalid("%s box" % str3, mth, 0, CN.DBG, a)
+
+        if "rows" in st:
+            try:
+                st["rows"] = int(st["rows"])
+            except:
+                return oslg.invalid("%s rows" % ide, mth, 0, CN.DBG, a)
+
+            if st["rows"] < 1:
+                return oslg.zero("%s rows" % ide, mth, CN.DBG, a)
+        else:
+            st["rows"] = 1
+
+        if "cols" in st:
+            try:
+                st["cols"] = int(st["cols"])
+            except:
+                return oslg.invalid("%s cols" % ide, mth, 0, CN.DBG, a)
+
+            if st["cols"] < 1:
+                return oslg.zero( "%s cols" % ide, mth, CN.DBG, a)
+        else:
+            st["cols"] = 1
+
+        if "w0" in st:
+            try:
+                st["w0"] = float(st["w0"])
+            except:
+                return oslg.invalid("%s width" % ide, mth, 0, CN.DBG, a)
+
+            if round(st["w0"], 2) < gap4:
+                return oslg.zero("%s width" % ide, mth, CN.DBG, a)
+        else:
+            st["w0"] = 1.4
+
+        if "d0" in st:
+            try:
+                st["d0"] = float(st["d0"])
+            except:
+                return oslg.invalid("%s depth" % ide, mth, 0, CN.DBG, a)
+
+            if round(st["d0"], 2) < gap4:
+                return oslg.zero("%s depth" % ide, mth, CN.DBG, a)
+        else:
+            st["d0"] = 1.4
+
+        if "dX" in st:
+            try:
+                st["dX"] = float(st["dX"])
+            except:
+                return oslg.invalid("%s dX" % ide, mth, 0, CN.DBG, a)
+        else:
+            st["dX"] = None
+
+        if "dY" in st:
+            try:
+                st["dY"] = float(st["dY"])
+            except:
+                return oslg.invalid("%s dY" % ide, mth, 0, CN.DBG, a)
+        else:
+            st["dY"] = None
+
+    # Flag conflicts between set bounding boxes. @todo: ease up for ridges.
+    for i, st in enumerate(set):
+        bx = st["box"]
+        if "void" in st and st["void"]: continue
+
+        for j, other in enumerate(set):
+            if i == j: continue
+            bx2  = other["box"]
+
+            if overlapping(bx, bx2):
+                str4 = ide + "set boxes #%d:#%d" % (i+1, j+1)
+                return oslg.invalid("%s (overlapping)" % str4, mth, 0, CN.DBG, a)
+
+
+    t = openstudio.Transformation.alignFace(pts)
+    rpts = t.inverse() * pts
+
+    # Loop through each 'valid' subset (i.e. linking a valid leader line
+    # anchor), generate subset vertex array based on user-provided specs.
+    for i, st in enumerate(set):
+        str5 = ide + "subset #%d" % (i+1)
+        if "void" in st and st["void"]: continue
+
+        o    = st["out"]
+        vts  = {} # collection of individual (named) polygon insert vertices
+        vtx  = [] # sequence of circumscribing polygon vertices
+        bx   = o["set"]
+        w    = width(bx)  # overall sandbox width
+        d    = height(bx) # overall sandbox depth
+        dX   = st["dX"  ]  # left/right buffer (array vs bx)
+        dY   = st["dY"  ]  # top/bottom buffer (array vs bx)
+        cols = st["cols"]  # number of array columns
+        rows = st["rows"]  # number of array rows
+        x    = st["w0"  ]  # width of individual insert
+        y    = st["d0"  ]  # depth of individual insert
+        gX   = 0          # gap between insert columns
+        gY   = 0          # gap between insert rows
+
+        # Gap between insert columns.
+        if cols > 1:
+            if not dX: dX = ((w - cols * x) / cols) / 2
+            gX = (w - 2 * dX - cols * x) / (cols - 1)
+            if round(gX, 2) < gap: gX = gap
+            dX = (w - cols * x - (cols - 1) * gX) / 2
+        else:
+            dX = (w - x) / 2
+
+        if round(dX, 2) < 0:
+            oslg.log(CN.ERR, "Skipping %s: Negative dX (%s)" % (str5, mth))
+            continue
+
+        # Gap between insert rows.
+        if rows > 1:
+            if not dY: dY = ((d - rows * y) / rows) / 2
+            gY = (d - 2 * dY - rows * y) / (rows - 1)
+            if round(gY, 2) < gap: gY = gap
+            dY = (d - rows * y - (rows - 1) * gY) / 2
+        else:
+            dY = (d - y) / 2
+
+        if round(dY, 2) < 0:
+            oslg.log(CN.ERR, "Skipping %s: Negative dY (%s)" % (str5, mth))
+            continue
+
+        st["dX"] = dX
+        st["gX"] = gX
+        st["dY"] = dY
+        st["gY"] = gY
+
+        x0 = min([pt.x() for pt in bx]) + dX # X-axis starting point
+        y0 = min([pt.y() for pt in bx]) + dY # X-axis starting point
+        xC = x0 # current X-axis position
+        yC = y0 # current Y-axis position
+
+        # BLC of array.
+        vtx.append(openstudio.Point3d(xC, yC, 0))
+
+        # Move up incrementally along left side of sandbox.
+        for iY in range(rows):
+            if iY != 0:
+                yC += gY
+                vtx.append(openstudio.Point3d(xC, yC, 0))
+
+            yC += y
+            vtx.append(openstudio.Point3d(xC, yC, 0))
+
+        # Loop through each row: left-to-right, then right-to-left.
+        for iY in range(rows):
+            for iX in range(cols - 1):
+                xC += x
+                vtx.append(openstudio.Point3d(xC, yC, 0))
+
+                xC += gX
+                vtx.append(openstudio.Point3d(xC, yC, 0))
+
+        # Generate individual polygon inserts, left-to-right.
+        for iX in range(cols):
+            nom  = "%d:%d:%d" % (i, iX, iY)
+            vec  = []
+            vec.append(openstudio.Point3d(xC    , yC    , 0))
+            vec.append(openstudio.Point3d(xC    , yC - y, 0))
+            vec.append(openstudio.Point3d(xC + x, yC - y, 0))
+            vec.append(openstudio.Point3d(xC + x, yC    , 0))
+
+            # Store.
+            vts[nom] = p3Dv(t * ulc(o["r"] * (o["t"] * vec)))
+
+            # Add reverse vertices, circumscribing each insert.
+            vec.reverse()
+            if iX == cols - 1: vec.pop
+
+            vtx += vec
+            if iX != cols - 1: xC -= gX + x
+
+            if iY != rows - 1:
+                yC -= gY + y
+                vtx.append(openstudio.Point3d(xC, yC, 0))
+
+        st["vts"] = vts
+        st["vtx"] = p3Dv(t * (o["r"] * (o["t"] * vtx)))
+
+    # Extended vertex sequence of the larger polygon.
+    genExtendedVertices(s, set)
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
@@ -5607,15 +5966,15 @@ def genSlab(pltz=[], z=0) -> openstudio.Point3dVector:
         return oslg.mismatch("Z", z, float, mth, CN.DBG, slb)
 
     for i, plt in enumerate(pltz):
-        id = "plate # %d (index %d)" % (i+1, i)
+        ide = "plate # %d (index %d)" % (i+1, i)
 
         if not isinstance(plt, dict):
-            return oslg.mismatch(id, plt, dict, mth, CN.DBG, slb)
+            return oslg.mismatch(ide, plt, dict, mth, CN.DBG, slb)
 
-        if "x"  not in plt: return oslg.hashkey(id, plt,  "x", mth, CN.DBG, slb)
-        if "y"  not in plt: return oslg.hashkey(id, plt,  "y", mth, CN.DBG, slb)
-        if "dx" not in plt: return oslg.hashkey(id, plt, "dx", mth, CN.DBG, slb)
-        if "dy" not in plt: return oslg.hashkey(id, plt, "dy", mth, CN.DBG, slb)
+        if "x"  not in plt: return oslg.hashkey(ide, plt,  "x", mth, CN.DBG, slb)
+        if "y"  not in plt: return oslg.hashkey(ide, plt,  "y", mth, CN.DBG, slb)
+        if "dx" not in plt: return oslg.hashkey(ide, plt, "dx", mth, CN.DBG, slb)
+        if "dy" not in plt: return oslg.hashkey(ide, plt, "dy", mth, CN.DBG, slb)
 
         x  = plt["x" ]
         y  = plt["y" ]
@@ -5625,29 +5984,29 @@ def genSlab(pltz=[], z=0) -> openstudio.Point3dVector:
         try:
             x = float(x)
         except:
-            oslg.mismatch("%s X" % id, x, float, mth, CN.DBG, slb)
+            oslg.mismatch("%s X" % ide, x, float, mth, CN.DBG, slb)
 
         try:
             y = float(y)
         except:
-            oslg.mismatch("%s Y" % id, y, float, mth, CN.DBG, slb)
+            oslg.mismatch("%s Y" % ide, y, float, mth, CN.DBG, slb)
 
         try:
             dx = float(dx)
         except:
-            oslg.mismatch("%s dX" % id, dx, float, mth, CN.DBG, slb)
+            oslg.mismatch("%s dX" % ide, dx, float, mth, CN.DBG, slb)
 
         try:
             dy = float(dy)
         except:
-            oslg.mismatch("%s dY" % id, dy, float, mth, CN.DBG, slb)
+            oslg.mismatch("%s dY" % ide, dy, float, mth, CN.DBG, slb)
 
-        if abs(dx) < CN.TOL: return oslg.zero("%s dX" % id, mth, CN.ERR, slb)
-        if abs(dy) < CN.TOL: return oslg.zero("%s dY" % id, mth, CN.ERR, slb)
+        if abs(dx) < CN.TOL: return oslg.zero("%s dX" % ide, mth, CN.ERR, slb)
+        if abs(dy) < CN.TOL: return oslg.zero("%s dY" % ide, mth, CN.ERR, slb)
 
     # Join plates.
     for i, plt in enumerate(pltz):
-        id = "plate # %d (index %d)" % (i+1, i)
+        ide = "plate # %d (index %d)" % (i+1, i)
 
         x  = plt["x" ]
         y  = plt["y" ]
@@ -5674,7 +6033,7 @@ def genSlab(pltz=[], z=0) -> openstudio.Point3dVector:
             if slab:
                 slb  = slab.get()
             else:
-                return oslg.invalid(id, mth, 0, CN.ERR, bkp)
+                return oslg.invalid(ide, mth, 0, CN.ERR, bkp)
         else:
             slb = vtx
 
@@ -5705,9 +6064,10 @@ def roofs(spaces = []) -> list:
         list of openstudio.model.Surface instances: roofs (may be empty).
 
     """
-    mth    = "osut.getRoofs"
-    up     = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
-    roofs  = []
+    mth  = "osut.getRoofs"
+    up   = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
+    rufs = []
+
     if isinstance(spaces, openstudio.model.Space): spaces = [spaces]
 
     try:
@@ -5718,8 +6078,8 @@ def roofs(spaces = []) -> list:
     spaces = [s for s in spaces if isinstance(s, openstudio.model.Space)]
 
     # Space-specific outdoor-facing roof surfaces.
-    roofs = facets(spaces, "Outdoors", "RoofCeiling")
-    roofs = [roof for roof in roofs if isRoof(roof)]
+    rufs = facets(spaces, "Outdoors", "RoofCeiling")
+    rufs = [roof for roof in rufs if isRoof(roof)]
 
     for space in spaces:
         # When unoccupied spaces are involved (e.g. plenums, attics), the
@@ -5755,12 +6115,12 @@ def roofs(spaces = []) -> list:
                 cst = cast(cv0, rvi, up)
                 if not overlapping(cst, rvi, False): continue
 
-                if ruf not in roofs: roofs.append(ruf)
+                if ruf not in rufs: rufs.append(ruf)
 
-    return roofs
+    return rufs
 
 
-def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005):
+def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005) -> bool:
     """Adds sub surface(s) (e.g. windows, doors, skylights) to a surface.
 
     Args:
@@ -5947,12 +6307,12 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
         if sub["count"     ] < 1: sub["count"     ] = 1
         if sub["multiplier"] < 1: sub["multiplier"] = 1
 
-        id = sub["id"]
+        ide = sub["id"]
 
         # If sub surface type is invalid, log/reset. Additional corrections may
         # be enabled once a sub surface is actually instantiated.
         if sub["type"] not in types:
-            m = "Reset invalid '%s' type to '%s' (%s)" % (id, type, mth)
+            m = "Reset invalid '%s' type to '%s' (%s)" % (ide, type, mth)
             oslg.log(CN.WRN, m)
             sub["type"] = type
 
@@ -5971,10 +6331,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                     sub["frame"] = None
 
                 if sub["frame"] is None:
-                    m = "Skip '%s' FrameDivider (%s)" % (id, mth)
+                    m = "Skip '%s' FrameDivider (%s)" % (ide, mth)
                     oslg.log(CN.WRN, m)
             else:
-                m = "Skip '%s' invalid FrameDivider object (%s)" % (id, mth)
+                m = "Skip '%s' invalid FrameDivider object (%s)" % (ide, mth)
                 oslg.log(CN.WRN, m)
                 sub["frame"] = None
 
@@ -5984,7 +6344,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
         # activated once a sub surface is actually instantiated.
         if sub["assembly"]:
             if not isinstance(sub["assembly"], cl3):
-                m = "Skip invalid '%s' construction (%s)" % (id, mth)
+                m = "Skip invalid '%s' construction (%s)" % (ide, mth)
                 oslg.log(WRN, m)
                 sub["assembly"] = None
 
@@ -6024,7 +6384,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
         #   - Frame & Divider "width"
         #   - minimum "clear glazing" limits
         #   - buffers, etc.
-        id         = sub["id"]
+        ide        = sub["id"]
         frame      = sub["frame"].frameWidth() if sub["frame"] else 0
         frames     = 2 * frame
         buffer     = frame + bfr
@@ -6056,10 +6416,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if (sub["height"] < glass - CN.TOL2 or
                 sub["height"] > max_height + CN.TOL2):
 
-                m = "Reset '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                m = "Reset '%s' height %.3fm (%s)" % (ide, sub["height"], mth)
                 oslg.log(CN.WRN, m)
                 sub["height"] = numpy.clip(sub["height"], glass, max_height)
-                m = "Height '%s' reset to %.3fm (%s)" % (id, sub["height"], mth)
+                m = "Height '%s' reset to %.3fm (%s)" % (ide, sub["height"], mth)
                 oslg.log(CN.WRN, m)
 
         # Log/reset "head" height if beyond min/max.
@@ -6067,10 +6427,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if (sub["head"] < min_head - CN.TOL2 or
                 sub["head"] > max_head + CN.TOL2):
 
-                m = "Reset '%s' head %.3fm (%s)" % (id, sub["head"], mth)
+                m = "Reset '%s' head %.3fm (%s)" % (ide, sub["head"], mth)
                 oslg.log(CN.WRN, m)
                 sub["head"] = numpy.clip(sub["head"], min_head, max_head)
-                m = "Head '%s' reset to %.3fm (%s)" % (id, sub["head"], mth)
+                m = "Head '%s' reset to %.3fm (%s)" % (ide, sub["head"], mth)
                 oslg.log(CN.WRN, m)
 
         # Log/reset "sill" height if beyond min/max.
@@ -6078,10 +6438,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if (sub["sill"] < min_sill - CN.TOL2 or
                 sub["sill"] > max_sill + CN.TOL2):
 
-                m = "Reset '%s' sill %.3fm (%s)" % (id, sub["sill"], mth)
+                m = "Reset '%s' sill %.3fm (%s)" % (ide, sub["sill"], mth)
                 oslg.log(CN.WRN, m)
                 sub["sill"] = numpy.clip(sub["sill"], min_sill, max_sill)
-                m = "Sill '%s reset to %.3fm (%s)" % (id, sub["sill"], mth)
+                m = "Sill '%s reset to %.3fm (%s)" % (ide, sub["sill"], mth)
                 oslg.log(CN.WRN, m)
 
         # At this point, "head", "sill" and/or "height" have been tentatively
@@ -6098,14 +6458,14 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 if "height" in sub: sub["height"] = 0
                 if "width" in sub: sub["width"  ] = 0
 
-                m = "Skip: invalid '%s' head/sill combo (%s)" % (id, mth)
+                m = "Skip: invalid '%s' head/sill combo (%s)" % (ide, mth)
                 oslg.log(CN.ERR, m)
                 continue
             else:
-                m = "Reset '%s' sill %.3fm (%s)" % (id, sub["sill"], mth)
+                m = "Reset '%s' sill %.3fm (%s)" % (ide, sub["sill"], mth)
                 oslg.log(CN.WRN, m)
                 sub["sill"] = sill
-                m = "Sill '%s' reset to %.3fm (%s)" % (id, sub["sill"], mth)
+                m = "Sill '%s' reset to %.3fm (%s)" % (ide, sub["sill"], mth)
                 oslg.log(CN.WRN, m)
 
         # Attempt to reconcile "head", "sill" and/or "height". If successful,
@@ -6114,8 +6474,8 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             hght = sub["head"] - sub["sill"]
 
             if "height" in sub and abs(sub["height"] - hght) > CN.TOL2:
-                m1 = "Reset '%s' height %.3fm (%s)" % (id, sub["height"], mth)
-                m2 = "Height '%s' reset %.3fm (%s)" % (id, hght, mth)
+                m1 = "Reset '%s' height %.3fm (%s)" % (ide, sub["height"], mth)
+                m2 = "Height '%s' reset %.3fm (%s)" % (ide, hght, mth)
                 oslg.log(CN.WRN, m1)
                 oslg.log(CN.WRN, m2)
 
@@ -6137,15 +6497,15 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                         if "height" in sub: sub["height"] = 0
                         if "width"  in sub: sub["width" ] = 0
 
-                        m = "Skip: invalid '%s' head/height combo (%s)" % (id, mth)
+                        m = "Skip: invalid '%s' head/height combo (%s)" % (ide, mth)
                         oslg.log(CN.ERR, m)
                         continue
                     else:
-                        m = "Reset '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                        m = "Reset '%s' height %.3fm (%s)" % (ide, sub["height"], mth)
                         oslg.log(CN.WRN, m)
                         sub["sill"  ] = sill
                         sub["height"] = hght
-                        m = "Height '%s' re(set) %.3fm (%s)" % (id, sub["height"], mth)
+                        m = "Height '%s' re(set) %.3fm (%s)" % (ide, sub["height"], mth)
                         oslg.log(CN.WRN, m)
                 else:
                     sub["sill"] = sill
@@ -6169,15 +6529,15 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                         if "height" in sub: sub["height"] = 0
                         if "width"  in sub: sub["width" ] = 0
 
-                        m = "Skip: invalid '%s' sill/height combo (%s)" % (id, mth)
+                        m = "Skip: invalid '%s' sill/height combo (%s)" % (ide, mth)
                         oslg.log(CN.ERR, m)
                         continue
                     else:
-                        m = "Reset '%s' height %.3fm (%s)" % (id, sub["height"], mth)
+                        m = "Reset '%s' height %.3fm (%s)" % (ide, sub["height"], mth)
                         oslg.log(CN.WRN, m)
                         sub["head"  ] = head
                         sub["height"] = hght
-                        m = "Height '%s' reset to %.3fm (%s)" % (id, sub["height"], mth)
+                        m = "Height '%s' reset to %.3fm (%s)" % (ide, sub["height"], mth)
                         oslg.log(CN.WRN, m)
                 else:
                     sub["head"] = head
@@ -6206,10 +6566,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             if (sub["width"] < glass - CN.TOL2 or
                 sub["width"] > max_width + CN.TOL2):
 
-                m = "Reset '%s' width %.3fm (%s)" % (id, sub["width"], mth)
+                m = "Reset '%s' width %.3fm (%s)" % (ide, sub["width"], mth)
                 oslg.log(CN.WRN, m)
                 sub["width"] = numpy.clip(sub["width"], glass, max_width)
-                m = "Width '%s' reset to %.3fm ()%s)" % (id, sub["width"], mth)
+                m = "Width '%s' reset to %.3fm ()%s)" % (ide, sub["width"], mth)
                 oslg.log(CN.WRN, m)
 
         # Log/reset "count" if < 1 (or not an Integer)
@@ -6220,24 +6580,24 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
         if sub["count"] < 1:
             sub["count"] = 1
-            oslg.log(CN.WRN, "Reset '%s' count to min 1 (%s)" % (id, mth))
+            oslg.log(CN.WRN, "Reset '%s' count to min 1 (%s)" % (ide, mth))
 
         # Log/reset if left-sided buffer under min jamb position.
         if "l_buffer" in sub:
             if sub["l_buffer"] < min_ljamb - CN.TOL:
-                m = "Reset '%s' left buffer %.3fm (%s)" % (id, sub["l_buffer"], mth)
+                m = "Reset '%s' left buffer %.3fm (%s)" % (ide, sub["l_buffer"], mth)
                 oslg.log(WRN, m)
                 sub["l_buffer"] = min_ljamb
-                m = "Left buffer '%s' reset to %.3fm (%s)" % (id, sub["l_buffer"], mth)
+                m = "Left buffer '%s' reset to %.3fm (%s)" % (ide, sub["l_buffer"], mth)
                 oslg.log(WRN, m)
 
         # Log/reset if right-sided buffer beyond max jamb position.
         if "r_buffer" in sub:
             if sub["r_buffer"] > max_rjamb - CN.TOL:
-                m = "Reset '%s' right buffer %.3fm (%s)" % (id, sub["r_buffer"], mth)
+                m = "Reset '%s' right buffer %.3fm (%s)" % (ide, sub["r_buffer"], mth)
                 oslg.log(CN.WRN, m)
                 sub["r_buffer"] = min_rjamb
-                m = "Right buffer '%s' reset to %.3fm (%s)" % (id, sub["r_buffer"], mth)
+                m = "Right buffer '%s' reset to %.3fm (%s)" % (ide, sub["r_buffer"], mth)
                 oslg.log(CN.WRN, m)
 
         centre  = mid_x
@@ -6283,7 +6643,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
             if "l_buffer" in sub:
                 if "centreline" in sub:
-                    m = "Skip '%s' left buffer (vs centreline) (%s)" % (id, mth)
+                    m = "Skip '%s' left buffer (vs centreline) (%s)" % (ide, mth)
                     oslg.log(CN.WRN, m)
                 else:
                     x0     = sub["l_buffer"] - frame
@@ -6291,7 +6651,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                     centre = x0 + w/2
             elif "r_buffer" in sub:
                 if "centreline" in sub:
-                    m = "Skip '%s' right buffer (vs centreline) (%s)" % (id, mth)
+                    m = "Skip '%s' right buffer (vs centreline) (%s)" % (ide, mth)
                     oslg.log(CN.WRN, m)
                 else:
                     xf     = max_x - sub["r_buffer"] + frame
@@ -6307,15 +6667,15 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 if "height" in sub: sub["height"] = 0
                 if "width"  in sub: sub["width" ] = 0
 
-                m = "Skip '%s': invalid (ratio) width/centreline (%s)" % (id, mth)
+                m = "Skip '%s': invalid (ratio) width/centreline (%s)" % (ide, mth)
                 oslg.log(CN.ERR, m)
                 continue
 
             if "width" in sub and abs(sub["width"] - wdth) > CN.TOL:
-                m = "Reset '%s' width (ratio) %.3fm (%s)" % (id, sub["width"], mth)
+                m = "Reset '%s' width (ratio) %.3fm (%s)" % (ide, sub["width"], mth)
                 oslg.log(CN.WRN, m)
                 sub["width"] = wdth
-                m = "Width (ratio) '%s' reset to %.3fm (%s)" % (id, sub["width"], mth)
+                m = "Width (ratio) '%s' reset to %.3fm (%s)" % (ide, sub["width"], mth)
                 oslg.log(CN.WRN, m)
 
             if "width" not in sub: sub["width"] = wdth
@@ -6329,7 +6689,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 if "height" in sub: sub["height"] = 0
                 if "width"  in sub: sub["width" ] = 0
 
-                oslg.log(CN.ERR, "Skip: missing '%s' width (%s})" % (id, mth))
+                oslg.log(CN.ERR, "Skip: missing '%s' width (%s})" % (ide, mth))
                 continue
 
             wdth = sub["width"] + frames
@@ -6341,10 +6701,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
             offst = gap + wdth
 
             if "offset" in sub and abs(offst - sub["offset"]) > CN.TOL:
-                m = "Reset '%s' sub offset %.3fm (%s)" % (id, sub["offset"], mth)
+                m = "Reset '%s' sub offset %.3fm (%s)" % (ide, sub["offset"], mth)
                 oslg.log(CN.WRN, m)
                 sub["offset"] = offst
-                m = "Sub offset (%s) reset to %.3fm (%s)" % (id, sub["offset"], mth)
+                m = "Sub offset (%s) reset to %.3fm (%s)" % (ide, sub["offset"], mth)
                 oslg.log(CN.WRN, m)
 
             if "offset" not in sub: sub["offset"] = offst
@@ -6356,7 +6716,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
             if "l_buffer" in sub:
                 if "centreline" in sub:
-                    m = "Skip '%s' left buffer (vs centreline) (%s)" % (id, mth)
+                    m = "Skip '%s' left buffer (vs centreline) (%s)" % (ide, mth)
                     oslg.log(CN.WRN, m)
                 else:
                     x0     = sub["l_buffer"] - frame
@@ -6364,7 +6724,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                     centre = x0 + w/2
             elif "r_buffer" in sub:
                 if "centreline" in sub:
-                    m = "Skip '%s' right buffer (vs centreline) (%s)" % (id, mth)
+                    m = "Skip '%s' right buffer (vs centreline) (%s)" % (ide, mth)
                     oslg.log(WRN, m)
                 else:
                     xf     = max_x - sub["r_buffer"] + frame
@@ -6387,7 +6747,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
         # Generate sub(s).
         for i in range(sub["count"]):
-            name = "%s:%d" % (id, i)
+            name = "%s:%d" % (ide, i)
             fr   = sub["frame"].frameWidth() if sub["frame"] else 0
             vec  = openstudio.Point3dVector()
             vec.append(openstudio.Point3d(pos,              sub["head"], 0))
@@ -6486,11 +6846,11 @@ def grossRoofArea(spaces=[]) -> float:
     # Start with roof surfaces of occupied, conditioned spaces.
     for space in spaces:
         for roof in facets(space, "Outdoors", "RoofCeiling"):
-            id = roof.nameString()
-            if id in rfs: continue
+            ide = roof.nameString()
+            if ide in rfs: continue
             if not isRoof(roof): continue
 
-            rfs[id] = dict(m2=roof.grossArea(), m=space.multiplier())
+            rfs[ide] = dict(m2=roof.grossArea(), m=space.multiplier())
 
     # Roof surfaces of unoccupied, conditioned spaces above (e.g. plenums)?
     for space in spaces:
@@ -6506,11 +6866,11 @@ def grossRoofArea(spaces=[]) -> float:
             if isUnconditioned(other): continue
 
             for roof in facets(other, "Outdoors", "RoofCeiling"):
-                id = roof.nameString()
-                if id in rfs: continue
+                ide = roof.nameString()
+                if ide in rfs: continue
                 if not isRoof(roof): continue
 
-                rfs[id] = dict(m2=roof.grossArea(), m=other.multiplier())
+                rfs[ide] = dict(m2=roof.grossArea(), m=other.multiplier())
 
     # Roof surfaces of unoccupied, unconditioned spaces above (e.g. attics)?
     # @todo: recursive call for stacked spaces as atria (via AirBoundaries).
@@ -6541,7 +6901,7 @@ def grossRoofArea(spaces=[]) -> float:
             ti = ti["t"]
 
             for roof in facets(other, "Outdoors", "RoofCeiling"):
-                id = roof.nameString()
+                ide = roof.nameString()
                 if not isRoof(roof): continue
 
                 rvi  = ti * roof.vertices()
@@ -6561,9 +6921,9 @@ def grossRoofArea(spaces=[]) -> float:
 
                 m2 = m2.get()
                 if m2 < CN.TOL2: continue
-                if id not in rfs: rfs[id] = dict(m2=0, m=other.multiplier())
+                if ide not in rfs: rfs[ide] = dict(m2=0, m=other.multiplier())
 
-                rfs[id]["m2"] += m2
+                rfs[ide]["m2"] += m2
 
     for rf in rfs.values():
         rm2 += rf["m2"] * rf["m"]
@@ -6571,13 +6931,13 @@ def grossRoofArea(spaces=[]) -> float:
     return rm2
 
 
-def getHorizontalRidges(roofs=[]) -> list:
+def getHorizontalRidges(rufs=[]) -> list:
     """Identifies horizontal ridges along 2x sloped 'roof' surfaces (same
     space) - see 'isRoof'. Harmonized with OpenStudio's "alignZPrime" - see
     'isSloped'.
 
     Args:
-        roofs (list):
+        rufs (list):
             A set of 'roof' openstudio.model.Surface instances.
 
     Returns:
@@ -6591,15 +6951,15 @@ def getHorizontalRidges(roofs=[]) -> list:
     ridges = []
 
     try:
-        roofs = list(roofs)
+        rufs = list(rufs)
     except:
         return ridges
 
-    roofs = [s for s in roofs if isinstance(s, openstudio.model.Surface)]
-    roofs = [s for s in roofs if isSloped(s)]
-    roofs = [s for s in roofs if isRoof(s)]
+    rufs = [s for s in rufs if isinstance(s, openstudio.model.Surface)]
+    rufs = [s for s in rufs if isSloped(s)]
+    rufs = [s for s in rufs if isRoof(s)]
 
-    for roof in roofs:
+    for roof in rufs:
         if not roof.space(): continue
 
         space = roof.space().get()
@@ -6628,7 +6988,7 @@ def getHorizontalRidges(roofs=[]) -> list:
             # Links another roof (same space)?
             match = False
 
-            for ruf in roofs:
+            for ruf in rufs:
                 if match: break
                 if ruf == roof: continue
                 if not ruf.space(): continue
@@ -6710,10 +7070,10 @@ def toToplit(spaces=[], opts={}) -> list:
     spaces = [s for s in spaces if isinstance(s, openstudio.model.Space)]
     spaces = [s for s in spaces if s.partofTotalFloorArea()]
     spaces = [s for s in spaces if not isUnconditioned(s)]
-    spaces = [s for s in spaces if not isVestibule(s)]
+    spaces = [s for s in spaces if not areVestibules(s)]
     spaces = [s for s in spaces if roofs(s)]
     spaces = [s for s in spaces if s.floorArea() < 4 * w2]
-    spaces = sorted(spaces, key=floorArea(), reverse=True)
+    spaces = sorted(spaces, key=lambda s: s.floorArea(), reverse=True)
     if not spaces: return oslg.empty("spaces", mth, CN.WRN, [])
 
     # Unfenestrated spaces have no windows, glazed doors or skylights. By
@@ -6730,7 +7090,7 @@ def toToplit(spaces=[], opts={}) -> list:
     afm2 = fm2 / len(spaces)
 
     unfen = [s for s in spaces if not isDaylit(s)]
-    unfen = sorted(unfen, key=floorArea(), reverse=True)
+    unfen = sorted(unfen, key=lambda s: s.floorArea(), reverse=True)
 
     # Target larger unfenestrated spaces, if sufficient in area.
     if unfen:
@@ -6752,19 +7112,19 @@ def toToplit(spaces=[], opts={}) -> list:
 
     # Gather roof surfaces - possibly those of attics or plenums above.
     for s in spaces:
-        id = s.nameString()
+        ide = s.nameString()
         m2 = s.floorArea()
 
         for rf in roofs(s):
-            if id not in espaces: espaces[id] = dict(m2=m2, roofs=[])
-            if rf not in espaces[id]["roofs"]: espaces[id]["roofs"].append(rf)
+            if ide not in espaces: espaces[ide] = dict(m2=m2, roofs=[])
+            if rf not in espaces[ide]["roofs"]: espaces[ide]["roofs"].append(rf)
 
     # Priortize larger spaces.
     espaces = dict(sorted(espaces.items(), key=lambda s: s[1]["m2"], reverse=True))
 
     # Prioritize larger roof surfaces.
     for s in espaces.values():
-        s["roofs"] = sorted(s["roofs"], key=grossArea(), reverse=True)
+        s["roofs"] = sorted(s["roofs"], key=lambda s: s.grossArea(), reverse=True)
 
     # Single out largest roof in largest space, key when dealing with shared
     # attics or plenum roofs.
@@ -6772,7 +7132,7 @@ def toToplit(spaces=[], opts={}) -> list:
         rfs = [ruf for ruf in s["roofs"] if ruf not in toits]
         if not rfs: continue
 
-        rfs = sorted(rfs, key=grossArea(), reverse=True)
+        rfs = sorted(rfs, key=lambda ruf: ruf.grossArea(), reverse=True)
 
         toits.append(rfs[0])
         rooms.append(s)
@@ -6780,6 +7140,1550 @@ def toToplit(spaces=[], opts={}) -> list:
     if not rooms: oslg.log(CN.INF, "No ideal toplit candidates (%s)" % mth)
 
     return rooms
+
+
+def addSkyLights(spaces=[], opts=dict) -> float:
+    """Adds skylights to toplight selected OpenStudio (occupied, conditioned)
+    spaces, based on requested skylight area, or a skylight-to-roof ratio
+    (SRR%). If the user selects '0' m2 as the requested "area" (or '0' as the
+    requested "srr"), while setting the option "clear" as True, the method
+    simply purges all pre-existing roof fenestrated subsurfaces of selected
+    spaces, and exits while returning '0' (without logging an error or warning).
+    Pre-existing skylight wells are not cleared however. Pre-toplit spaces are
+    otherwise ignored. Boolean options "attic", "plenum", "sloped" and "sidelit"
+    further restrict candidate spaces to toplight. If applicable, options
+    "attic" and "plenum" add skylight wells. Option "patterns" restricts preset
+    skylight allocation layouts in order of preference; if left empty, all
+    preset patterns are considered, also in order of preference (see examples).
+
+    Args:
+        spaces (list of openstudio.model.Space):
+            One or more spaces to toplight.
+        opts (dict):
+            Requested skylight attributes:
+            - "area" (float): overall skylight area.
+            - "srr" (float): skylight-to-roof ratio (0.00, 0.90]
+            - "size" (float): template skylight width/depth (min 0.4m)
+            - "frame" (openstudio.model.WindowPropertyFrameAndDivider): optional
+            - "clear" (bool): whether to first purge existing skylights
+            - "ration" (bool): finer selection of candidates to toplight
+            - "sidelit" (bool): whether to consider sidelit spaces
+            - "sloped" (bool): whether to consider sloped roof surfaces
+            - "plenum" (bool): whether to consider plenum wells
+            - "attic" (bool): whether to consider attic wells
+
+    Returns:
+        float: 'Gross roof area' if successful (see logs if 0 m2)
+
+    """
+    mth   = "osut.addSkyLights"
+    clear = True
+    srr   = None
+    area  = None
+    frame = None  # FrameAndDivider object
+    f     = 0.0   # FrameAndDivider frame width
+    gap   = 0.1   # min 2" around well (2x == 4"), as well as max frame width
+    gap2  = 0.2   # 2x gap
+    gap4  = 0.4   # minimum skylight 16" width/depth (excluding frame width)
+    bfr   = 0.005 # minimum array perimeter buffer (no wells)
+    w     = 1.22  # default 48" x 48" skylight base
+    w2    = w * w # m2
+    v     = int("".join(openstudio.openStudioVersion().split(".")))
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Excerpts of ASHRAE 90.1 2022 definitions:
+    #
+    # "ROOF":
+    #
+    #   "the upper portion of the building envelope, including opaque areas and
+    #   fenestration, that is horizontal or tilted at an angle of less than 60
+    #   degrees from horizontal. For the purposes of determining building
+    #   envelope requirements, the classifications are defined as follows
+    #   (inter alia):
+    #
+    #     - attic and other roofs: all other roofs, including roofs with
+    #       insulation ENTIRELY BELOW (inside of) the roof structure (i.e.
+    #       attics, cathedral ceilings, and single-rafter ceilings), roofs with
+    #       insulation both above and BELOW the roof structure, and roofs
+    #       without insulation but excluding metal building roofs. [...]"
+    #
+    # "ROOF AREA, GROSS":
+    #
+    #   "the area of the roof measured from the EXTERIOR faces of walls or from
+    #   the centerline of party walls."
+    #
+    #
+    # For the simple case below (steep 4-sided hip roof, UNENCLOSED ventilated
+    # attic), 90.1 users typically choose between either:
+    #   1. modelling the ventilated attic explicitly, or
+    #   2. ignoring the ventilated attic altogether.
+    #
+    # If skylights were added to the model, option (1) would require one or more
+    # skylight wells (light shafts leading to occupied spaces below), with
+    # insulated well walls separating CONDITIONED spaces from an UNENCLOSED,
+    # UNCONDITIONED space (i.e. attic).
+    #
+    # Determining which roof surfaces (or which portion of roof surfaces) need
+    # to be considered when calculating "GROSS ROOF AREA" may be subject to some
+    # interpretation. From the above definitions:
+    #
+    #   - the uninsulated, tilted hip-roof attic surfaces are considered "ROOF"
+    #     surfaces, provided they 'shelter' insulation below (i.e. insulated
+    #     attic floor).
+    #   - however, only the 'projected' portion of such "ROOF" surfaces, i.e.
+    #     areas between axes AA` and BB` (along exterior walls)) would be
+    #     considered.
+    #   - the portions above uninsulated soffits (illustrated on the right)
+    #     would be excluded from the "GROSS ROOF AREA" as they are beyond the
+    #     exterior wall projections.
+    #
+    #     A         B
+    #     |         |
+    #      _________
+    #     /          \                  /|        |\
+    #    /            \                / |        | \
+    #   /_  ________  _\    = >       /_ |        | _\   ... excluded portions
+    #     |          |
+    #     |__________|
+    #     .          .
+    #     A`         B`
+    #
+    # If the unoccupied space (directly under the hip roof) were instead an
+    # INDIRECTLY-CONDITIONED plenum (not an attic), then there would be no need
+    # to exclude portions of any roof surface: all plenum roof surfaces (in
+    # addition to soffit surfaces) would need to be insulated). The method takes
+    # such circumstances into account, which requires vertically casting
+    # surfaces onto others, as well as overlap calculations. If successful, the
+    # method returns the "GROSS ROOF AREA" (in m2), based on the above rationale.
+    #
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Excerpts of similar NECB requirements (unchanged from 2011 through 2020):
+    #
+    #   3.2.1.4. 2). "The total skylight area shall be less than 2% of the GROSS
+    #   ROOF AREA as determined in Article 3.1.1.6." (5% in earlier versions)
+    #
+    #   3.1.1.6. 5). "In the calculation of allowable skylight area, the GROSS
+    #   ROOF AREA shall be calculated as the sum of the areas of insulated
+    #   roof including skylights."
+    #
+    # There are NO additional details or NECB appendix notes on the matter. It
+    # is unclear if the NECB's looser definition of GROSS ROOF AREA includes
+    # (uninsulated) sloped roof surfaces above (insulated) flat ceilings (e.g.
+    # attics), as with 90.1. It would be definitely odd if it didn't. For
+    # instance, if the GROSS ROOF AREA were based on insulated ceiling surfaces,
+    # there would be a topological disconnect between flat ceiling and sloped
+    # skylights above. Should NECB users first 'project' (sloped) skylight rough
+    # openings onto flat ceilings when calculating SRR%? Without much needed
+    # clarification, the (clearer) 90.1 rules equally apply here to NECB cases.
+
+    # If skylight wells are indeed required, well wall edges are always vertical
+    # (i.e. never splayed), requiring a vertical ray.
+    origin = openstudio.Point3d(0,0,0)
+    zenith = openstudio.Point3d(0,0,1)
+    ray    = zenith - origin
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Accept a single openStudio.model.Space (vs an array of spaces).
+    if isinstance(spaces, openstudio.model.Space): spaces = [spaces]
+
+    try:
+        spaces = list(spaces)
+    except:
+        return oslg.mismatch("spaces", spaces, list, mth, CN.DBG, [])
+
+    spaces = [s for s in spaces if isinstance(s, openstudio.model.Space)]
+    spaces = [s for s in spaces if s.partofTotalFloorArea()]
+    spaces = [s for s in spaces if not isUnconditioned(s)]
+
+    if not spaces:
+        return oslg.empty("spaces", mth, CN.DBG, 0)
+
+    mdl = spaces[0].model
+
+    # Exit if mismatched or invalid options.
+    if not isinstance(opts, dict):
+        return oslg.mismatch("opts", opts, dict, mth, CN.DBG, 0)
+
+    # Validate Frame & Divider object, if provided.
+    if "frame" in opts:
+        frame = opts["frame"]
+
+        if isinstance(frame, openstudio.model.WindowPropertyFrameAndDivider):
+            if v < 321: frame = None
+            if round(frame.frameWidth(), 2) < 0: frame = None
+            if round(frame.frameWidth(), 2) > gap: frame = None
+
+            if frame:
+                f = frame.frameWidth()
+            else:
+                oslg.log(CN.ERR, "Skip Frame&Divider object (%s)" % mth)
+        else:
+            frame = None
+            oslg.log(CN.ERR, "Skip invalid Frame&Divider object (%s)" % mth)
+
+    # Validate skylight size, if provided.
+    if "size" in opts:
+        try:
+            w = float(opts["size"])
+        except:
+            return oslg.mismatch("size", opts["size"], float, mth, CN.DBG, 0)
+
+        if round(w, 2) < gap4: return oslg.invalid(size, mth, 0, CN.ERR, 0)
+
+        w2 = w * w
+
+    f2  = 2 * f
+    w0  = w + f2
+    w02 = w0 * w0
+    wl  = w0 + gap
+    wl2 = wl * wl
+
+    # Validate requested skylight-to-roof ratio (or overall area).
+    if "area" in opts:
+        try:
+            area = float(opts["area"])
+        except:
+            return oslg.mismatch("area", opts["area"], float, mth, CN.DBG, 0)
+
+        if area < 0: oslg.log(CN.WRN, "Area reset to 0.0 m2 (%s)" % mth)
+
+    elif "srr" in opts:
+        try:
+            srr = float(opts["srr"])
+        except:
+            return oslg.mismatch("srr", opts["srr"], float, mth, CN.DBG, 0)
+
+            if srr < 0:
+                oslg.log(CN.WRN, "SRR (%.2f) reset to 0% (%s)" % (srr, mth))
+            if srr > 0.90:
+                oslg.log(CN.WRN, "SRR (%.2f) reset to 90% (%s)" % (srr, mth))
+
+            srr = numpy.clip(srr, 0.00, 0.10)
+    else:
+        return oslg.hashkey("area", opts, "area", mth, CN.ERR, 0)
+
+    # Validate purge request, if provided.
+    if "clear" in opts:
+        clear = opts["clear"]
+
+        try:
+            clear = bool(clear)
+        except:
+            log(CN.WRN, "Purging existing skylights by default (%s)" % mth)
+            clear = True
+
+    # Purge if requested.
+    if clear:
+        for s in roofs(spaces):
+            for sub in s.subSurfaces(): sub.remove()
+
+    # Safely exit, e.g. if strictly called to purge existing roof subsurfaces.
+    if area and round(area, 2) == 0: return 0
+    if srr  and round(srr,  2) == 0: return 0
+
+    m2  = 0 # total existing skylight rough opening area
+    rm2 = grossRoofArea(spaces) # excludes e.g. overhangs
+
+    # Tally existing skylight rough opening areas.
+    for space in spaces:
+        mx = space.multiplier()
+
+        for roof in facets(space, "Outdoors", "RoofCeiling"):
+            for sub in roof.subSurfaces():
+                if not isFenestration(sub): continue
+
+                ide = sub.nameString()
+                xm2 = sub.grossArea()
+
+                if sub.allowWindowPropertyFrameAndDivider():
+                    fd = sub.windowPropertyFrameAndDivider()
+
+                    if fd:
+                        fd   = fd.get()
+                        fw   = fd.frameWidth()
+                        vec  = offset(sub.vertices(), fw, 300)
+                        aire = openstudio.getArea(vec)
+
+                        if aire:
+                            xm2 = aire.get()
+                        else:
+                            m = "Skip '%s': Frame&Divider (%s)" % (ide, mth)
+                            oslg.log(CN.ERR, m)
+
+
+                m2 += xm2 * sub.multiplier() * mx
+
+    # Required skylight area to add.
+    sm2 = area if area else rm2 * srr - m2
+
+    # Warn/skip if existing skylights exceed or ~roughly match targets.
+    if round(sm2, 2) < round(w02, 2):
+        if m2 > 0:
+            oslg.log(CN.INF, "Skip: skylight area > request (%s)" % mth)
+            return rm2
+        else:
+            oslg.log(CN.INF, "Requested skylight area < min size (%s)" % mth)
+
+    elif 0.9 * round(rm2, 2) < round(sm2, 2):
+        oslg.log(CN.INF, "Skip: requested skylight area > 90% of GRA (%s)" % mth)
+        return rm2
+
+    if "ration" not in opts: opts["ration"] = True
+
+    try:
+        opts["ration"] = bool(opts["ration"])
+    except:
+        opts["ration"] = True
+
+    # By default, seek ideal candidate spaces/roofs. Bail out if unsuccessful.
+    if opts["ration"] is True:
+        spaces = toToplit(spaces, opts)
+        if not spaces: return rm2
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # The method seeks to insert a skylight array within the largest rectangular
+    # 'bounded box' that neatly 'fits' within a given roof surface. This equally
+    # applies to any vertically-cast overlap between roof and plenum (or attic)
+    # floor, which in turn generates skylight wells. Skylight arrays are
+    # inserted from left-to-right & top-to-bottom (as illustrated below), once a
+    # roof (or cast 3D overlap) is 'aligned' in 2D.
+    #
+    # Depending on geometric complexity (e.g. building/roof concavity,
+    # triangulation), the total area of bounded boxes may be significantly less
+    # than the calculated "GROSS ROOF AREA", which can make it challenging to
+    # attain the requested skylight area. If "patterns" are left unaltered, the
+    # method will select those that maximize the likelihood of attaining the
+    # requested target, to the detriment of spatial daylighting distribution.
+    #
+    # The default skylight module size is 1.22m x 1.22m (4' x 4'), which can be
+    # overridden by the user, e.g. 2.44m x 2.44m (8' x 8'). However, skylight
+    # sizes usually end up either contracted or inflated to exactly meet a
+    # request skylight area or SRR%,
+    #
+    # Preset skylight allocation patterns (in order of precedence):
+    #
+    #    1. "array"
+    #   _____________________
+    #  |   _      _      _   |  - ?x columns ("cols") >= ?x rows (min 2x2)
+    #  |  |_|    |_|    |_|  |  - SRR ~5% (1.22m x 1.22m), as illustrated
+    #  |                     |  - SRR ~19% (2.44m x 2.44m)
+    #  |   _      _      _   |  - +suitable for wide spaces (storage, retail)
+    #  |  |_|    |_|    |_|  |  - ~1.4x height + skylight width 'ideal' rule
+    #  |_____________________|  - better daylight distribution, many wells
+    #
+    #    2. "strips"
+    #   _____________________
+    #  |   _      _      _   |  - ?x columns (min 2), 1x row
+    #  |  | |    | |    | |  |  - ~doubles %SRR ...
+    #  |  | |    | |    | |  |  - SRR ~10% (1.22m x ?1.22m), as illustrated
+    #  |  | |    | |    | |  |  - SRR ~19% (2.44m x ?1.22m)
+    #  |  |_|    |_|    |_|  |  - ~roof monitor layout
+    #  |_____________________|  - fewer wells
+    #
+    #    3. "strip"
+    #    ____________________
+    #   |                    |  - 1x column, 1x row (min 1x)
+    #   |   ______________   |  - SRR ~11% (1.22m x ?1.22m)
+    #   |  | ............ |  |  - SRR ~22% (2.44m x ?1.22m), as illustrated
+    #   |  |______________|  |  - +suitable for elongated bounded boxes
+    #   |                    |  - 1x well
+    #   |____________________|
+    #
+    # @todo: Support strips/strip patterns along ridge of paired roof surfaces.
+    layouts  = ["array", "strips", "strip"]
+    patterns = []
+
+    # Validate skylight placement patterns, if provided.
+    if "patterns" in opts:
+        try:
+            opts["patterns"] = list(opts["patterns"])
+        except:
+            oslg.mismatch("patterns", opts["patterns"], list, mth, CN.DBG)
+
+
+        for i, pattern in enumerate(opts["patterns"]):
+            pattern = oslg.trim(pattern).lower()
+
+            if not pattern:
+                oslg.invalid("pattern %d" % (i+1), mth, 0, CN.ERR)
+                continue
+
+            if pattern in layouts: patterns.append(pattern)
+
+    if not patterns: patterns = layouts
+
+    # The method first attempts to add skylights in ideal candidate spaces:
+    #   - large roof surface areas (e.g. retail, classrooms ... not corridors)
+    #   - not sidelit (favours core spaces)
+    #   - having flat roofs (avoids sloped roofs)
+    #   - neither under plenums, nor attics (avoids wells)
+    #
+    # This ideal (albeit stringent) set of conditions is "combo a".
+    #
+    # If the requested skylight area has not yet been achieved (after initially
+    # applying "combo a"), the method decrementally drops selection criteria and
+    # starts over, e.g.:
+    #   - then considers sidelit spaces
+    #   - then considers sloped roofs
+    #   - then considers skylight wells
+    #
+    # A maximum number of skylights are allocated to roof surfaces matching a
+    # given combo, all the while giving priority to larger roof areas. An error
+    # message is logged if the target isn't ultimately achieved.
+    #
+    # Through filters, users may in advance restrict candidate roof surfaces:
+    #   b. above occupied sidelit spaces (False restricts to core spaces)
+    #   c. that are sloped (False restricts to flat roofs)
+    #   d. above INDIRECTLY CONDITIONED spaces (e.g. plenums, uninsulated wells)
+    #   e. above UNCONDITIONED spaces (e.g. attics, insulated wells)
+    filters = ["a", "b", "bc", "bcd", "bcde"]
+
+    # Prune filters, based on user-selected options.
+    for opt in ["sidelit", "sloped", "plenum", "attic"]:
+        if opt not in opts: continue
+        if opts[opt] is True: continue
+
+        if opt == "sidelit":
+            filters = [fil for fil in filters if "b" not in fil]
+        elif opt == "sloped":
+            filters = [fil for fil in filters if "c" not in fil]
+        elif opt == "plenum":
+            filters = [fil for fil in filters if "d" not in fil]
+        elif opt == "attic":
+            filters = [fil for fil in filters if "e" not in fil]
+
+    filters = [fil for fil in filters if fil] # prune out any emptied pattern
+    filters = list(set(filters))              # ensure uniqueness
+
+    # Remaining filters may be further pruned automatically after space/roof
+    # processing, depending on geometry, e.g.:
+    #  - if there are no sidelit spaces: filter "b" will be pruned away
+    #  - if there are no sloped roofs  : filter "c" will be pruned away
+    #  - if no plenums are identified  : filter "d" will be pruned away
+    #  - if no attics are identified   : filter "e" will be pruned away
+
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+    # Break down spaces (and connected spaces) into groups.
+    sets     = [] # collection of skylight arrays to deploy
+    rooms    = {} # occupied CONDITIONED spaces to toplight
+    plenums  = {} # unoccupied (INDIRECTLY-) CONDITIONED spaces above rooms
+    attics   = {} # unoccupied UNCONDITIONED spaces above rooms
+    ceilings = {} # of occupied CONDITIONED space (if plenums/attics)
+
+    # Candidate 'rooms' to toplit - excludes plenums/attics.
+    for space in spaces:
+        ide = space.nameString()
+
+        if isDaylit(space, False, True, False):
+            oslg.log(CN.WRN, "%s is already toplit, skipping (%s)" % (ide, mth))
+            continue
+
+        # When unoccupied spaces are involved (e.g. plenums, attics), the
+        # occupied space (to toplight) may not share the same local
+        # transformation as its unoccupied space(s) above. Fetching site
+        # transformation.
+        t0 = transforms(space)
+        if not t0["t"]: continue
+
+        # Calculate space height.
+        h = spaceHeight(space)
+
+        if h < CN.TOL:
+            oslg.zero("%s height", mth, CN.ERR)
+            continue
+
+        rooms[ide]            = {}
+        rooms[ide]["space"  ] = space
+        rooms[ide]["t0"     ] = t0["t"]
+        rooms[ide]["m"      ] = space.multiplier()
+        rooms[ide]["h"      ] = h
+        rooms[ide]["roofs"  ] = facets(space, "Outdoors", "RoofCeiling")
+        rooms[ide]["sidelit"] = isDaylit(space, True, False, False)
+
+        # Fetch and process room-specific outdoor-facing roof surfaces.
+        #   e.g. the most basic 'set' to track:
+        #   - no skylight wells (i.e. no leader lines)
+        #   - 1x skylight array per roof surface
+        #   - no need to consider site transformation
+        for roof in rooms[space]["roofs"]:
+            if not isRoof(roof): continue
+
+            vtx = roof.vertices()
+            box = boundedBox(vtx)
+            if not box: continue
+
+            bm2 = openstudio.getArea(box)
+            if not bm2: continue
+
+            bm2 = bm2.get()
+            if round(bm2, 2) < round(w02, 2): continue
+
+            width = alignedWidth(box, True)
+            depth = alignedHeight(box, True)
+            if width < wl * 3: continue
+            if depth < wl: continue
+
+            # A set is 'tight' if the area of its bounded box is significantly
+            # smaller than that of its roof. A set is 'thin' if the depth of
+            # its bounded box is (too) narrow. If either is True, some geometry
+            # rules may be relaxed to maximize allocated skylight area. Neither
+            # apply to cases with skylight wells.
+            tight = True if bm2 < roof.grossArea() / 2 else False
+            thin  = True if round(depth, 2) < round(1.5 * wl, 2) else False
+
+            set            = {}
+            set["box"    ] = box
+            set["bm2"    ] = bm2
+            set["tight"  ] = tight
+            set["thin"   ] = thin
+            set["roof"   ] = roof
+            set["space"  ] = space
+            set["m"      ] = space.multiplier()
+            set["sidelit"] = rooms[space]["sidelit"]
+            set["t0"     ] = rooms[space]["t0"]
+            set["t"      ] = openstudio.Transformation.alignFace(vtx)
+            sets.append(set)
+
+    # Process outdoor-facing roof surfaces of plenums and attics above.
+    for ide, room in rooms.items():
+        t0    = room["t0"]
+        space = room["space"]
+        rufs  = roofs(space) - room["roofs"]
+
+        for ruf in rufs:
+            id0 = ruf.nameString()
+            vtx = ruf.vertices()
+            if not isRoof(ruf): continue
+
+            espace = ruf.space()
+            if not espace: continue
+
+            espace = espace.get()
+            if espace.partofTotalFloorArea(): continue
+
+            idx = espace.nameString()
+            mx  = espace.multiplier()
+
+            if mx != space.multiplier():
+                m = "%s vs %s - multiplier mismatch (%s)" % (ide, idx, mth)
+                log(CN.ERR, m)
+                continue
+
+            ti = transforms(espace)
+            if not ti["t"]: continue
+
+            ti   = ti["t"]
+            rpts = ti * vtx
+
+            # Process occupied room ceilings, as 1x or more are overlapping roof
+            # surfaces above. Vertically cast, then fetch overlap.
+            for tile in facets(space, "Surface", "RoofCeiling"):
+                idee = tile.nameString()
+                tpts = t0 * tile.vertices()
+                ci0  = cast(tpts, rpts, ray)
+                if not ci0: continue
+
+                olap = overlap(rpts, ci0)
+                if not olap: continue
+
+                om2 = openstudio.getArea(olap)
+                if not om2: continue
+
+                om2 = om2.get()
+                if round(om2, 2) < round(w02, 2): continue
+
+                box = boundedBox(olap)
+                if not box: continue
+
+                # Adding skylight wells (plenums/attics) is contingent to safely
+                # linking new base roof 'inserts' (as well as new ceiling ones)
+                # through 'leader lines'. This requires an offset to ensure no
+                # conflicts with roof or (ceiling) tile edges.
+                #
+                # @todo: Expand the method to factor in cases where simple
+                #        'side' cutouts can be supported (no need for leader
+                #        lines), e.g. skylight strips along roof ridges.
+                box = offset(box, -gap, 300)
+                if not box: continue
+
+                bm2 = openstudio.getArea(box)
+                if not bm2: continue
+
+                bm2 = bm2.get()
+                if round(bm2, 2) < round(wl2, 2): continue
+
+                width = alignedWidth(box, True)
+                depth = alignedHeight(box, True)
+                if width < wl * 3: continue
+                if depth < wl * 2: continue
+
+                # Vertically cast box onto tile below.
+                cbox = cast(box, tpts, ray)
+                if not cbox: continue
+
+                cm2 = openstudio.getArea(cbox)
+                if not cm2: continue
+
+                cm2  = cm2.get()
+                box  = ti.inverse() * box
+                cbox = t0.inverse() * cbox
+
+                if idee not in ceilings:
+                    floor = tile.adjacentSurface()
+                    if not floor:
+                        oslg.log(CN.ERR, "%s adjacent floor? (%s)" % (idee, mth))
+                        continue
+
+                    floor = floor.get()
+                    if not floor.space():
+                        oslg.log(CN.ERR, "%s space? (%s)" % (idee, mth))
+                        continue
+
+                    espce = floor.space().get()
+                    if espce != espace:
+                        ido = espce.nameString()
+                        oslg.log(CN.ERR, "%s != %s? (%s)" % (ido, idx, mth))
+                        continue
+
+                    ceilings[idee]          = {}    # idee: ceiling surface ID
+                    ceilings[idee]["clng" ] = tile  # ceiling surface itself
+                    ceilings[idee]["id"   ] = ide   # its space's ID
+                    ceilings[idee]["space"] = space # its space
+                    ceilings[idee]["floor"] = floor # adjacent floor
+                    ceilings[idee]["roofs"] = []    # collection of roofs above
+
+                ceilings[idee]["roofs"].append(ruf)
+
+                # Skylight set key:values are more detailed with suspended
+                # ceilings. The overlap ("olap") remains in 'transformed' site
+                # coordinates (with regards to the roof). The "box" polygon
+                # reverts to attic/plenum space coordinates, while the "cbox"
+                # polygon is reset with regards to the occupied space
+                # coordinates.
+                set            = {}
+                set["olap"   ] = olap
+                set["box"    ] = box
+                set["cbox"   ] = cbox
+                set["om2"    ] = om2
+                set["bm2"    ] = bm2
+                set["cm2"    ] = cm2
+                set["tight"  ] = False
+                set["thin"   ] = False
+                set["roof"   ] = ruf
+                set["space"  ] = space
+                set["m"      ] = space.multiplier()
+                set["clng"   ] = tile
+                set["t0"     ] = t0
+                set["ti"     ] = ti
+                set["t"      ] = openstudio.Transformation.alignFace(vtx)
+                set["sidelit"] = room["sidelit"]
+
+                if isUnconditioned(espace): # e.g. attic
+                    if idx not in attics:   # idx = espace.nameString()
+                        attics[idx]          = {}
+                        attics[idx]["space"] = espace
+                        attics[idx]["ti"   ] = ti
+                        attics[idx]["m"    ] = mx
+                        attics[idx]["bm2"  ] = 0
+                        attics[idx]["roofs"] = []
+
+                    attics[idx]["bm2"  ] += bm2
+                    attics[idx]["roofs"].append(ruf)
+
+                    set["attic"] = espace
+
+                    ceilings[idee]["attic"] = espace # adjacent attic (floor)
+                else: # e.g. plenum
+                    if idx not in plenums:
+                        plenums[idx] = {}
+                        plenums[idx]["space"] = espace
+                        plenums[idx]["ti"   ] = ti
+                        plenums[idx]["m"    ] = mx
+                        plenums[idx]["bm2"  ] = bm2
+                        plenums[idx]["roofs"] = []
+
+                    plenums[idx]["bm2"  ] += bm2
+                    plenums[idx]["roofs"].append(ruf)
+
+                    set["plenum"] = espace
+
+                    ceilings[idee]["plenum"] = espace # adjacent plenum (floor)
+
+                sets.append(set)
+                break # only 1x unique ruf/ceiling pair.
+
+    # Ensure uniqueness of plenum roofs.
+    for attic in attics.values():
+        attic["roofs" ] = list(set(attic["roofs"]))
+        attic["ridges"] = horizontalRidges(attic["roofs"]) # @todo
+
+    for plenum in plenums.values():
+        plenum["roofs" ] = list(set(plenum["roofs"]))
+        plenum["ridges"] = horizontalRidges(plenum["roofs"]) # @todo
+
+    # Regardless of the selected skylight arrangement pattern, the solution only
+    # considers attic/plenum sets that can be successfully linked to leader line
+    # anchors, for both roof and ceiling surfaces. First, attic/plenum roofs.
+    for greniers in [attics, plenums]:
+        k = "attic" if greniers == attics else "plenum"
+
+        for grenier in greniers.values():
+            for roof in grenier["roofs"]:
+                sts = sets
+                sts = [st for st in sts if k       in st]
+                sts = [st for st in sts if "space" in st]
+                sts = [st for st in sts if "box"   in st]
+                sts = [st for st in sts if "bm2"   in st]
+                sts = [st for st in sts if "roof"  in st]
+
+                sts = [st for st in sts if st[k     ] == grenier["space"]]
+                sts = [st for st in sts if st["roof"] == roof]
+                if not sts: continue
+
+                sts = sorted(sts, key=lambda st: st["bm2"], reverse=True)
+                genAnchors(roof, sts, "box")
+
+    # Delete voided sets.
+    sets = [set for set in sets if "void" not in set]
+
+    # Repeat leader line loop for ceilings.
+    for ceiling in ceilings.values():
+        k = "attic" if "attic" in ceiling else "plenum"
+        if k not in ceiling: continue
+
+        clng   = ceiling["cnlg" ] # ceiling surface
+        space  = ceiling["space"] # its space
+        espace = ceiling[k]       # adjacent (unoccupied) space above
+
+        if "roofs" not in ceiling: continue
+        if ceiling["ide"] not in rooms: continue
+
+        stz = []
+
+        for roof in ceiling["roofs"]:
+            sts = sets
+
+            sts = [st for st in sts if k       in st]
+            sts = [st for st in sts if "cbox"  in st]
+            sts = [st for st in sts if "cm2"   in st]
+            sts = [st for st in sts if "roof"  in st]
+            sts = [st for st in sts if "clng"  in st]
+            sts = [st for st in sts if "space" in st]
+
+            sts = [st for st in sts if st[k      ] == espace]
+            sts = [st for st in sts if st["roof" ] == roof]
+            sts = [st for st in sts if st["clng" ] == clng]
+            sts = [st for st in sts if st["space"] == space]
+            if len(sts) != 1: continue
+
+            stz.append(sts[0])
+
+        if not stz: continue
+
+        stz = sorted(stz, key=lambda st: st["cm2"], reverse=True)
+        genAnchors(tile, stz, "cbox")
+
+    # Delete voided sets.
+    sets = [set for set in sets if "void" not in set]
+    if not sets: return oslg.empty("sets", mth, CN.WRN, rm2)
+
+    # Sort sets, from largest to smallest bounded box area.
+    sets = sorted(sets, key=lambda st: st["bm2"] * st["m"], reverse=True)
+
+    # Any sidelit and/or sloped roofs being targeted?
+    # @todo: enable double-ridged, sloped roofs have double-sloped
+    #        skylights/wells (patterns "strip"/"strips").
+    sidelit = any(set["sidelit"] for set in sets)
+    sloped  = any(set["sloped" ] for set in sets)
+
+    # Average sandbox area + revised 'working' SRR%.
+    sbm2 = sum(set.get("bm2", 0) for set in sets)
+    avm2 = sbm2 / len(sets)
+    srr2 = sm2 / len(sets) / avm2
+
+    # Precalculate skylight rows + cols, for each selected pattern. In the case
+    # of 'cols x rows' arrays of skylights, the method initially overshoots
+    # with regards to 'ideal' skylight placement, e.g.:
+    #
+    #   aceee.org/files/proceedings/2004/data/papers/SS04_Panel3_Paper18.pdf
+    #
+    # Skylight areas are subsequently contracted to strictly meet the target.
+    for i, set in enumerate(sets):
+        thin   = set["thin"]
+        tight  = set["tight"]
+        factor = 1.75 if tight else 1.25
+        well   = "clng" in set
+        space  = set["space"]
+        room   = rooms[space.nameString()]
+        h      = room["h"]
+        width  = alignedWidth( set["box"], True)
+        depth  = alignedHeight(set["box"], True)
+        barea  = set["om2"] if "om2" in set else set["bm2"]
+        rtio   = barea / avm2
+        skym2  = srr2 * barea * rtio
+
+        # Flag set if too narrow/shallow to hold a single skylight.
+        if well:
+            if round(width, 2) < round(wl, 2):
+                oslg.log(CN.WRN, "set #{i+1} well: Too narrow (%s)" % mth)
+                set["void"] = True
+                continue
+
+            if round(depth, 2) < round(wl, 2):
+                oslg.log(CN.WRN, "set #{i+1} well: Too shallow (%s)" % mth)
+                set["void"] = True
+                continue
+        else:
+            if round(width, 2) < round(w0, 2):
+                oslg.log(CN.WRN, "set #{i+1}: Too narrow (%s)" % mth)
+                set["void"] = True
+                continue
+
+            if round(depth, 2) < round(w0, 2):
+                oslg.log(CN.WRN, "set #{i+1}: Too shallow (%s)" % mth)
+                set["void"] = True
+                continue
+
+        # Estimate number of skylight modules per 'pattern'. Default spacing
+        # varies based on bounded box size (i.e. larger vs smaller rooms).
+        for pattern in patterns:
+            cols = 1
+            rows = 1
+            wx   = w0
+            wy   = w0
+            wxl  = wl if well else None
+            wyl  = wl if well else None
+            dX   = None
+            dY   = None
+
+            if pattern == "array": # min 2x cols x min 2x rows
+                cols = 2
+                rows = 2
+                if thin: continue
+
+                if tight:
+                    sp = 1.4 * h / 2
+                    lx = width - cols * wx
+                    ly = depth - rows * wy
+                    if round(lx, 2) < round(sp, 2): continue
+                    if round(ly, 2) < round(sp, 2): continue
+
+                    cols = int(round((width - wx) / (wx + sp)), 2) + 1
+                    rows = int(round((depth - wy) / (wy + sp)), 2) + 1
+                    if cols < 2: continue
+                    if rows < 2: continue
+
+                    dX = bfr + f
+                    dY = bfr + f
+                else:
+                    sp = 1.4 * h
+
+                    if well:
+                        lx = (width - cols * wxl) / cols
+                        ly = (depth - rows * wyl) / rows
+                    else:
+                        lx = (width - cols * wx) / cols
+                        ly = (depth - rows * wy) / rows
+
+                    if round(lx, 2) < round(sp, 2): continue
+                    if round(ly, 2) < round(sp, 2): continue
+
+                    if well:
+                        cols = (width / (wxl + sp)).round(2).to_i
+                        rows = (depth / (wyl + sp)).round(2).to_i
+                    else:
+                        cols = (width / (wx + sp)).round(2).to_i
+                        rows = (depth / (wy + sp)).round(2).to_i
+
+                    if cols < 2: continue
+                    if rows < 2: continue
+
+                    if well:
+                        ly = (depth - rows * wyl) / rows
+                    else:
+                        ly = (depth - rows * wy) / rows
+
+                    dY = ly / 2
+
+                # Default allocated skylight area. If undershooting, inflate
+                # skylight width/depth (with reduced spacing). For geometrically
+                # -constrained cases, undershooting means not reaching 1.75x the
+                # required target. Otherwise, undershooting means not reaching
+                # 1.25x the required target. Any consequent overshooting is
+                # later corrected.
+                tm2 = wx * cols * wy * rows
+
+                # Inflate skylight width/depth (and reduce spacing) to reach
+                # target.
+                if round(tm2, 2) < factor * round(skym2, 2):
+                    ratio2 = 1 + (factor * skym2 - tm2) / tm2
+                    ratio  = math.sqrt(ratio2)
+
+                    sp  = wl
+                    wx *= ratio
+                    wy *= ratio
+
+                    if well:
+                        wxl = wx + gap
+                        wyl = wy + gap
+
+                    if tight:
+                        lx = (width - 2 * (bfr + f) - cols * wx) / (cols - 1)
+                        ly = (depth - 2 * (bfr + f) - rows * wy) / (rows - 1)
+                        lx = sp if round(lx, 2) < round(sp, 2) else lx
+                        ly = sp if round(ly, 2) < round(sp, 2) else ly
+                        wx = (width - 2 * (bfr + f) - (cols - 1) * lx) / cols
+                        wy = (depth - 2 * (bfr + f) - (rows - 1) * ly) / rows
+                    else:
+                        if well:
+                            lx  = (width - cols * wxl) / cols
+                            ly  = (depth - rows * wyl) / rows
+                            lx  = sp if round(lx, 2) < round(sp, 2) else lx
+                            ly  = sp if round(ly, 2) < round(sp, 2) else ly
+                            wxl = (width - cols * lx) / cols
+                            wyl = (depth - rows * ly) / rows
+                            wx  = wxl - gap
+                            wy  = wyl - gap
+                            ly  = (depth - rows * wyl) / rows
+                        else:
+                            lx  = (width - cols * wx) / cols
+                            ly  = (depth - rows * wy) / rows
+                            lx  = sp if round(lx, 2) < round(sp, 2) else lx
+                            ly  = sp if round(ly, 2) < round(sp, 2) else ly
+                            wx  = (width - cols * lx) / cols
+                            wy  = (depth - rows * ly) / rows
+                            ly  = (depth - rows * wy) / rows
+
+                        dY = ly / 2
+
+            elif pattern == "strips": # min 2x cols x 1x row
+                cols = 2
+
+                if tight:
+                    sp = h / 2
+                    dX = bfr + f
+                    lx = width - cols * wx
+                    if round(lx, 2) < round(sp, 2): continue
+
+                    cols = int(round((width - wx) / (wx + sp)), 2) + 1
+                    if cols < 2: continue
+
+                    if thin:
+                        dY = bfr + f
+                        wy = depth - 2 * dY
+                        if round(wy, 2) < gap4: continue
+                    else:
+                        ly = depth - wy
+                        if round(ly, 2) < round(wl, 2): continue
+
+                    dY = ly / 2
+                else:
+                    sp = h
+
+                    if well:
+                        lx = (width - cols * wxl) / cols
+                        if round(lx, 2) < round(sp, 2): continue
+
+                        cols = int(round(width / (wxl + sp), 2))
+                        if cols < 2: continue
+
+                        ly = depth - wyl
+                        dY = ly / 2
+                        if round(ly, 2) < round(wl, 2): continue
+                    else:
+                        lx = (width - cols * wx) / cols
+                        if round(lx, 2) < round(sp, 2): continue
+
+                        cols = int(round(width / (wx + sp), 2))
+                        if cols < 2: continue
+
+                        if thin:
+                            dY = bfr + f
+                            wy = depth - 2 * dY
+                            if round(wy, 2) < gap4: continue
+                        else:
+                            ly = depth - wy
+                            if round(ly, 2) < round(wl, 2): continue
+
+                            dY = ly / 2
+
+                tm2 = wx * cols * wy
+
+                # Inflate skylight depth to reach target.
+                if round(tm2, 2) < factor * round(skym2, 2):
+                    sp = wl
+
+                    # Skip if already thin.
+                    if not thin:
+                        ratio2 = 1 + (factor * skym2 - tm2) / tm2
+
+                        wy *= ratio2
+
+                        if well:
+                            wyl = wy + gap
+                            ly  = depth - wyl
+                            ly  = sp if round(ly, 2) < round(sp, 2) else ly
+                            wyl = depth - ly
+                            wy  = wyl - gap
+                        else:
+                            ly = depth - wy
+                            ly = sp if round(ly, 2) < round(sp, 2) else ly
+                            wy = depth - ly
+
+                        dY = ly / 2
+
+                tm2 = wx * cols * wy
+
+                # Inflate skylight width (and reduce spacing) to reach target.
+                if round(tm2, 2) < factor * round(skym2, 2):
+                    ratio2 = 1 + (factor * skym2 - tm2) / tm2
+
+                    wx *= ratio2
+                    if well: wxl = wx + gap
+
+                    if tight:
+                        lx = (width - 2 * (bfr + f) - cols * wx) / (cols - 1)
+                        lx = sp if round(lx, 2) < round(sp, 2) else lx
+                        wx = (width - 2 * (bfr + f) - (cols - 1) * lx) / cols
+                    else:
+                        if well:
+                            lx  = (width - cols * wxl) / cols
+                            lx  = sp if round(lx, 2) < round(sp, 2) else lx
+                            wxl = (width - cols * lx) / cols
+                            wx  = wxl - gap
+                        else:
+                            lx  = (width - cols * wx) / cols
+                            lx  = sp if round(lx, 2) < round(sp, 2) else lx
+                            wx  = (width - cols * lx) / cols
+
+            else: # "strip" 1 (long?) row x 1 column
+                if tight:
+                    sp = gap4
+                    dX = bfr + f
+                    wx = width - 2 * dX
+                    if round(wx, 2) < round(sp, 2): continue
+
+                    if thin:
+                        dY = bfr + f
+                        wy = depth - 2 * dY
+                        if round(wy, 2) < round(sp, 2): continue
+                    else:
+                        ly = depth - wy
+                        dY = ly / 2
+                        if round(ly, 2) < round(sp, 2): continue
+                else:
+                    sp = wl
+                    lx = width - wxl if well else width - wx
+                    ly = depth - wyl if well else depth - wy
+                    dY = ly / 2
+                    if round(lx, 2) < round(sp, 2): continue
+                    if round(ly, 2) < round(sp, 2): continue
+
+                tm2 = wx * wy
+
+                # Inflate skylight width (and reduce spacing) to reach target.
+                if round(tm2, 2) < factor * round(skym2, 2):
+                    if not tight:
+                        ratio2 = 1 + (factor * skym2 - tm2) / tm2
+
+                        wx *= ratio2
+
+                        if well:
+                            wxl = wx + gap
+                            lx  = width - wxl
+                            lx  = sp if round(lx, 2) < round(sp, 2) else lx
+                            wxl = width - lx
+                            wx  = wxl - gap
+                        else:
+                            lx  = width - wx
+                            lx  = sp if round(lx, 2) < round(sp, 2) else lx
+                            wx  = width - lx
+
+                tm2 = wx * wy
+
+                # Inflate skylight depth to reach target. Skip if already tight thin.
+                if round(tm2, 2) < factor * round(skym2, 2):
+                    if not thin:
+                        ratio2 = 1 + (factor * skym2 - tm2) / tm2
+
+                        wy *= ratio2
+
+                        if well:
+                            wyl = wy + gap
+                            ly  = depth - wyl
+                            ly  = sp if ly.round(2) < sp.round(2) else ly
+                            wyl = depth - ly
+                            wy  = wyl - gap
+                        else:
+                            ly = depth - wy
+                            ly = sp if ly.round(2) < sp.round(2) else ly
+                            wy = depth - ly
+
+                        dY = ly / 2
+
+            st          = {}
+            st["tight"] = tight
+            st["cols" ] = cols
+            st["rows" ] = rows
+            st["wx"   ] = wx
+            st["wy"   ] = wy
+            st["wxl"  ] = wxl
+            st["wyl"  ] = wyl
+
+            if dX: st["dX"] = dX
+            if dY: st["dY"] = dY
+
+            set[pattern] = st
+
+        if not any(pattern in set for pattern in patterns): set["void"] = True
+
+    # Delete voided sets.
+    sets = [set for set in sets if "void" not in set]
+    if not sets: return oslg.empty("sets (2)", mth, CN.WRN, rm2)
+
+    # Final reset of filters.
+    if not sidelit: filters = [fil.replace("b", "") for fil in filters]
+    if not sloped:  filters = [fil.replace("c", "") for fil in filters]
+    if not plenums: filters = [fil.replace("d", "") for fil in filters]
+    if not attics:  filters = [fil.replace("e", "") for fil in filters]
+
+    filters = [fil for fil in filters if fil] # remove any empty filter strings
+    filters = list(set(filters))              # ensure uniqueness
+
+    # Initialize skylight area tally (to increment).
+    skm2 = 0
+
+    # Assign skylight pattern.
+    for filter in filters:
+        if round(skm2, 2) >= round(sm2, 2): continue
+
+        dm2 = sm2 - skm2 # differential (remaining skylight area to meet).
+        sts = [st for st in sets if "pattern" not in st]
+
+        if "a" in filter:
+            # Start with the default (ideal) allocation selection:
+            # - large roof surface areas (e.g. retail, classrooms not corridors)
+            # - not sidelit (favours core spaces)
+            # - having flat roofs (avoids sloped roofs)
+            # - not under plenums, nor attics (avoids wells)
+            sts = [st for st in sts if not st["sidelit"]]
+            sts = [st for st in sts if not st["sloped" ]]
+            sts = [st for st in sts if "clng" not in st]
+        else:
+            if "b" not in filter: sts = [st for st in sts if not st["sidelit"]]
+            if "c" not in filter: sts = [st for st in sts if not st["sloped" ]]
+            if "d" not in filter: sts = [st for st in sts if "plenum" not in st]
+            if "e" not in filter: sts = [st for st in sts if "attic"  not in st]
+
+        if not sts: continue
+
+        # Tally precalculated skylights per pattern (once filtered).
+        fpm2 = {}
+
+        for pattern in patterns:
+            for st in sts:
+                if pattern not in st: continue
+
+                cols = st[pattern]["cols"]
+                rows = st[pattern]["rows"]
+                wx   = st[pattern]["wx"  ]
+                wy   = st[pattern]["wy"  ]
+
+                if pattern not in fpm2: fpm2[pattern] = dict(m2=0, tight=False)
+
+                fpm2[pattern]["m2"] += st["m"] * wx * wy * cols * rows
+                if st["tight"]: fpm2[pattern]["tight"] = True
+
+        pattern = None
+        if not fpm2: continue
+
+        # Favour (large) arrays if meeting residual target, unless constrained.
+        if "array" in fpm2:
+            if round(fpm2["array"]["m2"], 2) >= round(dm2, 2):
+                if not fpm2["tight"]: pattern = "array"
+
+        if not pattern:
+            fpm2 = dict(sorted(f2.items(), key=lambda f2: f2[1]["m2"]))
+            mnM2 = fpm2.values()[ 0]["m2"]
+            mxM2 = fpm2.values()[-1]["m2"]
+
+            if mnM2.round(2) >= dm2.round(2):
+                # If not large array, then retain pattern generating smallest
+                # skylight area if ALL patterns >= residual target
+                # (deterministic sorting).
+                fpm2 = dict(fpm2.items(), key=lambda f2: round(f2, 2) == round(mnM2, 2))
+
+                if "array" in fpm2:
+                    pattern = "array"
+                elif "strips" in fpm2:
+                    pattern = "strips"
+                else: # "strip" in fpm2
+                    pattern = "strip"
+            else:
+                # Pick pattern offering greatest skylight area
+                # (deterministic sorting).
+                fpm2 = dict(fpm2.items(), key=lambda f2: round(f2, 2) == round(mxM2, 2))
+
+                if "strip" in fpm2:
+                    pattern = "strip"
+                elif "strips" in fpm2:
+                    pattern = "strips"
+                else: # "array" in fpm2
+                    pattern = "array"
+
+        skm2 += fpm2[pattern]["m2"]
+
+        # Update matching sets.
+        for st in sts:
+            for set in sets:
+                if pattern not in set: continue
+                if st["roof"] != set["roof"]: continue
+                if not areSame(st["box"], set["box"]): continue
+
+                if "clng" in st:
+                    if not "clng" in set: continue
+                    if st["clng"] != set["clng"]: continue
+
+                set["pattern"] = pattern
+                set["cols"   ] = set[pattern]["cols"]
+                set["rows"   ] = set[pattern]["rows"]
+                set["w"      ] = set[pattern]["wx"  ]
+                set["d"      ] = set[pattern]["wy"  ]
+                set["w0"     ] = set[pattern]["wxl" ]
+                set["d0"     ] = set[pattern]["wyl" ]
+
+                if set[pattern]["dX"]: set["dX"] = set[pattern]["dX"]
+                if set[pattern]["dY"]: set["dY"] = set[pattern]["dY"]
+
+    # Delete incomplete sets (same as rejected if 'voided').
+    sets = [set for set in sets if "void" not in set]
+    sets = [set for set in sets if "pattern"  in set]
+    if not sets: return oslg.empty("sets (3)", mth, CN.WRN, rm2)
+
+    # Skylight size contraction if overshot (e.g. scale down by -13% if > +13%).
+    # Applied on a surface/pattern basis: individual skylight sizes may vary
+    # from one surface to the next, depending on respective patterns.
+
+    # First, skip whole sets altogether if their total m2 < (skm2 - sm2). Only
+    # considered if significant discrepancies vs average set skylight m2.
+    sbm2 = 0
+
+    for set in sets:
+        sbm2 += set["cols"] * set["w"] * set["rows"] * set["d"] * set["m"]
+
+    avm2 = sbm2 / len(sets)
+
+    if round(skm2, 2) > round(sm2, 2):
+        sets.reverse()
+
+        for set in sets:
+            if round(skm2, 2) <= round(sm2, 2): break
+
+            stm2 = set["cols"] * set["w"] * set["rows"] * set["d"] * set["m"]
+            if round(stm2, 2) >= round(0.75 * avm2, 2): continue
+            if round(stm2, 2) >= round(skm2 - sm2,  2): continue
+
+            skm2 -= stm2
+            set["void"] = True
+
+        sets.reverse()
+
+    sets = [set for set in sets if "void" not in set]
+    if not sets: return oslg.empty("sets (4)", mth, CN.WRN, rm2)
+
+    # Size contraction: round 1: low-hanging fruit.
+    if round(skm2, 2) > round(sm2, 2):
+        ratio2 = 1 - (skm2 - sm2) / skm2
+        ratio  = math.sqrt(ratio2)
+
+        for set in sets:
+            am2 = set["cols"] * set["w"] * set["rows"] * set["d"] * set["m"]
+            xr  = set["w"]
+            yr  = set["d"]
+
+            if xr > w0:
+                xr = w0 if xr * ratio < w0 else xr * ratio
+
+            if yr > w0:
+                yr = w0 if yr * ratio < w0 else yr * ratio
+
+            xm2 = set["cols"] * xr * set["rows"] * yr * set["m"]
+            if round(xm2, 2) == round(am2, 2): continue
+
+            set["dY"] += (set["d"] - yr) / 2
+            if "dX" in set: set["dX"] += (set["w"] - xr) / 2
+
+            set["w" ] = xr
+            set["d" ] = yr
+            set["w0"] = set["w"] + gap
+            set["d0"] = set["d"] + gap
+
+            skm2 -= (am2 - xm2)
+
+    # Size contraction: round 2: prioritize larger sets.
+    adm2 = 0
+
+    for set in sets:
+        if round(set["w"], 2) <= w0: continue
+        if round(set["d"], 2) <= w0: continue
+
+        adm2 += set["cols"] * set["w"] * set["rows"] * set["d"] * set["m"]
+
+    if round(skm2, 2) > round(sm2, 2) and round(adm2, 2) > round(sm2, 2):
+        ratio2 = 1 - (adm2 - sm2) / adm2
+        ratio  = math.sqrt(ratio2)
+
+        for set in sets:
+            if round(set["w"], 2) <= w0: continue
+            if round(set["d"], 2) <= w0: continue
+
+            am2 = set["cols"] * set["w"] * set["rows"] * set["d"] * set["m"]
+            xr  = set["w"]
+            yr  = set["d"]
+
+            if xr > w0:
+                xr = w0 if xr * ratio < w0 else xr * ratio
+
+            if yr > w0:
+                yr = yw0 if r * ratio < w0 else yr * ratio
+
+            xm2 = set["cols"] * xr * set["rows"] * yr * set["m"]
+            if round(xm2, 2) == round(am2, 2): continue
+
+            set["dY"] += (set["d"] - yr) / 2
+            if "dX" in set: set["dX"] += (set["w"] - xr) / 2
+
+            set["w" ] = xr
+            set["d" ] = yr
+            set["w0"] = set["w"] + gap
+            set["d0"] = set["d"] + gap
+
+            skm2 -= (am2 - xm2)
+            adm2 -= (am2 - xm2)
+
+    # Size contraction: round 3: Resort to sizes < requested w0.
+    if round(skm2, 2) > round(sm2, 2):
+        ratio2 = 1 - (skm2 - sm2) / skm2
+        ratio  = math.sqrt(ratio2)
+
+        for set in sets:
+            if round(skm2, 2) <= round(sm2, 2): break
+
+            am2 = set["cols"] * set["w"] * set["rows"] * set["d"] * set["m"]
+            xr  = set["w"]
+            yr  = set["d"]
+
+            if xr > gap4:
+                xr = gap4 if xr * ratio < gap4 else xr * ratio
+
+            if yr > gap4:
+                yr = gap4 if yr * ratio < gap4 else yr * ratio
+
+            xm2 = set["cols"] * xr * set["rows"] * yr * set["m"]
+            if round(xm2, 2) == round(am2, 2): continue
+
+            set["dY"] += (set["d"] - yr) / 2
+            if "dX" in set: set["dX"] += (set["w"] - xr) / 2
+
+            set["w" ] = xr
+            set["d" ] = yr
+            set["w0"] = set["w"] + gap
+            set["d0"] = set["d"] + gap
+
+            skm2 -= (am2 - xm2)
+
+    # Log warning if unable to entirely contract skylight dimensions.
+    if round(skm2, 2) > round(sm2, 2):
+        oslg.log(CN.WRN, "Skylights slightly oversized (%s)" % (mth))
+
+    # Generate skylight well vertices for roofs, attics & plenums.
+    for greniers in [attics, plenums]:
+        k = "attic" if greniers == attics else "plenum"
+
+        for grenier in greniers.values():
+            for roof in grenier["roofs"]:
+                sts = sets
+                sts = [st for st in sts if "clng"        in st]
+                sts = [st for st in sts if k             in st]
+                sts = [st for st in sts if "ld"          in st]
+                sts = [st for st in sts if "space"       in st]
+                sts = [st for st in sts if "roof"        in st]
+                sts = [st for st in sts if "pattern"     in st]
+                sts = [st for st in sts if st["pattern"] in st]
+                sts = [st for st in sts if st["space"  ] in rooms]
+                sts = [st for st in sts if id(roof)      in st["ld"]]
+
+                sts = [st for st in sts if st[k     ] == grenier["space"]]
+                sts = [st for st in sts if st["roof"] == roof]
+                if not sts: continue
+
+                # If successful, 'genInserts' returns extended ROOF surface
+                # vertices, including leader lines to support cutouts. The
+                # method also generates new roof inserts. See key:value pair
+                # "vts". The FINAL go/no-go is contingent to successfully
+                # inserting corresponding room ceiling inserts (vis-à-vis
+                # attic/plenum floor below).
+                vz = genInserts(roof, sts)
+                if not vz: continue
+
+                roof.setVertices(vz)
+
+    # Repeat for ceilings below attic/plenum floors.
+    for ceiling in ceilings.values():
+        k = "attic" if "attic" in ceiling else "plenum"
+        greniers = attics if k == "attic" else plenums
+
+        if k       not in ceiling: continue
+        if "floor" not in ceiling: continue
+        if "clng"  not in ceiling: continue
+        if "space" not in ceiling: continue
+
+        espace = ceiling[k      ] # (unoccupied) space above ceiling
+        floor  = ceiling["floor"] # adjacent floor above
+        clng   = ceiling["cnlg" ] # ceiling surface
+        space  = ceiling["space"] # its space
+        idx    = espace.nameString()
+        ide    = space.nameString()
+        if ide not in rooms: continue
+        if idx not in greniers: continue
+
+        room    = rooms[ide]
+        grenier = greniers[idx]
+        ti      = grenier["ti"]
+        t0      = room["t0"]
+        stz     = []
+
+        for roof in ceiling["roofs"]:
+            sts = sets
+            sts = [st for st in sts if "clng"      in st]
+            sts = [st for st in sts if k           in st]
+            sts = [st for st in sts if "space"     in st]
+            sts = [st for st in sts if "roof"      in st]
+            sts = [st for st in sts if "pattern"   in st]
+            sts = [st for st in sts if "cm2"       in st]
+            sts = [st for st in sts if "vts"       in st]
+            sts = [st for st in sts if "vtx"       in st]
+            sts = [st for st in sts if "ld"        in st]
+            sts = [st for st in sts if id(roof)    in st["ld"]]
+            sts = [st for st in sts if id(clng)    in st["ld"]]
+            sts = [st for st in sts if st["space"] in rooms]
+
+            sts = [st for st in sts if st["clng"] == clng]
+            sts = [st for st in sts if st["roof"] == roof]
+            sts = [st for st in sts if st[k     ] == espace]
+            if len(sts) != 1: continue
+
+            stz.append(sts)[0]
+
+        if not stz: continue
+
+        # Add new roof inserts & skylights for the (now) toplit space.
+        for i, st in enumerate(stz):
+            sub         = {}
+            sub["type"] = "Skylight"
+            sub["sill"] = gap / 2
+            if frame: sub["frame"] = frame
+
+            for ids, vt in st["vts"].items():
+                roof = openstudio.model.Surface(t0.inverse() * (ti * vt), mdl)
+                roof.setSpace(space)
+                roof.setName("%s:%s" % (ids, ide))
+
+                # Generate well walls.
+                vX = cast(roof, clng, ray)
+                s0 = segments(t0 * roof.vertices())
+                sX = segments(t0 * vX)
+
+                for j, sg in enumerate(s0):
+                    sg0 = list(sg)
+                    sgX = list(sX[j])
+                    vec = openstudio.Point3dVector()
+                    vec.append(sg0[ 0])
+                    vec.append(sg0[-1])
+                    vec.append(sgX[-1])
+                    vec.append(sgX[ 0])
+
+                    v_grenier = ti.inverse() * vec
+                    v_room    = list(t0.inverse() * vec)
+                    v_room.reverse()
+                    v_room    = p3Dv(v_room)
+
+                    grenier_wall = openstudio.model.Surface(v_grenier, mdl)
+                    grenier_wall.setSpace(espace)
+                    grenier_wall.setName("%s:%d:%d:%s" % (ids, i, j, idx))
+
+                    room_wall = openstudio.model.Surface(v_room, mdl)
+                    room_wall.setSpace(space)
+                    room_wall.setName("%s:%d:%d:%s" % (ids, i, j, ide))
+
+                    grenier_wall.setAdjacentSurface(room_wall)
+                    room_wall.setAdjacentSurface(grenier_wall)
+
+                # Add individual skylights. Independently of the set layout
+                # (rows x cols), individual roof inserts may be deeper than
+                # wider (or vice-versa). Adapt skylight width vs depth
+                # accordingly.
+                if round(st["d"], 2) > round(st["w"], 2):
+                    sub["width" ] = st["d"] - f2
+                    sub["height"] = st["w"] - f2
+                else:
+                    sub["width" ] = st["w"] - f2
+                    sub["height"] = st["d"] - f2
+
+                sub["id"] = roof.nameString()
+                addSubs(roof, sub, False, True, True)
+
+
+        # Vertically-cast set roof "vtx" onto ceiling.
+        for st in stz:
+            cst = cast(ti * st["vtx"], t0 * tile.vertices(), ray)
+            st["cvtx"] = t0.inverse() * cst
+
+        # Extended ceiling vertices.
+        vertices = genExtendedVertices(clng, stz, "cvtx")
+        if not vertices: continue
+
+        # Reset ceiling and adjacent floor vertices.
+        clng.setVertices(vertices)
+        fvtx = list(t0 * vertices)
+        fvtx.reverse()
+        floor.setVertices(ti.inverse() * p3Dv(fvtx))
+
+    # Loop through 'direct' roof surfaces of rooms to toplit (no attics or
+    # plenums). No overlaps, so no relative space coordinate adjustments.
+    for ide, room in rooms.items():
+        for roof in room["roofs"]:
+            for i, st in enumerate(sets):
+                if "clng"     in st: continue
+                if "box"  not in st: continue
+                if "cols" not in st: continue
+                if "rows" not in st: continue
+                if "d"    not in st: continue
+                if "w"    not in st: continue
+                if "dY"   not in st: continue
+                if "roof" not in st: continue
+
+                if st["roof"] != roof: continue
+
+                w1 = st["w" ] - f2
+                d1 = st["d" ] - f2
+                dY = st["dY"]
+
+                for j in range(st["rows"]):
+                    sub            = {}
+                    sub["type"    ] = "Skylight"
+                    sub["count"   ] = st["cols"]
+                    sub["width"   ] = w1
+                    sub["height"  ] = d1
+                    sub["id"      ] = "%s:%d:%d" % (roof.nameString(), i, j)
+                    sub["sill"    ] = dY + j * (2 * dY + d1)
+                    if st["dX"]: sub["r_buffer"] = st["dX"]
+                    if st["dX"]: sub["l_buffer"] = st["dX"]
+                    if frame:    sub["frame"   ] = frame
+
+                    addSubs(roof, sub, False, True, True)
+
+    return rm2
 
 
 def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
@@ -6803,7 +8707,7 @@ def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
     mth    = "osut.isDaylit"
     cl     = openstudio.model.Space
     walls  = []
-    roofs  = []
+    rufs   = []
     floors = []
 
     if not isinstance(space, openstudio.model.Space):
@@ -6825,10 +8729,10 @@ def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
         return oslg.invalid("baselit", mth, 2, CN.DBG, False)
 
     if sidelit: walls  = facets(space, "Outdoors", "Wall")
-    if toplit:  roofs  = facets(space, "Outdoors", "RoofCeiling")
+    if toplit:  rufs   = facets(space, "Outdoors", "RoofCeiling")
     if baselit: floors = facets(space, "Outdoors", "Floor")
 
-    for surface in (walls + roofs + floors):
+    for surface in (walls + rufs + floors):
         for sub in surface.subSurfaces():
             # All fenestrated subsurface types are considered, as user can set
             # these explicitly (e.g. skylight in a wall) in OpenStudio.

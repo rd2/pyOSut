@@ -817,8 +817,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         for c in model.getConstructions():
             if not c.to_LayeredConstruction(): continue
 
-            c  = c.to_LayeredConstruction().get()
-            id = c.nameString()
+            c   = c.to_LayeredConstruction().get()
+            ide = c.nameString()
 
             # OSut 'thickness' method can only process layered constructions
             # built up with standard opaque layers, which exclude:
@@ -829,7 +829,7 @@ class TestOSutModuleMethods(unittest.TestCase):
             # The method returns '0' in such cases, logging ERROR messages.
             th = osut.thickness(c)
 
-            if "Air Wall" in id or "Double pane" in id:
+            if "Air Wall" in ide or "Double pane" in ide:
                 self.assertAlmostEqual(th, 0.00, places=2)
                 continue
 
@@ -843,9 +843,9 @@ class TestOSutModuleMethods(unittest.TestCase):
         for c in model.getConstructions():
             if c.to_LayeredConstruction(): continue
 
-            c  = c.to_LayeredConstruction().get()
-            id = c.nameString()
-            if "Air Wall" in id or "Double pane" in id: continue
+            c   = c.to_LayeredConstruction().get()
+            ide = c.nameString()
+            if "Air Wall" in ide or "Double pane" in id: continue
 
             th = osut.thickness(c)
             self.assertTrue(th > 0)
@@ -1196,7 +1196,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         m0 = " expecting LayeredConstruction (osut.insulatingLayer)"
 
         for lc in model.getLayeredConstructions():
-            id = lc.nameString()
+            ide = lc.nameString()
             lyr = osut.insulatingLayer(lc)
 
             self.assertTrue(isinstance(lyr, dict))
@@ -1220,16 +1220,16 @@ class TestOSutModuleMethods(unittest.TestCase):
 
             self.assertTrue(lyr["index"] < lc.numLayers())
 
-            if id == "EXTERIOR-ROOF":
+            if ide == "EXTERIOR-ROOF":
                 self.assertEqual(lyr["index"], 2)
                 self.assertAlmostEqual(lyr["r"], 5.08, places=2)
-            elif id == "EXTERIOR-WALL":
+            elif ide == "EXTERIOR-WALL":
                 self.assertEqual(lyr["index"], 2)
                 self.assertAlmostEqual(lyr["r"], 1.47, places=2)
-            elif id == "Default interior ceiling":
+            elif ide == "Default interior ceiling":
                 self.assertEqual(lyr["index"], 0)
                 self.assertAlmostEqual(lyr["r"], 0.12, places=2)
-            elif id == "INTERIOR-WALL":
+            elif ide == "INTERIOR-WALL":
                 self.assertEqual(lyr["index"], 1)
                 self.assertAlmostEqual(lyr["r"], 0.24, places=2)
             else:
@@ -1588,10 +1588,10 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         mth1 = "osut.maxHeatScheduledSetpoint"
         mth2 = "osut.minCoolScheduledSetpoint"
-        msg1 = "'zone' NoneType? expecting ThermalZone (%s)" % mth1
-        msg2 = "'zone' NoneType? expecting ThermalZone (%s)" % mth2
-        msg3 = "'zone' str? expecting ThermalZone (%s)" % mth1
-        msg4 = "'zone' str? expecting ThermalZone (%s)" % mth2
+        m1   = "'zone' NoneType? expecting ThermalZone (%s)" % mth1
+        m2   = "'zone' NoneType? expecting ThermalZone (%s)" % mth2
+        m3   = "'zone' str? expecting ThermalZone (%s)" % mth1
+        m4   = "'zone' str? expecting ThermalZone (%s)" % mth2
 
         for z in model.getThermalZones():
             z0  = z.nameString()
@@ -1624,7 +1624,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(res["dual"])
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], msg1)
+        self.assertEqual(o.logs()[0]["message"], m1)
         self.assertEqual(o.clean(), DBG)
 
         res = osut.minCoolScheduledSetpoint(None) # bad argument
@@ -1635,7 +1635,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(res["dual"])
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], msg2)
+        self.assertEqual(o.logs()[0]["message"], m2)
         self.assertEqual(o.clean(), DBG)
 
         res = osut.maxHeatScheduledSetpoint("") # bad argument
@@ -1646,7 +1646,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(res["dual"])
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], msg3)
+        self.assertEqual(o.logs()[0]["message"], m3)
         self.assertEqual(o.clean(), DBG)
 
         res = osut.minCoolScheduledSetpoint("") # bad argument
@@ -1657,7 +1657,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(res["dual"])
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], msg4)
+        self.assertEqual(o.logs()[0]["message"], m4)
         self.assertEqual(o.clean(), DBG)
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
@@ -1742,10 +1742,11 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
-
-        msg = "'model' str? expecting Model (osut.hasAirLoopsHVAC)"
-        version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
+
+        m = "'model' str? expecting Model (osut.hasAirLoopsHVAC)"
+
+        version = int("".join(openstudio.openStudioVersion().split(".")))
 
         # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         path  = openstudio.path("./tests/files/osms/out/seb2.osm")
@@ -1759,7 +1760,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(osut.hasAirLoopsHVAC(""), False)
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], msg)
+        self.assertEqual(o.logs()[0]["message"], m)
         self.assertEqual(o.clean(), DBG)
 
         del model
@@ -1776,7 +1777,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(osut.hasAirLoopsHVAC(""), False)
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], msg)
+        self.assertEqual(o.logs()[0]["message"], m)
         self.assertEqual(o.clean(), DBG)
 
         del model
@@ -1796,7 +1797,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         # Tag "Entry way 1" in SEB as a vestibule.
         tag   = "vestibule"
-        msg   = "Invalid 'vestibule' arg #1 (osut.areVestibules)"
+        m     = "Invalid 'vestibule' arg #1 (osut.areVestibules)"
         entry = model.getSpaceByName("Entry way 1")
         self.assertTrue(entry)
         entry = entry.get()
@@ -1830,7 +1831,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertFalse(osut.areVestibules(entry))
         self.assertTrue(o.is_error())
         self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], msg)
+        self.assertEqual(o.logs()[0]["message"], m)
         self.assertEqual(o.clean(), DBG)
         self.assertTrue(entry.additionalProperties().resetFeature(tag))
 
@@ -2044,7 +2045,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         # Tag attic instead as an SEMIHEATED space. First, test an invalid entry.
         key = "space_conditioning_category"
         val = "Demiheated"
-        msg = "Invalid '%s:%s' (osut.setpoints)" % (key, val)
+        m   = "Invalid '%s:%s' (osut.setpoints)" % (key, val)
         self.assertTrue(attic.additionalProperties().setFeature(key, val))
         stps = osut.setpoints(attic)
         self.assertFalse(osut.arePlenums(attic))
@@ -2059,7 +2060,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         # 3x same error, as arePlenums/isUnconditioned call setpoints(attic).
         self.assertEqual(len(o.logs()), 3)
-        for l in o.logs(): self.assertEqual(l["message"], msg)
+        for l in o.logs(): self.assertEqual(l["message"], m)
 
         # Now test a valid entry.
         self.assertTrue(attic.additionalProperties().resetFeature(key))
@@ -4442,8 +4443,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         model.save("./tests/files/osms/out/seb_ext3.osm", True)
 
         # Fetch a (flat) plenum roof surface, and add a single skylight.
-        id = "Level 0 Open area 1 ceiling Plenum RoofCeiling"
-        ruf1 = model.getSurfaceByName(id)
+        ide  = "Level 0 Open area 1 ceiling Plenum RoofCeiling"
+        ruf1 = model.getSurfaceByName(ide)
         self.assertTrue(ruf1)
         ruf1 = ruf1.get()
 
@@ -4488,7 +4489,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         attic = None
 
         for space in model.getSpaces():
-            id = space.nameString()
+            ide = space.nameString()
 
             if version >= 350:
                 self.assertTrue(space.isVolumeAutocalculated)
@@ -4496,7 +4497,7 @@ class TestOSutModuleMethods(unittest.TestCase):
                 self.assertTrue(space.isFloorAreaDefaulted)
                 self.assertTrue(space.isFloorAreaAutocalculated)
 
-            if id == "Attic":
+            if ide == "Attic":
                 self.assertFalse(space.partofTotalFloorArea())
                 attic = space
                 continue
@@ -4697,9 +4698,9 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         self.assertEqual(len(roofs), len(spaces))
 
-        for id, surface in spaces.items():
-            self.assertTrue(id in roofs.keys())
-            self.assertEqual(roofs[id], surface)
+        for ide, surface in spaces.items():
+            self.assertTrue(ide in roofs)
+            self.assertEqual(roofs[ide], surface)
 
         del model
 
@@ -4743,7 +4744,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
 
         for occ in occupied:
-            self.assertTrue(occ in roofs.keys())
+            self.assertTrue(occ in roofs)
             self.assertTrue("plenum" in roofs[occ].lower())
 
         del model
@@ -4931,7 +4932,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(osut.rsi(io_wall, 0.150), 0.31, places=2)
 
         for space in model.getSpaces():
-            id = space.nameString()
+            ide = space.nameString()
 
             if not space.partofTotalFloorArea():
                 attic.append(space)
@@ -4941,9 +4942,9 @@ class TestOSutModuleMethods(unittest.TestCase):
             toplit  = osut.isDaylit(space, False)
             self.assertFalse(toplit)
 
-            if "Perimeter" in id:
+            if "Perimeter" in ide:
                 self.assertTrue(sidelit)
-            elif "Core" in id:
+            elif "Core" in ide:
                 self.assertFalse(sidelit)
                 core.append(space)
 
@@ -4962,52 +4963,37 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(total1, total2, places=2)
         self.assertAlmostEqual(total2, 598.76, places=2)
 
-        # attic = model.getSpaceByName("Attic")
-        # pZN4  = model.getSpaceByName("Perimeter_ZN_4")
-        # self.assertTrue(attic)
-        # self.assertTrue(pZN4)
-        # attic = attic.get()
-        # pZN4  = pZN4.get()
-        # pZN4_ceiling = model.getSurfaceByName("Perimeter_ZN_4_ceiling")
-        # aSouth_roof  = model.getSurfaceByName("Attic_roof_south")
-        # self.assertTrue(pZN4_ceiling)
-        # self.assertTrue(aSouth_roof)
-        # pZN4_ceiling = pZN4_ceiling.get()
-        # aSouth_roof  = aSouth_roof.get()
-        #
-        # up = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
-        # t0 = osut.transforms(attic)
-        # ti = osut.transforms(pZN4)
-        #
-        # roof0 = t0["t"] * aSouth_roof.vertices()
-        # ceili = ti["t"] * pZN4_ceiling.vertices()
-        #
-        # print(" --- ROOF0 --- --- --- --- --- ")
-        # for pt in roof0: print(pt)
-        # print(" --- CEILI --- --- --- --- --- ")
-        # for pt in ceili: print(pt)
-        #
-        # cst = osut.cast(ceili, roof0, up)
-        # print(" --- CST --- --- --- --- --- ")
-        # for pt in cst: print(pt)
-        #
-        # olap = osut.overlap(cst, roof0, False)
-        # print(olap.__class__.__name__)
-        # print(len(olap))
-        # for pt in olap: print(pt)
-        # self.assertTrue(olap)
-        # print(" --- OLAP --- --- --- --- --- ")
-        # for pt in olap: print(pt)
-        #
-        # m2 = openstudio.getArea(olap)
-        # self.assertTrue(m2)
-        # m2 = m2.get()
-        # print(" --- m2 --- --- --- --- --- ")
-        # print(m2)
-
         # "GROSS ROOF AREA" (GRA), as per 90.1/NECB - excludes overhangs (60m2)
         gra1 = osut.grossRoofArea(model.getSpaces())
         self.assertAlmostEqual(gra1, 538.86, places=2)
+
+        # Unless model geometry is too granular (e.g. finely tessellated), the
+        # method 'addSkyLights' generates skylight/wells achieving user-required
+        # skylight-to-roof ratios (SRR%). The distinction between TOTAL vs GRA
+        # is obviously key for SRR% calculations (i.e. denominators).
+
+        # 2x test CASES:
+        #   1. UNCONDITIONED (attic, as is)
+        #   2. INDIRECTLY-CONDITIONED (e.g. plenum)
+        #
+        # For testing purposes, only the core zone here is targeted for skylight
+        # wells. Context: NECBs and 90.1 require separate SRR% calculations for
+        # differently conditioned spaces (SEMI-CONDITIONED vs CONDITIONED).
+        # Consider this as practice - see 'addSkyLights' doc.
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # CASE 1:
+        # Retrieve core GRA. As with overhangs, only the attic roof 'sections'
+        # directly-above the core are retained for SRR% calculations. Here, the
+        # GRA is substantially lower (than previously-calculated gra1). For now,
+        # calculated GRA is only valid BEFORE adding skylight wells.
+        gra_attic = osut.grossRoofArea(core)
+        self.assertAlmostEqual(gra_attic, 157.77, places=2)
+
+        # The method returns the GRA, calculated BEFORE adding skylights/wells.
+        # rm2 = osut.addSkyLights(core, dict(srr=srr))
+        # print(o.logs())
+        # self.assertAlmostEqual(rm2, gra_attic, places=2)
 
         self.assertEqual(o.status(), 0)
         del model
@@ -5190,8 +5176,8 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         slab = osut.genSlab(plates, z0)
         self.assertTrue(o.is_error())
-        msg = o.logs()[0]["message"]
-        self.assertEqual(msg, "Invalid 'plate # 4 (index 3)' (osut.genSlab)")
+        m = o.logs()[0]["message"]
+        self.assertEqual(m, "Invalid 'plate # 4 (index 3)' (osut.genSlab)")
         self.assertEqual(o.clean(), DBG)
         self.assertTrue(isinstance(slab, openstudio.Point3dVector))
         self.assertFalse(slab)
