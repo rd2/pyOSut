@@ -975,8 +975,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = model.get()
 
         for s in model.getSurfaces():
-            set = osut.defaultConstructionSet(s)
-            self.assertTrue(set)
+            cset = osut.defaultConstructionSet(s)
+            self.assertTrue(cset)
             self.assertEqual(o.status(), 0)
 
         del model
@@ -988,8 +988,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = model.get()
 
         for s in model.getSurfaces():
-            set = osut.defaultConstructionSet(s)
-            self.assertFalse(set)
+            cset = osut.defaultConstructionSet(s)
+            self.assertFalse(cset)
             self.assertTrue(o.is_warn())
 
             for l in o.logs(): self.assertEqual(l["message"], m)
@@ -1863,7 +1863,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         mt1 = "(osut.arePlenums)"
         mt2 = "(osut.hasHeatingTemperatureSetpoints)"
         mt3 = "(osut.setpoints)"
-        ms1 = "'set' NoneType? expecting list %s" % mt1
+        ms1 = "'spaces' NoneType? expecting list %s" % mt1
         ms2 = "'model' NoneType? expecting %s %s" % (cl2.__name__, mt2)
         ms3 = "'space' Nonetype? expecting %s %s" % (cl1.__name__, mt3)
 
