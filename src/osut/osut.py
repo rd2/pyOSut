@@ -5204,11 +5204,9 @@ def spaceHeight(space=None) -> float:
     # The solution considers all surface types: "Floor", "Wall", "RoofCeiling".
     # No presumption that floor are necessarily at ground level.
     for surface in space.surfaces():
-        for pts in surface.vertices():
-            zs = [pt.z() for pt in pts]
-
-            minZ = min(minZ, min(zs))
-            maxZ = max(maxZ, max(zs))
+        zs   = [pt.z() for pt in surface.vertices()]
+        minZ = min(minZ, min(zs))
+        maxZ = max(maxZ, max(zs))
 
     hght = maxZ - minZ
     if hght < 0: hght = 0
@@ -5436,7 +5434,7 @@ def genAnchors(s=None, sset=[], tag="box") -> int:
                 if ids not in other["ld"]: continue
 
                 ost = other[tag]
-                pld = other["ld"][ts]
+                pld = other["ld"][ids]
                 if areSame(pld, pt): continue
                 if doesLineIntersect(ld, [pld, ost[0]]): nb += 1
 
@@ -5446,7 +5444,7 @@ def genAnchors(s=None, sset=[], tag="box") -> int:
                 if holds(sg, tpts[0]): continue
                 if doesLineIntersect(sg, ld): nb += 1
 
-                if (sg[0] - sg[0]).cross(ld[0] - ld[0]).length() < TOL: nb += 1
+                if ((sg[0]-sg[-1]).cross(ld[0]-ld[-1])).length() < CN.TOL: nb += 1
 
             if nb == 0: candidates.append(pt)
 
@@ -5465,9 +5463,9 @@ def genAnchors(s=None, sset=[], tag="box") -> int:
             st["ld"][ids] = p0
             n += 1
         else:
-            str = ide + ("subset #%d" % (i+1))
-            m   = "%s: unable to anchor %s leader line (%s)" % (str, tag, mth)
-            oslg.log(WRN, m)
+            str1 = ide + ("subset #%d" % (i+1))
+            m    = "%s: unable to anchor '%s' leader line (%s)" % (str1, tag, mth)
+            oslg.log(CN.WRN, m)
             st["void"] = True
 
     return n
@@ -6931,7 +6929,7 @@ def grossRoofArea(spaces=[]) -> float:
     return rm2
 
 
-def getHorizontalRidges(rufs=[]) -> list:
+def horizontalRidges(rufs=[]) -> list:
     """Identifies horizontal ridges along 2x sloped 'roof' surfaces (same
     space) - see 'isRoof'. Harmonized with OpenStudio's "alignZPrime" - see
     'isSloped'.
@@ -6947,7 +6945,7 @@ def getHorizontalRidges(rufs=[]) -> list:
         - "roofs" (list): 2x linked roof surfaces, on either side of the edge
 
     """
-    mth    = "osut.getHorizontalRidges"
+    mth    = "osut.horizontalRidges"
     ridges = []
 
     try:
@@ -6998,7 +6996,8 @@ def getHorizontalRidges(rufs=[]) -> list:
                     if match: break
 
                     edg1 = list(edg)
-                    edg2 = edg.reverse()
+                    edg2 = list(edg)
+                    edg2.reverse()
 
                     if areSame(edge, edg1) or areSame(edge, edg2):
                         ridge["roofs"].append(ruf)
@@ -7437,7 +7436,6 @@ def addSkyLights(spaces=[], opts=dict) -> float:
     # By default, seek ideal candidate spaces/roofs. Bail out if unsuccessful.
     if opts["ration"] is True:
         spaces = toToplit(spaces, opts)
-        print(spaces.__class__.__name__)
         if not spaces: return rm2
 
     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
@@ -7605,7 +7603,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
         #   - no skylight wells (i.e. no leader lines)
         #   - 1x skylight array per roof surface
         #   - no need to consider site transformation
-        for roof in rooms[space]["roofs"]:
+        for roof in rooms[ide]["roofs"]:
             if not isRoof(roof): continue
 
             vtx = roof.vertices()
@@ -7640,6 +7638,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
             sset["space"  ] = space
             sset["m"      ] = space.multiplier()
             sset["sidelit"] = rooms[space]["sidelit"]
+            sset["sloped" ] = isSloped(roof)
             sset["t0"     ] = rooms[space]["t0"]
             sset["t"      ] = openstudio.Transformation.alignFace(vtx)
             ssets.append(sset)
@@ -7648,7 +7647,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
     for ide, room in rooms.items():
         t0    = room["t0"]
         space = room["space"]
-        rufs  = roofs(space) - room["roofs"]
+        rufs  = [ruf for ruf in roofs(space) if ruf not in room["roofs"]]
 
         for ruf in rufs:
             id0 = ruf.nameString()
@@ -7777,6 +7776,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 sset["ti"     ] = ti
                 sset["t"      ] = openstudio.Transformation.alignFace(vtx)
                 sset["sidelit"] = room["sidelit"]
+                sset["sloped" ] = isSloped(ruf)
 
                 if isUnconditioned(espace): # e.g. attic
                     if idx not in attics:   # idx = espace.nameString()
@@ -7814,11 +7814,15 @@ def addSkyLights(spaces=[], opts=dict) -> float:
 
     # Ensure uniqueness of plenum roofs.
     for attic in attics.values():
-        attic["roofs" ] = list(set(attic["roofs"]))
+        ruufs = []
+        ruufs = [ruf for ruf in attic["roofs"] if ruf not in ruufs]
+        attic["roofs" ] = ruufs
         attic["ridges"] = horizontalRidges(attic["roofs"]) # @todo
 
     for plenum in plenums.values():
-        plenum["roofs" ] = list(set(plenum["roofs"]))
+        ruufs = []
+        ruufs = [ruf for ruf in plenum["roofs"] if ruf not in ruufs]
+        plenum["roofs" ] = ruufs
         plenum["ridges"] = horizontalRidges(plenum["roofs"]) # @todo
 
     # Regardless of the selected skylight arrangement pattern, the solution only
@@ -7851,12 +7855,10 @@ def addSkyLights(spaces=[], opts=dict) -> float:
         k = "attic" if "attic" in ceiling else "plenum"
         if k not in ceiling: continue
 
-        clng   = ceiling["cnlg" ] # ceiling surface
+        clng   = ceiling["clng" ] # ceiling surface
         space  = ceiling["space"] # its space
         espace = ceiling[k]       # adjacent (unoccupied) space above
-
         if "roofs" not in ceiling: continue
-        if ceiling["ide"] not in rooms: continue
 
         stz = []
 
@@ -7989,11 +7991,11 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                     if round(ly, 2) < round(sp, 2): continue
 
                     if well:
-                        cols = (width / (wxl + sp)).round(2).to_i
-                        rows = (depth / (wyl + sp)).round(2).to_i
+                        cols = int(round(width / (wxl + sp)), 2)
+                        rows = int(round(depth / (wyl + sp)), 2)
                     else:
-                        cols = (width / (wx + sp)).round(2).to_i
-                        rows = (depth / (wy + sp)).round(2).to_i
+                        cols = int(round(width / (wx + sp)), 2)
+                        rows = int(round(depth / (wy + sp)), 2)
 
                     if cols < 2: continue
                     if rows < 2: continue
@@ -8211,12 +8213,12 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                         if well:
                             wyl = wy + gap
                             ly  = depth - wyl
-                            ly  = sp if ly.round(2) < sp.round(2) else ly
+                            ly  = sp if round(ly, 2) < round(sp, 2) else ly
                             wyl = depth - ly
                             wy  = wyl - gap
                         else:
                             ly = depth - wy
-                            ly = sp if ly.round(2) < sp.round(2) else ly
+                            ly = sp if round(ly, 2) < round(sp, 2) else ly
                             wy = depth - ly
 
                         dY = ly / 2
@@ -8248,7 +8250,9 @@ def addSkyLights(spaces=[], opts=dict) -> float:
     if not attics:  filters = [fil.replace("e", "") for fil in filters]
 
     filters = [fil for fil in filters if fil] # remove any empty filter strings
-    filters = list(set(filters))              # ensure uniqueness
+    flters  = []
+    flters  = [fil for fil in filters if fil not in flters] # ensure uniqueness
+    filters = flters
 
     # Initialize skylight area tally (to increment).
     skm2 = 0
@@ -8303,11 +8307,11 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 if not fpm2["tight"]: pattern = "array"
 
         if not pattern:
-            fpm2 = dict(sorted(f2.items(), key=lambda f2: f2[1]["m2"]))
-            mnM2 = fpm2.values()[ 0]["m2"]
-            mxM2 = fpm2.values()[-1]["m2"]
+            fpm2 = dict(sorted(fpm2.items(), key=lambda f2: f2[1]["m2"]))
+            mnM2 = list(fpm2.values())[ 0]["m2"]
+            mxM2 = list(fpm2.values())[-1]["m2"]
 
-            if mnM2.round(2) >= dm2.round(2):
+            if round(mnM2, 2) >= round(dm2, 2):
                 # If not large array, then retain pattern generating smallest
                 # skylight area if ALL patterns >= residual target
                 # (deterministic sorting).
@@ -8352,8 +8356,10 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 sset["w0"     ] = sset[pattern]["wxl" ]
                 sset["d0"     ] = sset[pattern]["wyl" ]
 
-                if sset[pattern]["dX"]: sset["dX"] = sset[pattern]["dX"]
-                if sset[pattern]["dY"]: sset["dY"] = sset[pattern]["dY"]
+                if "dX" in sset[pattern] and sset[pattern]["dX"]:
+                    sset["dX"] = sset[pattern]["dX"]
+                if "dY" in sset[pattern] and sset[pattern]["dY"]:
+                    sset["dY"] = sset[pattern]["dY"]
 
     # Delete incomplete sets (same as rejected if 'voided').
     ssets = [sset for sset in ssets if "void" not in sset]
@@ -8510,8 +8516,10 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 sts = [st for st in sts if "roof"        in st]
                 sts = [st for st in sts if "pattern"     in st]
                 sts = [st for st in sts if st["pattern"] in st]
-                sts = [st for st in sts if st["space"  ] in rooms]
-                sts = [st for st in sts if id(roof)      in st["ld"]]
+
+                ide = st["space"].nameString()
+                sts = [st for st in sts if ide      in rooms]
+                sts = [st for st in sts if id(roof) in st["ld"]]
 
                 sts = [st for st in sts if st[k     ] == grenier["space"]]
                 sts = [st for st in sts if st["roof"] == roof]
@@ -8540,7 +8548,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
 
         espace = ceiling[k      ] # (unoccupied) space above ceiling
         floor  = ceiling["floor"] # adjacent floor above
-        clng   = ceiling["cnlg" ] # ceiling surface
+        clng   = ceiling["clng" ] # ceiling surface
         space  = ceiling["space"] # its space
         idx    = espace.nameString()
         ide    = space.nameString()

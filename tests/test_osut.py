@@ -4991,9 +4991,8 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(gra_attic, 157.77, places=2)
 
         # The method returns the GRA, calculated BEFORE adding skylights/wells.
-        # rm2 = osut.addSkyLights(core, dict(srr=srr))
-        # print(o.logs())
-        # self.assertAlmostEqual(rm2, gra_attic, places=2)
+        rm2 = osut.addSkyLights(core, dict(srr=srr))
+        self.assertAlmostEqual(rm2, gra_attic, places=2)
 
         self.assertEqual(o.status(), 0)
         del model
