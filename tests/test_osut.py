@@ -4994,6 +4994,13 @@ class TestOSutModuleMethods(unittest.TestCase):
         rm2 = osut.addSkyLights(core, dict(srr=srr))
         self.assertAlmostEqual(rm2, gra_attic, places=2)
 
+        # New core skylight areas. Successfully achieved SRR%.
+        core_skies = osut.facets(core, "Outdoors", "Skylight")
+        sky_area1  = sum([sk.grossArea() for sk in core_skies])
+        self.assertAlmostEqual(round(sky_area1, 2), 7.89)
+        ratio = sky_area1 / rm2
+        self.assertAlmostEqual(round(ratio, 2), srr)
+
         self.assertEqual(o.status(), 0)
         del model
 

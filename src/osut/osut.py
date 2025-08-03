@@ -2136,8 +2136,8 @@ def arePlenums(spaces=None):
     # By initially relying on the SDK's "partofTotalFloorArea", "space_plenum?"
     # ends up catching a MUCH WIDER range of spaces, which aren't caught by
     # "isPlenum". This includes attics, crawlspaces, non-plenum air spaces above
-    # ceiling tiles, and any other UNOCCUPIED space in a model. The term
-    # "plenum" in this context is more of a catch-all shorthand - to be used
+    # ceiling surfaces, and any other UNOCCUPIED space in a model. The term
+    # "plenum" in that context is more of a catch-all shorthand - to be used
     # with caution. For instance, "space_plenum?" shouldn't be used (in
     # isolation) to determine whether an UNOCCUPIED space should have its
     # envelope insulated ("plenum") or not ("attic").
@@ -5371,12 +5371,11 @@ def genAnchors(s=None, sset=[], tag="box") -> int:
         # others) a 'realigned' set of points (by default a 'realigned' "box").
         # The latter is typically generated from an outdoor-facing roof.
         # Subsequent calls to 'genAnchors' may send (as first argument) a
-        # corresponding ceiling tile below (both may be called from
-        # 'addSkylights'). Roof vs ceiling may neither share alignment
-        # transformation nor space/site transformation identities. All
-        # subsequent calls to 'genAnchors' shall recover the "out" points,
-        # apply a succession of de/alignments and transformations in sync, and
-        # overwrite tagged points.
+        # corresponding ceiling below (both may be called from 'addSkylights').
+        # Roof vs ceiling may neither share alignment transformation nor
+        # space/site transformation identities. All subsequent calls to
+        # 'genAnchors' shall recover the "out" points, apply a succession of
+        # de/alignments and transformations in sync, and overwrite tagged points.
         #
         # Although 'genAnchors' and 'genInserts' have both been developed to
         # support anchor insertions in other cases (e.g. bay window in a wall),
@@ -7297,7 +7296,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
     if not spaces:
         return oslg.empty("spaces", mth, CN.DBG, 0)
 
-    mdl = spaces[0].model
+    mdl = spaces[0].model()
 
     # Exit if mismatched or invalid options.
     if not isinstance(opts, dict):
@@ -7676,9 +7675,9 @@ def addSkyLights(spaces=[], opts=dict) -> float:
 
             # Process occupied room ceilings, as 1x or more are overlapping roof
             # surfaces above. Vertically cast, then fetch overlap.
-            for tile in facets(space, "Surface", "RoofCeiling"):
-                idee = tile.nameString()
-                tpts = t0 * tile.vertices()
+            for clng in facets(space, "Surface", "RoofCeiling"):
+                idee = clng.nameString()
+                tpts = t0 * clng.vertices()
                 ci0  = cast(tpts, rpts, ray)
                 if not ci0: continue
 
@@ -7697,7 +7696,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 # Adding skylight wells (plenums/attics) is contingent to safely
                 # linking new base roof 'inserts' (as well as new ceiling ones)
                 # through 'leader lines'. This requires an offset to ensure no
-                # conflicts with roof or (ceiling) tile edges.
+                # conflicts with roof or ceiling edges.
                 #
                 # @todo: Expand the method to factor in cases where simple
                 #        'side' cutouts can be supported (no need for leader
@@ -7716,7 +7715,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 if width < wl * 3: continue
                 if depth < wl * 2: continue
 
-                # Vertically cast box onto tile below.
+                # Vertically cast box onto ceiling below.
                 cbox = cast(box, tpts, ray)
                 if not cbox: continue
 
@@ -7728,7 +7727,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 cbox = t0.inverse() * cbox
 
                 if idee not in ceilings:
-                    floor = tile.adjacentSurface()
+                    floor = clng.adjacentSurface()
                     if not floor:
                         oslg.log(CN.ERR, "%s adjacent floor? (%s)" % (idee, mth))
                         continue
@@ -7745,7 +7744,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                         continue
 
                     ceilings[idee]          = {}    # idee: ceiling surface ID
-                    ceilings[idee]["clng" ] = tile  # ceiling surface itself
+                    ceilings[idee]["clng" ] = clng  # ceiling surface itself
                     ceilings[idee]["id"   ] = ide   # its space's ID
                     ceilings[idee]["space"] = space # its space
                     ceilings[idee]["floor"] = floor # adjacent floor
@@ -7771,7 +7770,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 sset["roof"   ] = ruf
                 sset["space"  ] = space
                 sset["m"      ] = space.multiplier()
-                sset["clng"   ] = tile
+                sset["clng"   ] = clng
                 sset["t0"     ] = t0
                 sset["ti"     ] = ti
                 sset["t"      ] = openstudio.Transformation.alignFace(vtx)
@@ -7883,7 +7882,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
         if not stz: continue
 
         stz = sorted(stz, key=lambda st: st["cm2"], reverse=True)
-        genAnchors(tile, stz, "cbox")
+        genAnchors(clng, stz, "cbox")
 
     # Delete voided sets.
     ssets = [sset for sset in ssets if "void" not in sset]
@@ -8563,25 +8562,29 @@ def addSkyLights(spaces=[], opts=dict) -> float:
 
         for roof in ceiling["roofs"]:
             sts = ssets
-            sts = [st for st in sts if "clng"      in st]
-            sts = [st for st in sts if k           in st]
-            sts = [st for st in sts if "space"     in st]
-            sts = [st for st in sts if "roof"      in st]
-            sts = [st for st in sts if "pattern"   in st]
-            sts = [st for st in sts if "cm2"       in st]
-            sts = [st for st in sts if "vts"       in st]
-            sts = [st for st in sts if "vtx"       in st]
-            sts = [st for st in sts if "ld"        in st]
-            sts = [st for st in sts if id(roof)    in st["ld"]]
-            sts = [st for st in sts if id(clng)    in st["ld"]]
-            sts = [st for st in sts if st["space"] in rooms]
+            sts = [st for st in sts if "clng"    in st]
+            sts = [st for st in sts if k         in st]
+            sts = [st for st in sts if "space"   in st]
+            sts = [st for st in sts if "roof"    in st]
+            sts = [st for st in sts if "pattern" in st]
+            sts = [st for st in sts if "cm2"     in st]
+            sts = [st for st in sts if "vts"     in st]
+            sts = [st for st in sts if "vtx"     in st]
+            sts = [st for st in sts if "ld"      in st]
+            sts = [st for st in sts if id(roof)  in st["ld"]]
+            sts = [st for st in sts if id(clng)  in st["ld"]]
+
+            id0 = st["space"].nameString()
+
+            sts = [st for st in sts if id0 == ide]
+            sts = [st for st in sts if id0 in rooms]
 
             sts = [st for st in sts if st["clng"] == clng]
             sts = [st for st in sts if st["roof"] == roof]
             sts = [st for st in sts if st[k     ] == espace]
             if len(sts) != 1: continue
 
-            stz.append(sts)[0]
+            stz.append(sts[0])
 
         if not stz: continue
 
@@ -8593,7 +8596,8 @@ def addSkyLights(spaces=[], opts=dict) -> float:
             if frame: sub["frame"] = frame
 
             for ids, vt in st["vts"].items():
-                roof = openstudio.model.Surface(t0.inverse() * (ti * vt), mdl)
+                vec = p3Dv(t0.inverse() * list(ti * vt))
+                roof = openstudio.model.Surface(vec, mdl)
                 roof.setSpace(space)
                 roof.setName("%s:%s" % (ids, ide))
 
@@ -8644,7 +8648,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
 
         # Vertically-cast subset roof "vtx" onto ceiling.
         for st in stz:
-            cst = cast(ti * st["vtx"], t0 * tile.vertices(), ray)
+            cst = cast(ti * st["vtx"], t0 * clng.vertices(), ray)
             st["cvtx"] = t0.inverse() * cst
 
         # Extended ceiling vertices.
