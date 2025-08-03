@@ -51,7 +51,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = openstudio.model.Model()
         self.assertTrue(isinstance(model, openstudio.model.Model))
         del model
-    
+
     def test02_tuples(self):
         self.assertEqual(len(osut.sidz()), 6)
         self.assertEqual(len(osut.mass()), 4)
@@ -5183,6 +5183,102 @@ class TestOSutModuleMethods(unittest.TestCase):
         sky_area2  = sum([sk.grossArea() for sk in core_skies])
         self.assertAlmostEqual(sky_area2, 0.00, places=2)
         self.assertEqual(o.clean(), DBG)
+
+        self.assertEqual(o.status(), 0)
+        del model
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # SEB case (flat ceiling plenum).
+        path  = openstudio.path("./tests/files/osms/out/seb2.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        entry   = model.getSpaceByName("Entry way 1")
+        office  = model.getSpaceByName("Small office 1")
+        open    = model.getSpaceByName("Open area 1")
+        utility = model.getSpaceByName("Utility 1")
+        plenum  = model.getSpaceByName("Level 0 Ceiling Plenum")
+        self.assertTrue(entry)
+        self.assertTrue(office)
+        self.assertTrue(open)
+        self.assertTrue(utility)
+        self.assertTrue(plenum)
+        entry   = entry.get()
+        office  = office.get()
+        open    = open.get()
+        utility = utility.get()
+        plenum  = plenum.get()
+        self.assertFalse(plenum.partofTotalFloorArea())
+        self.assertFalse(osut.isUnconditioned(plenum))
+
+        # TOTAL plenum roof area (4x surfaces), no overhangs.
+        roofs = osut.facets(plenum, "Outdoors", "RoofCeiling")
+        total = sum([ruf.grossArea() for ruf in roofs])
+        self.assertAlmostEqual(total, 82.21, places=2)
+
+        # A single plenum above all 4 occupied rooms. Reports same GRA.
+        gra_seb1 = osut.grossRoofArea(model.getSpaces())
+        gra_seb2 = osut.grossRoofArea(entry)
+        self.assertAlmostEqual(gra_seb1, gra_seb2, places=2)
+        self.assertAlmostEqual(gra_seb1, total, places=2)
+
+        sky_area = srr * total
+
+        # Before adding skylight wells.
+        if version >= 350:
+            for sp in [plenum, entry, office, open, utility]:
+                self.assertTrue(sp.isEnclosedVolume())
+                self.assertTrue(sp.isVolumeDefaulted())
+                self.assertTrue(sp.isVolumeAutocalculated())
+                self.assertGreater(sp.volume(), 0)
+
+                zn = sp.thermalZone()
+                self.assertTrue(zn)
+                zn = zn.get()
+                self.assertTrue(zn.isVolumeDefaulted())
+                self.assertTrue(zn.isVolumeAutocalculated())
+                self.assertFalse(zn.volume())
+
+        # The method returns the GRA, calculated BEFORE adding skylights/wells.
+        rm2 = osut.addSkyLights(model.getSpaces(), dict(area=sky_area))
+        if o.logs(): print(o.logs())
+        self.assertAlmostEqual(rm2, total, places=2)
+
+        entry_skies   = osut.facets(entry, "Outdoors", "Skylight")
+        office_skies  = osut.facets(office, "Outdoors", "Skylight")
+        utility_skies = osut.facets(utility, "Outdoors", "Skylight")
+        open_skies    = osut.facets(open, "Outdoors", "Skylight")
+
+        self.assertFalse(entry_skies)
+        self.assertFalse(office_skies)
+        self.assertFalse(utility_skies)
+        self.assertEqual(len(open_skies), 1)
+        open_sky = open_skies[0]
+
+        skm2 = open_sky.grossArea()
+        self.assertAlmostEqual(skm2 / rm2, srr, places=2)
+
+        # Assign construction to new skylights.
+        construction = osut.genConstruction(model, dict(type="skylight", uo=2.8))
+        self.assertTrue(open_sky.setConstruction(construction))
+
+        # No change after adding skylight wells.
+        if version >= 350:
+            for sp in [plenum, entry, office, open, utility]:
+                self.assertTrue(sp.isEnclosedVolume())
+                self.assertTrue(sp.isVolumeDefaulted())
+                self.assertTrue(sp.isVolumeAutocalculated())
+                self.assertGreater(sp.volume(), 0)
+
+                zn = sp.thermalZone()
+                self.assertTrue(zn)
+                zn = zn.get()
+                self.assertTrue(zn.isVolumeDefaulted())
+                self.assertTrue(zn.isVolumeAutocalculated())
+                self.assertFalse(zn.volume())
+
+        model.save("./tests/files/osms/out/seb_sky.osm", True)
 
         self.assertEqual(o.status(), 0)
         del model
