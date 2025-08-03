@@ -6118,6 +6118,61 @@ def roofs(spaces = []) -> list:
     return rufs
 
 
+def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
+    """Validates whether space has outdoor-facing surfaces with fenestration.
+
+    Args:
+        space (openstudio.model.Space):
+            An OpenStudio space.
+        sidelit (bool):
+            Whether to check for 'sidelighting', e.g. windows.
+        toplit (bool):
+            Whether to check for 'toplighting', e.g. skylights.
+        baselit (bool):
+            Whether to check for 'baselighting', e.g. glazed floors.
+
+    Returns:
+        bool: Whether space is daylit.
+        False: If invalid inputs (see logs).
+
+    """
+    mth    = "osut.isDaylit"
+    cl     = openstudio.model.Space
+    walls  = []
+    rufs   = []
+    floors = []
+
+    if not isinstance(space, openstudio.model.Space):
+        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
+
+    try:
+        sidelit = bool(sidelit)
+    except:
+        return oslg.invalid("sidelit", mth, 2, CN.DBG, False)
+
+    try:
+        toplit = bool(toplit)
+    except:
+        return oslg.invalid("toplit", mth, 2, CN.DBG, False)
+
+    try:
+        baselit = bool(baselit)
+    except:
+        return oslg.invalid("baselit", mth, 2, CN.DBG, False)
+
+    if sidelit: walls  = facets(space, "Outdoors", "Wall")
+    if toplit:  rufs   = facets(space, "Outdoors", "RoofCeiling")
+    if baselit: floors = facets(space, "Outdoors", "Floor")
+
+    for surface in (walls + rufs + floors):
+        for sub in surface.subSurfaces():
+            # All fenestrated subsurface types are considered, as user can set
+            # these explicitly (e.g. skylight in a wall) in OpenStudio.
+            if isFenestrated(sub): return True
+
+    return False
+
+
 def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005) -> bool:
     """Adds sub surface(s) (e.g. windows, doors, skylights) to a surface.
 
@@ -8700,58 +8755,3 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                     addSubs(roof, sub, False, True, True)
 
     return rm2
-
-
-def isDaylit(space=None, sidelit=True, toplit=True, baselit=True) -> bool:
-    """Validates whether space has outdoor-facing surfaces with fenestration.
-
-    Args:
-        space (openstudio.model.Space):
-            An OpenStudio space.
-        sidelit (bool):
-            Whether to check for 'sidelighting', e.g. windows.
-        toplit (bool):
-            Whether to check for 'toplighting', e.g. skylights.
-        baselit (bool):
-            Whether to check for 'baselighting', e.g. glazed floors.
-
-    Returns:
-        bool: Whether space is daylit.
-        False: If invalid inputs (see logs).
-
-    """
-    mth    = "osut.isDaylit"
-    cl     = openstudio.model.Space
-    walls  = []
-    rufs   = []
-    floors = []
-
-    if not isinstance(space, openstudio.model.Space):
-        return oslg.mismatch("space", space, cl, mth, CN.DBG, False)
-
-    try:
-        sidelit = bool(sidelit)
-    except:
-        return oslg.invalid("sidelit", mth, 2, CN.DBG, False)
-
-    try:
-        toplit = bool(toplit)
-    except:
-        return oslg.invalid("toplit", mth, 2, CN.DBG, False)
-
-    try:
-        baselit = bool(baselit)
-    except:
-        return oslg.invalid("baselit", mth, 2, CN.DBG, False)
-
-    if sidelit: walls  = facets(space, "Outdoors", "Wall")
-    if toplit:  rufs   = facets(space, "Outdoors", "RoofCeiling")
-    if baselit: floors = facets(space, "Outdoors", "Floor")
-
-    for surface in (walls + rufs + floors):
-        for sub in surface.subSurfaces():
-            # All fenestrated subsurface types are considered, as user can set
-            # these explicitly (e.g. skylight in a wall) in OpenStudio.
-            if isFenestrated(sub): return True
-
-    return False
