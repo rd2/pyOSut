@@ -5283,6 +5283,64 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         del model
 
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path  = openstudio.path("./tests/files/osms/in/warehouse.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        for space in model.getSpaces():
+            ide = space.nameString()
+            if not space.partofTotalFloorArea(): continue
+
+            sidelit = osut.isDaylit(space, True, False)
+            toplit  = osut.isDaylit(space, False)
+            if "Office"  in ide: self.assertTrue(sidelit)
+            if "Storage" in ide: self.assertFalse(sidelit)
+            if "Office"  in ide: self.assertFalse(toplit)
+            if "Storage" in ide: self.assertTrue(toplit)
+
+        bulk = model.getSpaceByName("Zone3 Bulk Storage")
+        fine = model.getSpaceByName("Zone2 Fine Storage")
+        self.assertTrue(bulk)
+        self.assertTrue(fine)
+        bulk = bulk.get()
+        fine = fine.get()
+
+        # No overhangs/attics. Calculation of roof area for SRR% is more intuitive.
+        gra_bulk = osut.grossRoofArea(bulk)
+        gra_fine = osut.grossRoofArea(fine)
+
+        bulk_roof_m2 = sum([ruf.grossArea() for ruf in osut.roofs(bulk)])
+        fine_roof_m2 = sum([ruf.grossArea() for ruf in osut.roofs(fine)])
+        self.assertAlmostEqual(gra_bulk, bulk_roof_m2, places=2)
+        self.assertAlmostEqual(gra_fine, fine_roof_m2, places=2)
+
+        # Initial SSR%.
+        bulk_skies = osut.facets(bulk, "Outdoors", "Skylight")
+        sky_area1  = sum([sk.grossArea() for sk in bulk_skies])
+        ratio1     = sky_area1 / bulk_roof_m2
+        self.assertAlmostEqual(sky_area1, 47.57, places=2)
+        self.assertAlmostEqual(ratio1, 0.01, places=2)
+
+        srr  = 0.04
+        opts = {}
+        opts["srr"  ] = srr
+        opts["size" ] = 2.4
+        opts["clear"] = True
+        rm2 = osut.addSkyLights(bulk, opts)
+
+        bulk_skies = osut.facets(bulk, "Outdoors", "Skylight")
+        sky_area2  = sum([sk.grossArea() for sk in bulk_skies])
+        self.assertAlmostEqual(sky_area2, 128.19, places=2)
+        ratio2     = sky_area2 / rm2
+        self.assertAlmostEqual(ratio2, srr, places=2)
+
+        model.save("./tests/files/osms/out/warehouse_sky.osm", True)
+
+        self.assertEqual(o.status(), 0)
+        del model
+
     def test35_facet_retrieval(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)

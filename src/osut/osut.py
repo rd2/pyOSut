@@ -7637,9 +7637,9 @@ def addSkyLights(spaces=[], opts=dict) -> float:
             sset["roof"   ] = roof
             sset["space"  ] = space
             sset["m"      ] = space.multiplier()
-            sset["sidelit"] = rooms[space]["sidelit"]
+            sset["sidelit"] = rooms[ide]["sidelit"]
             sset["sloped" ] = isSloped(roof)
-            sset["t0"     ] = rooms[space]["t0"]
+            sset["t0"     ] = rooms[ide]["t0"]
             sset["t"      ] = openstudio.Transformation.alignFace(vtx)
             ssets.append(sset)
 
@@ -7991,11 +7991,11 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                     if round(ly, 2) < round(sp, 2): continue
 
                     if well:
-                        cols = int(round(width / (wxl + sp)), 2)
-                        rows = int(round(depth / (wyl + sp)), 2)
+                        cols = int(round(width / (wxl + sp), 2))
+                        rows = int(round(depth / (wyl + sp), 2))
                     else:
-                        cols = int(round(width / (wx + sp)), 2)
-                        rows = int(round(depth / (wy + sp)), 2)
+                        cols = int(round(width / (wx + sp), 2))
+                        rows = int(round(depth / (wy + sp), 2))
 
                     if cols < 2: continue
                     if rows < 2: continue
@@ -8303,8 +8303,9 @@ def addSkyLights(spaces=[], opts=dict) -> float:
 
         # Favour (large) arrays if meeting residual target, unless constrained.
         if "array" in fpm2:
-            if round(fpm2["array"]["m2"], 2) >= round(dm2, 2):
-                if not fpm2["tight"]: pattern = "array"
+            if dm2 < fpm2["array"]["m2"]:
+                if "tight" not in fpm2["array"] or fpm2["array"]["tight"] is False:
+                    pattern = "array"
 
         if not pattern:
             fpm2 = dict(sorted(fpm2.items(), key=lambda f2: f2[1]["m2"]))
@@ -8684,16 +8685,17 @@ def addSkyLights(spaces=[], opts=dict) -> float:
                 dY = st["dY"]
 
                 for j in range(st["rows"]):
-                    sub            = {}
-                    sub["type"    ] = "Skylight"
-                    sub["count"   ] = st["cols"]
-                    sub["width"   ] = w1
-                    sub["height"  ] = d1
-                    sub["id"      ] = "%s:%d:%d" % (roof.nameString(), i, j)
-                    sub["sill"    ] = dY + j * (2 * dY + d1)
-                    if st["dX"]: sub["r_buffer"] = st["dX"]
-                    if st["dX"]: sub["l_buffer"] = st["dX"]
-                    if frame:    sub["frame"   ] = frame
+                    sub           = {}
+                    sub["type"  ] = "Skylight"
+                    sub["count" ] = st["cols"]
+                    sub["width" ] = w1
+                    sub["height"] = d1
+                    sub["id"    ] = "%s:%d:%d" % (roof.nameString(), i, j)
+                    sub["sill"  ] = dY + j * (2 * dY + d1)
+
+                    if "dX" in st and st["dX"]: sub["r_buffer"] = st["dX"]
+                    if "dX" in st and st["dX"]: sub["l_buffer"] = st["dX"]
+                    if frame: sub["frame"] = frame
 
                     addSubs(roof, sub, False, True, True)
 
