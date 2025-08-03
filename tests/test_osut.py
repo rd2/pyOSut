@@ -5001,6 +5001,15 @@ class TestOSutModuleMethods(unittest.TestCase):
         ratio = sky_area1 / rm2
         self.assertAlmostEqual(round(ratio, 2), srr)
 
+        # Reset attic default construction set for insulated interzone walls.
+        opts = dict(type="partition", uo=0.3)
+        construction = osut.genConstruction(model, opts)
+        self.assertAlmostEqual(osut.rsi(construction, 0.150), 1/0.3, places=2)
+        self.assertTrue(ia_set.setWallConstruction(construction))
+        if o.logs(): print(o.logs())
+
+        model.save("./tests/files/osms/out/office_attic.osm", True)
+
         self.assertEqual(o.status(), 0)
         del model
 

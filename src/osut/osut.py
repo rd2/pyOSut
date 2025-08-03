@@ -5315,8 +5315,8 @@ def genAnchors(s=None, sset=[], tag="box") -> int:
     mth = "osut.genAnchors"
     n   = 0
     ide = "%s " % s.nameString() if hasattr(s, "nameString") else ""
-    pts = poly(s)
     ids = id(s)
+    pts = poly(s)
 
     if not pts:
         return oslg.invalid("%s polygon" % ide, mth, 1, CN.DBG, n)
@@ -5361,7 +5361,7 @@ def genAnchors(s=None, sset=[], tag="box") -> int:
             if not isinstance(st["ld"], dict):
                 return oslg.invalid("%s leaders" % str1, mth, 0, CN.DBG, n)
 
-            st["ld"] = dict(st["ld"].items(), key=lambda k: k[0] != ids)
+            if ids in st["ld"]: st["ld"].pop(ids)
         else:
             st["ld"] = {}
 
@@ -5496,8 +5496,8 @@ def genExtendedVertices(s=None, sset=[], tag="vtx") -> openstudio.Point3dVector:
     mth = "osut.genExtendedVertices"
     ide = "%s " % s.nameString() if hasattr(s, "nameString") else ""
     f   = False
-    pts = poly(s)
     ids = id(s)
+    pts = poly(s)
     cl  = openstudio.Point3d
     a   = openstudio.Point3dVector()
     v   = []
@@ -5590,6 +5590,7 @@ def genInserts(s=None, sset=[]) -> openstudio.Point3dVector:
     """
     mth = "osut.genInserts"
     ide = "%s:" % s.nameString() if hasattr(s, "nameString") else ""
+    ids = id(s)
     pts = poly(s)
     cl  = openstudio.Point3d
     a   = openstudio.Point3dVector()
@@ -5622,10 +5623,10 @@ def genInserts(s=None, sset=[]) -> openstudio.Point3dVector:
 
         if not isinstance(ld, dict):
             return oslg.mismatch(str2, "ld", dict, mth, CN.DBG, a)
-        if id(s) not in ld:
-            return oslg.hashkey(str2, ld, s, mth, CN.DBG, a)
-        if not isinstance(ld[id(s)], cl):
-            return oslg.mismatch(str2, ld[id(s)], cl, mth, CN.DBG, a)
+        if ids not in ld:
+            return oslg.hashkey(str2, ld, ide, mth, CN.DBG, a)
+        if not isinstance(ld[ids], cl):
+            return oslg.mismatch(str2, ld[ids], cl, mth, CN.DBG, a)
 
         # Ensure each subset bounding box is safely within larger polygon
         # boundaries.
@@ -5709,7 +5710,7 @@ def genInserts(s=None, sset=[]) -> openstudio.Point3dVector:
 
         for j, other in enumerate(sset):
             if i == j: continue
-            bx2  = other["box"]
+            bx2 = other["box"]
 
             if overlapping(bx, bx2):
                 str4 = ide + "subset boxes #%d:#%d" % (i+1, j+1)
@@ -5811,7 +5812,7 @@ def genInserts(s=None, sset=[]) -> openstudio.Point3dVector:
 
             # Add reverse vertices, circumscribing each insert.
             vec.reverse()
-            if iX == cols - 1: vec.pop
+            if iX == cols - 1: vec.pop()
 
             vtx += vec
             if iX != cols - 1: xC -= gX + x
@@ -5824,7 +5825,7 @@ def genInserts(s=None, sset=[]) -> openstudio.Point3dVector:
         st["vtx"] = p3Dv(t * (o["r"] * (o["t"] * vtx)))
 
     # Extended vertex sequence of the larger polygon.
-    genExtendedVertices(s, sset)
+    return genExtendedVertices(s, sset)
 
 
 def facets(spaces=[], boundary="all", type="all", sides=[]) -> list:
@@ -8522,6 +8523,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
 
                 sts = [st for st in sts if st[k     ] == grenier["space"]]
                 sts = [st for st in sts if st["roof"] == roof]
+
                 if not sts: continue
 
                 # If successful, 'genInserts' returns extended ROOF surface
