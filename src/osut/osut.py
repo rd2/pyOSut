@@ -29,7 +29,6 @@
 
 import re
 import math
-import numpy
 import collections
 import openstudio
 from oslg import oslg
@@ -255,6 +254,50 @@ def each_cons(it, n):
         deq.popleft()
         deq.append(val)
         yield tuple(deq)
+
+
+def clamp(value, minimum, maximum) -> float:
+    """In-house alternative to Numpy's 'clip' (re: Ruby's 'clamp').
+
+    Args:
+        value (float):
+            A float-convertible value (to clip/clamp).
+        minimum (float):
+            Lower bound.
+        maximum (float):
+            Upper bound.
+
+    Returns:
+        float: Clamped value. Either value, min, max or '0' if invalid inputs.
+
+    """
+    try:
+        value = float(value)
+    except:
+        try:
+            minimum = float(minimum)
+            return minimum
+        except:
+            try:
+                maximum = float(maximum)
+                return maximum
+            except:
+                return 0.0
+
+    try:
+        minimum = float(minimum)
+    except:
+        return value
+
+    try:
+        maximum = float(maximum)
+    except:
+        return value
+
+    if value < minimum: return minimum
+    if value > maximum: return maximum
+
+    return value
 
 
 def genConstruction(model=None, specs=dict()):
@@ -1950,7 +1993,7 @@ def minCoolScheduledSetpoint(zone=None):
 
             if sched.to_ScheduleConstant():
                 sched = sched.to_ScheduleConstant().get()
-                minimum = scheduleConstantMinMax(sched)[:min]
+                minimum = scheduleConstantMinMax(sched)["min"]
 
                 if minimum:
                     if res["spt"] is None or res["spt"] > minimum:
@@ -6215,8 +6258,8 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
     cl2 = openstudio.model.WindowPropertyFrameAndDivider
     cl3 = openstudio.model.ConstructionBase
     v   = int("".join(openstudio.openStudioVersion().split(".")))
-    min = 0.050 # minimum ratio value ( 5%)
-    max = 0.950 # maximum ratio value (95%)
+    mn  = 0.050 # minimum ratio value ( 5%)
+    mx  = 0.950 # maximum ratio value (95%)
     if isinstance(subs, dict): subs = [subs]
 
     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
@@ -6471,7 +6514,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
                 m = "Reset '%s' height %.3fm (%s)" % (ide, sub["height"], mth)
                 oslg.log(CN.WRN, m)
-                sub["height"] = numpy.clip(sub["height"], glass, max_height)
+                sub["height"] = clamp(sub["height"], glass, max_height)
                 m = "Height '%s' reset to %.3fm (%s)" % (ide, sub["height"], mth)
                 oslg.log(CN.WRN, m)
 
@@ -6482,7 +6525,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
                 m = "Reset '%s' head %.3fm (%s)" % (ide, sub["head"], mth)
                 oslg.log(CN.WRN, m)
-                sub["head"] = numpy.clip(sub["head"], min_head, max_head)
+                sub["head"] = clamp(sub["head"], min_head, max_head)
                 m = "Head '%s' reset to %.3fm (%s)" % (ide, sub["head"], mth)
                 oslg.log(CN.WRN, m)
 
@@ -6493,7 +6536,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
                 m = "Reset '%s' sill %.3fm (%s)" % (ide, sub["sill"], mth)
                 oslg.log(CN.WRN, m)
-                sub["sill"] = numpy.clip(sub["sill"], min_sill, max_sill)
+                sub["sill"] = clamp(sub["sill"], min_sill, max_sill)
                 m = "Sill '%s reset to %.3fm (%s)" % (ide, sub["sill"], mth)
                 oslg.log(CN.WRN, m)
 
@@ -6621,7 +6664,7 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
 
                 m = "Reset '%s' width %.3fm (%s)" % (ide, sub["width"], mth)
                 oslg.log(CN.WRN, m)
-                sub["width"] = numpy.clip(sub["width"], glass, max_width)
+                sub["width"] = clamp(sub["width"], glass, max_width)
                 m = "Width '%s' reset to %.3fm ()%s)" % (ide, sub["width"], mth)
                 oslg.log(CN.WRN, m)
 
@@ -6676,10 +6719,10 @@ def addSubs(s=None, subs=[], clear=False, bound=False, realign=False, bfr=0.005)
                 continue
 
             # Log/reset if "ratio" beyond min/max?
-            if sub["ratio"] < min and sub["ratio"] > max:
+            if sub["ratio"] < mn and sub["ratio"] > mx:
                 m = "Reset ratio %.3f (%s)" % (sub["ratio"], mth)
                 oslg.log(CN.WRN, m)
-                sub["ratio"] = numpy.clip(sub["ratio"], min, max)
+                sub["ratio"] = clamp(sub["ratio"], mn, mx)
                 m = "Ratio reset to %.3f (%s)" % (sub["ratio"], mth)
                 oslg.log(CN.WRN, m)
 
@@ -7411,7 +7454,7 @@ def addSkyLights(spaces=[], opts=dict) -> float:
             if srr > 0.90:
                 oslg.log(CN.WRN, "SRR (%.2f) reset to 90% (%s)" % (srr, mth))
 
-            srr = numpy.clip(srr, 0.00, 0.10)
+            srr = clamp(srr, 0.00, 0.10)
     else:
         return oslg.hashkey("area", opts, "area", mth, CN.ERR, 0)
 
