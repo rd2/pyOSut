@@ -51,7 +51,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = openstudio.model.Model()
         self.assertTrue(isinstance(model, openstudio.model.Model))
         del model
-
+    
     def test02_tuples(self):
         self.assertEqual(len(osut.sidz()), 6)
         self.assertEqual(len(osut.mass()), 4)
@@ -5009,6 +5009,180 @@ class TestOSutModuleMethods(unittest.TestCase):
         if o.logs(): print(o.logs())
 
         model.save("./tests/files/osms/out/office_attic.osm", True)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Side test/comment: Why is it necessary to have 'addSkylights' return
+        # gross roof area (see 'rm2' above)?
+        #
+        # First, retrieving (newly-added) core roofs (i.e. skylight base
+        # surfaces).
+        rfs1 = osut.facets(core, "Outdoors", "RoofCeiling")
+        tot1 = sum([sk.grossArea() for sk in rfs1])
+        net  = sum([sk.netArea()   for sk in rfs1])
+        self.assertEqual(len(rfs1), 4)
+        self.assertAlmostEqual(tot1, 9.06, places=2) # 4x 2.265 m2
+        self.assertAlmostEqual(tot1 - net, sky_area1, places=2)
+
+        # In absence of skylight wells (more importantly, in absence of leader
+        # lines anchoring skylight base surfaces), OSut's 'roofs' &
+        # 'grossRoofArea' report not only on newly-added base surfaces (or
+        # their areas), but also overalpping areas of attic roofs above.
+        # Unfortunately, these become unreliable with newly-added skylight wells.
+        rfs2 = osut.roofs(core)
+        tot2 = sum([sk.grossArea() for sk in rfs2])
+        self.assertAlmostEqual(tot2, tot1, places=2)
+        self.assertAlmostEqual(tot2, osut.grossRoofArea(core), places=2)
+
+        # Fortunately, the addition of leader lines does not affect how
+        # OpenStudio reports surface areas.
+        rfs3 = osut.facets(attic, "Outdoors", "RoofCeiling")
+        tot3 = sum([sk.grossArea() for sk in rfs3])
+        self.assertAlmostEqual(tot3 + tot2, total2, places=2) # 598.76
+
+        # However, as discussed elsewhere (see 'addSkylights' doctring and
+        # inline comments), these otherwise valid areas are often overestimated
+        # for SRR% calculations (e.g. when overhangs and soffits are explicitely
+        # modelled). It is for this reason 'addSkylights' reports gross roof
+        # area BEFORE adding skylight wells. For higher-level applications
+        # relying on 'addSkylights' (e.g. an OpenStudio measure), it is better
+        # to store returned gross roof areas for subsequent reporting purposes.
+
+        # Deeper dive: Why are OSut's 'roofs' and 'grossRoofArea' unreliable
+        # with leader lines? Both rely on OSut's 'overlapping', itself relying
+        # on OpenStudio's 'join' and 'intersect': if neither are successful in
+        # joining (or intersecting) 2x polygons (e.g. attic roof vs cast core
+        # ceiling), there can be no identifiable overlap. In such cases, both
+        # 'roofs' and 'grossRoofArea' ignore overlapping attic roofs. A demo:
+        roof_north   = model.getSurfaceByName("Attic_roof_north")
+        core_ceiling = model.getSurfaceByName("Core_ZN_ceiling")
+        self.assertTrue(roof_north)
+        self.assertTrue(core_ceiling)
+        roof_north   = roof_north.get()
+        core_ceiling = core_ceiling.get()
+
+        t  = openstudio.Transformation.alignFace(roof_north.vertices())
+        up = openstudio.Point3d(0,0,1) - openstudio.Point3d(0,0,0)
+
+        a_roof_north   = t.inverse() * roof_north.vertices()
+        a_core_ceiling = t.inverse() * core_ceiling.vertices()
+        c_core_ceiling = osut.cast(a_core_ceiling, a_roof_north, up)
+
+        north_m2   = openstudio.getArea(a_roof_north)
+        ceiling_m2 = openstudio.getArea(c_core_ceiling)
+        self.assertTrue(north_m2)
+        self.assertTrue(ceiling_m2)
+        self.assertAlmostEqual(north_m2.get(), 192.98, places=2)
+        self.assertAlmostEqual(ceiling_m2.get(), 133.81, places=2)
+
+        # So far so good. Ensure clockwise winding.
+        a_roof_north   = list(a_roof_north)
+        c_core_ceiling = list(c_core_ceiling)
+        a_roof_north.reverse()
+        c_core_ceiling.reverse()
+        self.assertFalse(openstudio.join(a_roof_north, c_core_ceiling, TOL2))
+        self.assertFalse(openstudio.intersect(a_roof_north, c_core_ceiling, TOL))
+
+        # A future revision of OSut's 'roofs' and 'grossRoofArea' would require:
+        # - a new method identifying leader lines amongst surface vertices
+        # - a new method identifying surface cutouts amongst surface vertices
+        # - a method to prune both leader lines and cutouts from surface vertices
+        # - have 'roofs' & 'grossRoofArea' rely on the remaining outer vertices
+        #   ... @todo?
+        self.assertEqual(o.status(), 0)
+        del model
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # CASE 2:
+        path  = openstudio.path("./tests/files/osms/in/smalloffice.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        core  = model.getSpaceByName("Core_ZN")
+        attic = model.getSpaceByName("Attic")
+        self.assertTrue(core)
+        self.assertTrue(attic)
+        core  = core.get()
+        attic = attic.get()
+
+        # Tag attic as an INDIRECTLY-CONDITIONED space.
+        key = "indirectlyconditioned"
+        val = core.nameString()
+        self.assertTrue(attic.additionalProperties().setFeature(key, val))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertFalse(osut.isUnconditioned(attic))
+        self.assertAlmostEqual(osut.setpoints(attic)["heating"], 21.11, places=2)
+        self.assertAlmostEqual(osut.setpoints(attic)["cooling"], 23.89, places=2)
+
+        # Here, GRA includes ALL plenum roof surfaces (not just vertically-cast
+        # roof areas onto the core ceiling). More roof surfaces == greater
+        # skylight areas to meet the SRR% of 5%.
+        gra_plenum = osut.grossRoofArea(core)
+        self.assertAlmostEqual(gra_plenum, total1, places=2)
+
+        rm2 = osut.addSkyLights(core, dict(srr=srr))
+        if o.logs(): print(o.logs())
+        self.assertAlmostEqual(rm2, total1, places=2)
+
+        # The total skylight area is greater than in CASE 1. Nonetheless, the
+        # method is able to meet the requested SRR 5%. This may not be
+        # achievable in other circumstances, given the constrained roof/core
+        # overlap. Although a plenum vastly larger than the room(s) it serves is
+        # rare, it remains certainly problematic for the application of the
+        # Canadian NECB reference building skylight requirements.
+        core_skies = osut.facets(core, "Outdoors", "Skylight")
+        sky_area2  = sum([sk.grossArea() for sk in core_skies])
+        self.assertAlmostEqual(sky_area2, 29.94, places=2)
+        ratio2     = sky_area2 / rm2
+        self.assertAlmostEqual(ratio2, srr, places=2)
+
+        model.save("./tests/files/osms/out/office_plenum.osm", True)
+
+        self.assertEqual(o.status(), 0)
+        del model
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # CASE 2b:
+        path  = openstudio.path("./tests/files/osms/in/smalloffice.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        core  = model.getSpaceByName("Core_ZN")
+        attic = model.getSpaceByName("Attic")
+        self.assertTrue(core)
+        self.assertTrue(attic)
+        core  = core.get()
+        attic = attic.get()
+
+        # Again, tagging attic as an INDIRECTLY-CONDITIONED space.
+        key = "indirectlyconditioned"
+        val = core.nameString()
+        self.assertTrue(attic.additionalProperties().setFeature(key, val))
+        self.assertFalse(osut.arePlenums(attic))
+        self.assertFalse(osut.isUnconditioned(attic))
+        self.assertAlmostEqual(osut.setpoints(attic)["heating"], 21.11, places=2)
+        self.assertAlmostEqual(osut.setpoints(attic)["cooling"], 23.89, places=2)
+
+        gra_plenum = osut.grossRoofArea(core)
+        self.assertAlmostEqual(gra_plenum, total1, places=2)
+
+        # Conflicting argument case: Here, skylight wells must traverse plenums
+        # (in this context, "plenum" is an all encompassing keyword for any
+        # INDIRECTLY-CONDITIONED, unoccupied space). Yet by passing option
+        # "plenum: False", the method is instructed to skip "plenum" skylight
+        # wells altogether.
+        rm2 = osut.addSkyLights(core, dict(srr=srr, plenum=False))
+        self.assertTrue(o.is_warn())
+        self.assertEqual(len(o.logs()), 1)
+        msg = o.logs()[0]["message"]
+        self.assertTrue("Empty 'subsets (3)' (osut.addSkyLights)" in msg)
+        self.assertAlmostEqual(rm2, total1, places=2)
+
+        core_skies = osut.facets(core, "Outdoors", "Skylight")
+        sky_area2  = sum([sk.grossArea() for sk in core_skies])
+        self.assertAlmostEqual(sky_area2, 0.00, places=2)
+        self.assertEqual(o.clean(), DBG)
 
         self.assertEqual(o.status(), 0)
         del model
