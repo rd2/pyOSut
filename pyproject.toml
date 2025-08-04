@@ -1,17 +1,12 @@
 [project]
 name = "osut"
-version = "0.6.0a3"
+version = "0.6.0"
 description = "OpenStudio SDK utilities for Python"
 readme = "README.md"
 requires-python = ">=3.2"
 authors = [ {name = "Denis Bourgeois", email = "denis@rd2.ca"} ]
 maintainers = [ {name = "Denis Bourgeois", email = "denis@rd2.ca"} ]
-dependencies = [
-    "numpy",
-    "oslg",
-    "openstudio>=3.6.1",
-    "dataclasses",
-]
+dependencies = ["oslg","openstudio>=3.6.1"]
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 classifiers = [
