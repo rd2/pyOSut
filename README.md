@@ -1,6 +1,6 @@
 # pyOSut
-Python implementation of the OSut gem for the OpenStudio SDK.
+Python implementation of the  _OSut_ Ruby gem for the OpenStudio SDK.
 
-(original Ruby implementation/documentation: https://github.com/rd2/osut)
-
-_Disclaimer: alpha release_
+- PyPi [package](https://pypi.org/project/osut/)
+- Ruby [gem](https://rubygems.org/gems/osut)
+- Ruby GitHub [repository](https://github.com/rd2/osut)
