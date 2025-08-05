@@ -107,8 +107,8 @@ _film = dict(
 
 # Default (~1980s) envelope Uo (W/m2•K), based on surface type.
 _uo = dict(
-      shading = None,   # N/A
-    partition = None,   # N/A
+      shading = None,  # N/A
+    partition = None,  # N/A
          wall = 0.384, # rated R14.8 hr•ft2F/Btu
          roof = 0.327, # rated R17.6 hr•ft2F/Btu
         floor = 0.317, # rated R17.9 hr•ft2F/Btu (exposed floor)
@@ -335,9 +335,8 @@ def genConstruction(model=None, specs=dict()):
         ide = "OSut.CON." + specs["type"]
     if specs["type"] not in uo():
         return oslg.invalid("surface type", mth, 2, CN.ERR)
-    if "uo" not in specs:
-        specs["uo"] = uo()[ specs["type"] ]
 
+    if "uo" not in specs: specs["uo"] = uo()[ specs["type"] ] # can be None
     u = specs["uo"]
 
     if u:
@@ -348,6 +347,8 @@ def genConstruction(model=None, specs=dict()):
 
         if u < 0:
             return oslg.negative(id + " Uo", mth, CN.ERR)
+        if round(u, 2) == 0:
+            return oslg.zero(id + " Uo", mth, CN.ERR)
         if u > 5.678:
             return oslg.invalid(id + " Uo (> 5.678)", mth, 2, CN.ERR)
 
@@ -581,7 +582,7 @@ def genConstruction(model=None, specs=dict()):
         a["compo"  ]["id"  ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "window":
-        a["glazing"]["u"   ]  = specs["uo"]
+        a["glazing"]["u"   ]  = u if u else uo()["window"]
         a["glazing"]["shgc"]  = 0.450
         if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
         a["glazing"]["id"  ]  = "OSut.window"
@@ -589,7 +590,7 @@ def genConstruction(model=None, specs=dict()):
         a["glazing"]["id"  ] += ".SHGC%d" % (a["glazing"]["shgc"]*100)
 
     elif specs["type"] == "skylight":
-        a["glazing"]["u"   ]  = specs["uo"]
+        a["glazing"]["u"   ]  = u if u else uo()["skylight"]
         a["glazing"]["shgc"]  = 0.450
         if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
         a["glazing"]["id"  ]  = "OSut.skylight"
@@ -599,14 +600,14 @@ def genConstruction(model=None, specs=dict()):
     if a["glazing"]:
         layers = openstudio.model.FenestrationMaterialVector()
 
-        u    = a["glazing"]["u"   ]
+        u0   = a["glazing"]["u"   ]
         shgc = a["glazing"]["shgc"]
         lyr  = model.getSimpleGlazingByName(a["glazing"]["id"])
 
         if lyr:
             lyr = lyr.get()
         else:
-            lyr = openstudio.model.SimpleGlazing(model, u, shgc)
+            lyr = openstudio.model.SimpleGlazing(model, u0, shgc)
             lyr.setName(a["glazing"]["id"])
 
         layers.append(lyr)
@@ -635,49 +636,54 @@ def genConstruction(model=None, specs=dict()):
 
             layers.append(lyr)
 
-    c  = openstudio.model.Construction(layers)
+    c = openstudio.model.Construction(layers)
     c.setName(ide)
 
     # Adjust insulating layer thickness or conductivity to match requested Uo.
-    if not a["glazing"]:
-        ro = 1 / specs["uo"] - film()[specs["type"]] if specs["uo"] else 0
+    if u and not a["glazing"]:
+        ro = 1 / u - flm
 
-        if specs["type"] == "door": # 1x layer, adjust conductivity
-            layer = c.getLayer(0).to_StandardOpaqueMaterial()
+        if ro > 0:
+            if specs["type"] == "door": # 1x layer, adjust conductivity
+                layer = c.getLayer(0).to_StandardOpaqueMaterial()
 
-            if not layer:
-                return oslg.invalid(id + " standard material?", mth, 0)
+                if not layer:
+                    return oslg.invalid(id + " standard material?", mth, 0)
 
-            layer = layer.get()
-            k     = layer.thickness() / ro
-            layer.setConductivity(k)
+                layer = layer.get()
+                k     = layer.thickness() / ro
+                layer.setConductivity(k)
 
-        elif ro > 0: # multiple layers, adjust insulating layer thickness
-            lyr = insulatingLayer(c)
+            else: # multiple layers, adjust insulating layer thickness
+                lyr = insulatingLayer(c)
 
-            if not lyr["index"] or not lyr["type"] or not lyr["r"]:
-                return oslg.invalid(id + " construction", mth, 0)
+                if not lyr["index"] or not lyr["type"] or not lyr["r"]:
+                    return oslg.invalid(id + " construction", mth, 0)
 
-            index = lyr["index"]
-            layer = c.getLayer(index).to_StandardOpaqueMaterial()
+                index = lyr["index"]
+                layer = c.getLayer(index).to_StandardOpaqueMaterial()
 
-            if not layer:
-                return oslg.invalid(id + " material %d" % index, mth, 0)
+                if not layer:
+                    return oslg.invalid(id + " material %d" % index, mth, 0)
 
-            layer = layer.get()
-            k     = layer.conductivity()
-            d     = (ro - rsi(c) + lyr["r"]) * k
+                layer = layer.get()
+                k     = layer.conductivity()
+                d     = (ro - rsi(c) + lyr["r"]) * k
 
-            if d < 0.03:
-                return oslg.invalid(id + " adjusted material thickness", mth, 0)
+                if d < 0.03:
+                    m = id + " adjusted material thickness"
+                    return oslg.invalid(m, mth, 0)
 
-            nom = re.sub(r'[^a-zA-Z]', '', layer.nameString())
-            nom = re.sub(r'OSut', '', nom)
-            nom = "OSut." + nom + ".%03d" % int(d * 1000)
+                nom = re.sub(r'[^a-zA-Z]', '', layer.nameString())
+                nom = re.sub(r'OSut', '', nom)
+                nom = "OSut." + nom + ".%03d" % int(d * 1000)
 
-            if not model.getStandardOpaqueMaterialByName(nom):
-                layer.setName(nom)
-                layer.setThickness(d)
+                if model.getStandardOpaqueMaterialByName(nom):
+                    omat = model.getStandardOpaqueMaterialByName(nom).get()
+                    c.setLayer(index, omat)
+                else:
+                    layer.setName(nom)
+                    layer.setThickness(d)
 
     return c
 

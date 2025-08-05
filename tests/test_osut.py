@@ -649,6 +649,41 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         del model
 
+        # Invalid Uo (here, skylights and windows inherit default Uo values)
+        specs = dict(type="skylight", uo=None)
+        model = openstudio.model.Model()
+        c = osut.genConstruction(model, specs)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+        self.assertTrue(c)
+        self.assertTrue(isinstance(c, openstudio.model.Construction))
+        self.assertEqual(c.nameString(), "OSut.CON.skylight")
+        self.assertTrue(c.layers())
+        self.assertEqual(len(c.layers()), 1)
+        self.assertEqual(c.layers()[0].nameString(), "OSut.skylight.U3.5.SHGC45")
+        r = osut.rsi(c)
+        self.assertAlmostEqual(r, 1/osut.uo()["skylight"], places=3)
+        self.assertFalse(o.logs())
+        self.assertEqual(o.status(), 0)
+        del model
+
+        # Invalid Uo (here, Uo-adjustments are ignored altogether)
+        specs = dict(type="wall", uo=None)
+        model = openstudio.model.Model()
+        c = osut.genConstruction(model, specs)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+        self.assertTrue(c)
+        self.assertTrue(isinstance(c, openstudio.model.Construction))
+        self.assertEqual(c.nameString(), "OSut.CON.wall")
+        self.assertTrue(c.layers())
+        self.assertEqual(len(c.layers()), 4)
+        r = osut.rsi(c)
+        self.assertAlmostEqual(1/r, 2.23, places=2) # not matching any defaults
+        self.assertFalse(o.logs())
+        self.assertEqual(o.status(), 0)
+        del model
+
     def test06_internal_mass(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
