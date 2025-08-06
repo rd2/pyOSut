@@ -1665,12 +1665,11 @@ def scheduleIntervalMinMax(sched=None) -> dict:
         return oslg.mismatch("sched", sched, cl, mth, CN.DBG, res)
 
     values = sched.timeSeries().values()
-    length = len(values)
 
-    for i in range(length):
+    for i in range(len(values)):
         try:
             value = float(values[i])
-            value = vals.append(value)
+            vals.append(value)
         except:
             oslg.invalid("numerical at %d" % i, mth, 1, CN.ERR)
 
