@@ -392,7 +392,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         del model
 
-        # Insulated (conditioned), parking garage roof (polyiso under 8" slab).
+        # Roof above conditioned parking garage (polyiso under 8" slab).
         specs = dict(type="roof", uo=0.214, clad="heavy", frame="medium", finish="none")
         model = openstudio.model.Model()
         c = osut.genConstruction(model, specs)
@@ -1731,9 +1731,27 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(cc.setTemperatureCalculationRequestedAfterLayerNumber(1))
         self.assertTrue(floor.setConstruction(cc))
 
+        # Test 'fixed interval' schedule. Annual time series - no variation.
+        start  = model.getYearDescription().makeDate(1, 1)
+        inter  = openstudio.Time(0, 1, 0, 0)
+        values = openstudio.createVector([22.78] * 8760)
+        series = openstudio.TimeSeries(start, inter, values, "")
+        limits = openstudio.model.ScheduleTypeLimits(model)
+        limits.setName("Radiant Electric Heating Setpoint Schedule Type Limits")
+        self.assertTrue(limits.setNumericType("Continuous"))
+        self.assertTrue(limits.setUnitType("Temperature"))
+
+        schedule = openstudio.model.ScheduleFixedInterval(model)
+        schedule.setName("Radiant Electric Heating Setpoint Schedule")
+        self.assertTrue(schedule.setTimeSeries(series))
+        self.assertTrue(schedule.setTranslatetoScheduleFile(False))
+        self.assertTrue(schedule.setScheduleTypeLimits(limits))
+
+        tvals = schedule.timeSeries().values()
+        self.assertTrue(isinstance(tvals, openstudio.Vector))
+        for i in range(len(tvals)): self.assertTrue(isinstance(tvals[i], float))
+
         availability = osut.availabilitySchedule(model)
-        schedule = openstudio.model.ScheduleConstant(model)
-        self.assertTrue(schedule.setValue(22.78)) # reuse cooling setpoint
 
         # Create radiant electric heating.
         ht = (openstudio.model.ZoneHVACLowTemperatureRadiantElectric(
@@ -5384,15 +5402,15 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         translator = openstudio.osversion.VersionTranslator()
 
-        path   = openstudio.path("./tests/files/osms/out/seb2.osm")
+        path   = openstudio.path("./tests/files/osms/out/seb_ext2.osm")
         model  = translator.loadModel(path)
         self.assertTrue(model)
         model  = model.get()
         spaces = model.getSpaces()
         surfs  = model.getSurfaces()
         subs   = model.getSubSurfaces()
-        self.assertEqual(len(surfs), 56)
-        self.assertEqual(len(subs), 8)
+        self.assertEqual(len(surfs), 59)
+        self.assertEqual(len(subs), 14)
 
         # The solution is similar to:
         #   OpenStudio::Model::Space::findSurfaces(minDegreesFromNorth,
@@ -5416,15 +5434,15 @@ class TestOSutModuleMethods(unittest.TestCase):
         roofs1     = osut.facets(spaces, "Outdoors", "RoofCeiling", "top")
         roofs2     = osut.facets(spaces, "Outdoors", "RoofCeiling", "foo")
 
-        self.assertEqual(len(windows), 8)
-        self.assertEqual(len(skylights), 0)
-        self.assertEqual(len(walls), 26)
+        self.assertEqual(len(windows), 11)
+        self.assertEqual(len(skylights), 3)
+        self.assertEqual(len(walls), 28)
         self.assertFalse(northsouth)
         self.assertEqual(len(northeast), 8)
         self.assertEqual(len(north), 14)
         self.assertEqual(len(floors1a), 4)
         self.assertEqual(len(floors1b), 4)
-        self.assertEqual(len(roofs1), 4)
+        self.assertEqual(len(roofs1), 5)
         self.assertFalse(roofs2)
 
         # Concise variants, same output. In the SEB model, floors face "Ground".

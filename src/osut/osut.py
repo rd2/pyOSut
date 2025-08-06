@@ -1656,7 +1656,7 @@ def scheduleIntervalMinMax(sched=None) -> dict:
         - "min" (float): min temperature. (None if invalid inputs - see logs).
         - "max" (float): max temperature. (None if invalid inputs - see logs).
     """
-    mth  = "osut.scheduleCompactMinMax"
+    mth  = "osut.scheduleIntervalMinMax"
     cl   = openstudio.model.ScheduleInterval
     vals = []
     res  = dict(min=None, max=None)
@@ -1664,10 +1664,20 @@ def scheduleIntervalMinMax(sched=None) -> dict:
     if not isinstance(sched, cl):
         return oslg.mismatch("sched", sched, cl, mth, CN.DBG, res)
 
-    vals = sched.timeSeries().values()
+    values = sched.timeSeries().values()
+    length = len(values)
 
-    res["min"] = min(values)
-    res["max"] = max(values)
+    for i in range(length):
+        try:
+            value = float(values[i])
+            value = vals.append(value)
+        except:
+            oslg.invalid("numerical at %d" % i, mth, 1, CN.ERR)
+
+    if not vals: return res
+
+    res["min"] = min(vals)
+    res["max"] = max(vals)
 
     try:
         res["min"] = float(res["min"])
@@ -2601,6 +2611,17 @@ def availabilitySchedule(model=None, avl=""):
 
     return schedule
 
+# ---- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---- #
+# This final set of utilities targets OpenStudio geometry. Many of the
+# following geometry methods rely on Boost as an OpenStudio dependency.
+# As per Boost requirements, points (e.g. vertical polygon) must be 'aligned':
+#   - first rotated/tilted as to lay flat along XY plane (Z-axis ~= 0)
+#   - initial Z-axis values now become Y-axis values
+#   - points with the lowest X-axis values are 'aligned' along X-axis (0)
+#   - points with the lowest Z-axis values are 'aligned' along Y-axis (0)
+#   - for several Boost methods, points must be clockwise in sequence
+#
+# Check OSut's poly() method, which offers such Boost-related options.
 
 def transforms(group=None) -> dict:
     """"Returns OpenStudio site/space transformation & rotation angle.
@@ -2704,7 +2725,7 @@ def p3Dv(pts=None) -> openstudio.Point3dVector:
         pts (list): OpenStudio 3D points.
 
     Returns:
-        openstudio.Point3dVector: Vector of 3D points (see logs if empty).
+        openstudio.Point3dVector: Vector of 3D points (see 'p3Dv' logs if empty).
 
     """
     mth = "osut.p3Dv"
@@ -6085,7 +6106,7 @@ def genSlab(pltz=[], z=0) -> openstudio.Point3dVector:
             slb = vtx
 
     # Once joined, re-adjust Z-axis coordinates.
-    if abs(z) > CN.TOL:
+    if round(z, 2) != 0.00:
         vtx = openstudio.Point3dVector()
 
         for pt in slb: vtx.append(openstudio.Point3d(pt.x(), pt.y(), z))
