@@ -392,7 +392,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         del model
 
-        # Insulated (conditioned), parking garage roof (polyiso under 8" slab).
+        # Roof above conditioned parking garage (polyiso under 8" slab).
         specs = dict(type="roof", uo=0.214, clad="heavy", frame="medium", finish="none")
         model = openstudio.model.Model()
         c = osut.genConstruction(model, specs)
@@ -645,6 +645,41 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(specs["uo"], 0.900, places=3)
         r = osut.rsi(c) # not necessary to specify film
         self.assertAlmostEqual(r, 1/specs["uo"], places=3)
+        self.assertFalse(o.logs())
+        self.assertEqual(o.status(), 0)
+        del model
+
+        # Invalid Uo (here, skylights and windows inherit default Uo values)
+        specs = dict(type="skylight", uo=None)
+        model = openstudio.model.Model()
+        c = osut.genConstruction(model, specs)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+        self.assertTrue(c)
+        self.assertTrue(isinstance(c, openstudio.model.Construction))
+        self.assertEqual(c.nameString(), "OSut.CON.skylight")
+        self.assertTrue(c.layers())
+        self.assertEqual(len(c.layers()), 1)
+        self.assertEqual(c.layers()[0].nameString(), "OSut.skylight.U3.5.SHGC45")
+        r = osut.rsi(c)
+        self.assertAlmostEqual(r, 1/osut.uo()["skylight"], places=3)
+        self.assertFalse(o.logs())
+        self.assertEqual(o.status(), 0)
+        del model
+
+        # Invalid Uo (here, Uo-adjustments are ignored altogether)
+        specs = dict(type="wall", uo=None)
+        model = openstudio.model.Model()
+        c = osut.genConstruction(model, specs)
+        self.assertEqual(o.status(), 0)
+        self.assertFalse(o.logs())
+        self.assertTrue(c)
+        self.assertTrue(isinstance(c, openstudio.model.Construction))
+        self.assertEqual(c.nameString(), "OSut.CON.wall")
+        self.assertTrue(c.layers())
+        self.assertEqual(len(c.layers()), 4)
+        r = osut.rsi(c)
+        self.assertAlmostEqual(1/r, 2.23, places=2) # not matching any defaults
         self.assertFalse(o.logs())
         self.assertEqual(o.status(), 0)
         del model
@@ -1696,9 +1731,27 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(cc.setTemperatureCalculationRequestedAfterLayerNumber(1))
         self.assertTrue(floor.setConstruction(cc))
 
+        # Test 'fixed interval' schedule. Annual time series - no variation.
+        start  = model.getYearDescription().makeDate(1, 1)
+        inter  = openstudio.Time(0, 1, 0, 0)
+        values = openstudio.createVector([22.78] * 8760)
+        series = openstudio.TimeSeries(start, inter, values, "")
+        limits = openstudio.model.ScheduleTypeLimits(model)
+        limits.setName("Radiant Electric Heating Setpoint Schedule Type Limits")
+        self.assertTrue(limits.setNumericType("Continuous"))
+        self.assertTrue(limits.setUnitType("Temperature"))
+
+        schedule = openstudio.model.ScheduleFixedInterval(model)
+        schedule.setName("Radiant Electric Heating Setpoint Schedule")
+        self.assertTrue(schedule.setTimeSeries(series))
+        self.assertTrue(schedule.setTranslatetoScheduleFile(False))
+        self.assertTrue(schedule.setScheduleTypeLimits(limits))
+
+        tvals = schedule.timeSeries().values()
+        self.assertTrue(isinstance(tvals, openstudio.Vector))
+        for i in range(len(tvals)): self.assertTrue(isinstance(tvals[i], float))
+
         availability = osut.availabilitySchedule(model)
-        schedule = openstudio.model.ScheduleConstant(model)
-        self.assertTrue(schedule.setValue(22.78)) # reuse cooling setpoint
 
         # Create radiant electric heating.
         ht = (openstudio.model.ZoneHVACLowTemperatureRadiantElectric(
@@ -3255,11 +3308,72 @@ class TestOSutModuleMethods(unittest.TestCase):
         p7 = openstudio.Point3d(14, 20, -5)
         p8 = openstudio.Point3d(-9, -9, -5)
 
-        # Stress tests.
-        m1 = "Invalid '+n collinears' (osut.collinears)"
-        m2 = "Invalid '-n collinears' (osut.collinears)"
+        # Stress test 'uniques'.
+        m0 = "'n points' str? expecting int (osut.uniques)"
 
+        # Invalid case.
+        uniks = osut.uniques([p0, p1, p2, p3], "osut")
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
+
+        # Valid, basic case.
+        uniks = osut.uniques([p0, p1, p2, p3])
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertEqual(o.status(), 0)
+
+        uniks = osut.uniques([p0, p1, p2, p3], 0)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertEqual(o.status(), 0)
+
+        # Valid, first 3 points.
+        uniks = osut.uniques([p0, p1, p2, p3], 3)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 3)
+        self.assertEqual(o.status(), 0)
+
+        # Valid, last 3 points.
+        uniks = osut.uniques([p0, p1, p2, p3], -3)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 3)
+        self.assertEqual(o.status(), 0)
+
+        # Valid, n = 5: returns original 4 uniques points.
+        uniks = osut.uniques([p0, p1, p2, p3], 5)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertEqual(o.status(), 0)
+
+        # Valid, n = -5: returns original 4 uniques points.
+        uniks = osut.uniques([p0, p1, p2, p3], -5)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertEqual(o.status(), 0)
+
+        # Stress tests collinears.
+        m0 = "'n points' str? expecting int (osut.collinears)"
+
+        # Invalid case - raise DEBUG message, yet returns valid collinears.
+        collinears = osut.collinears([p0, p1, p3, p8], "osut")
+        self.assertTrue(isinstance(collinears, openstudio.Point3dVector))
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
+
+        # Valid, basic case
         collinears = osut.collinears([p0, p1, p3, p8])
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+
+        collinears = osut.collinears([p0, p1, p3, p8], 0)
         self.assertEqual(len(collinears), 1)
         self.assertTrue(osut.areSame(collinears[0], p0))
 
@@ -3268,35 +3382,38 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(osut.areSame(collinears[0], p0))
         self.assertTrue(osut.areSame(collinears[1], p1))
 
+        # Only 2 collinears, so request for first 3 is ignored.
         collinears = osut.collinears([p0, p1, p2, p3, p8], 3)
         self.assertEqual(len(collinears), 2)
         self.assertTrue(osut.areSame(collinears[0], p0))
         self.assertTrue(osut.areSame(collinears[1], p1))
 
+        # First collinear (out of 2).
         collinears = osut.collinears([p0, p1, p2, p3, p8], 1)
         self.assertEqual(len(collinears), 1)
         self.assertTrue(osut.areSame(collinears[0], p0))
 
+        # Last collinear (out of 2).
         collinears = osut.collinears([p0, p1, p2, p3, p8], -1)
         self.assertEqual(len(collinears), 1)
         self.assertTrue(osut.areSame(collinears[0], p1))
 
+        # First two vs last two: same result.
         collinears = osut.collinears([p0, p1, p2, p3, p8], -2)
         self.assertEqual(len(collinears), 2)
         self.assertTrue(osut.areSame(collinears[0], p0))
         self.assertTrue(osut.areSame(collinears[1], p1))
 
+        # Ignore n request when abs(n) > number of actual collinears.
         collinears = osut.collinears([p0, p1, p2, p3, p8], 6)
-        self.assertTrue(o.is_error())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m1)
-        self.assertEqual(o.clean(), DBG)
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
 
         collinears = osut.collinears([p0, p1, p2, p3, p8], -6)
-        self.assertTrue(o.is_error())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m2)
-        self.assertEqual(o.clean(), DBG)
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
 
         # CASE a1: 2x end-to-end line segments (returns matching endpoints).
         self.assertTrue(osut.doesLineIntersect([p0, p1], [p1, p2]))
@@ -5349,15 +5466,15 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         translator = openstudio.osversion.VersionTranslator()
 
-        path   = openstudio.path("./tests/files/osms/out/seb2.osm")
+        path   = openstudio.path("./tests/files/osms/out/seb_ext2.osm")
         model  = translator.loadModel(path)
         self.assertTrue(model)
         model  = model.get()
         spaces = model.getSpaces()
         surfs  = model.getSurfaces()
         subs   = model.getSubSurfaces()
-        self.assertEqual(len(surfs), 56)
-        self.assertEqual(len(subs), 8)
+        self.assertEqual(len(surfs), 59)
+        self.assertEqual(len(subs), 14)
 
         # The solution is similar to:
         #   OpenStudio::Model::Space::findSurfaces(minDegreesFromNorth,
@@ -5381,15 +5498,15 @@ class TestOSutModuleMethods(unittest.TestCase):
         roofs1     = osut.facets(spaces, "Outdoors", "RoofCeiling", "top")
         roofs2     = osut.facets(spaces, "Outdoors", "RoofCeiling", "foo")
 
-        self.assertEqual(len(windows), 8)
-        self.assertEqual(len(skylights), 0)
-        self.assertEqual(len(walls), 26)
+        self.assertEqual(len(windows), 11)
+        self.assertEqual(len(skylights), 3)
+        self.assertEqual(len(walls), 28)
         self.assertFalse(northsouth)
         self.assertEqual(len(northeast), 8)
         self.assertEqual(len(north), 14)
         self.assertEqual(len(floors1a), 4)
         self.assertEqual(len(floors1b), 4)
-        self.assertEqual(len(roofs1), 4)
+        self.assertEqual(len(roofs1), 5)
         self.assertFalse(roofs2)
 
         # Concise variants, same output. In the SEB model, floors face "Ground".
@@ -5574,7 +5691,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(surface.vertices()), 12)
         self.assertAlmostEqual(surface.grossArea(), 5 * 20 - 1, places=2)
 
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Same as previous, yet overlapping 'plate' has both negative dX & dY,
         # while XY origin is set at top-right (not bottom-left) corner.
         #        ____ ____
@@ -5601,6 +5718,17 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         self.assertEqual(o.status(), 0)
         del model
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Invalid input case.
+        plates = ["osut"]
+        slab = osut.genSlab(plates, z0)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertTrue("str? expecting dict" in o.logs()[0]["message"])
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertFalse(slab)
+        self.assertEqual(o.clean(), DBG)
 
     def test37_roller_shades(self):
         o = osut.oslg
