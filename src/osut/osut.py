@@ -3205,7 +3205,8 @@ def uniques(pts=None, n=0) -> openstudio.Point3dVector:
     try:
         n = int(n)
     except:
-        return oslg.mismatch("n unique points", n, int, mth, CN.DBG, v)
+        oslg.mismatch("n points", n, int, mth, CN.DBG)
+        n = 0
 
     for pt in pts:
         if not holds(v, pt): v.append(pt)
@@ -3659,11 +3660,10 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
             Requested number of non-collinears (0 returns all).
 
     Returns:
-        openstudio.Point3dVector: non-collinears (see logs if empty).
+        openstudio.Point3dVector: non-collinears (see logs).
 
     """
     mth = "osut.nonCollinears"
-    v   = openstudio.Point3dVector()
     a   = []
     pts = uniques(pts)
     if len(pts) < 3: return pts
@@ -3671,12 +3671,8 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
     try:
         n = int(n)
     except:
-        oslg.mismatch("n non-collinears", n, int, mth, CN.DBG, v)
-
-    if n > len(pts):
-        return oslg.invalid("+n non-collinears", mth, 0, CN.ERR, v)
-    elif n < 0 and abs(n) > len(pts):
-        return oslg.invalid("-n non-collinears", mth, 0, CN.ERR, v)
+        oslg.mismatch("n points", n, int, mth, CN.DBG)
+        n = 0
 
     # Evaluate cross product of vectors of 3x sequential points.
     for i2, p2 in enumerate(pts):
@@ -3698,9 +3694,7 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
             a.rotate(1)
             a = list(a)
 
-    if n > len(a): return p3Dv(a)
-    if n < 0 and abs(n) > len(a): return p3Dv(a)
-
+    if abs(n) > len(a): n = 0
     if n > 0: a = a[0:n]
     if n < 0: a = a[n:]
 
@@ -3718,11 +3712,10 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
             Requested number of collinears (0 returns all).
 
     Returns:
-        openstudio.Point3dVector: collinears (see logs if empty).
+        openstudio.Point3dVector: collinears (see logs).
 
     """
     mth = "osut.collinears"
-    v   = openstudio.Point3dVector()
     a   = []
     pts = uniques(pts)
     if len(pts) < 3: return pts
@@ -3730,12 +3723,8 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
     try:
         n = int(n)
     except:
-        oslg.mismatch("n collinears", n, int, mth, CN.DBG, v)
-
-    if n > len(pts):
-        return oslg.invalid("+n collinears", mth, 0, CN.ERR, v)
-    elif n < 0 and abs(n) > len(pts):
-        return oslg.invalid("-n collinears", mth, 0, CN.ERR, v)
+        oslg.mismatch("n points", n, int, mth, CN.DBG)
+        n = 0
 
     ncolls = nonCollinears(pts)
     if not ncolls: return pts
@@ -3743,9 +3732,7 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
     for pt in pts:
         if pt not in ncolls: a.append(pt)
 
-    if n > len(a): return p3Dv(a)
-    if n < 0 and abs(n) > len(a): return p3Dv(a)
-
+    if abs(n) > len(a): n = 0
     if n > 0: a = a[0:n]
     if n < 0: a = a[n:]
 

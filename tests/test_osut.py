@@ -3308,11 +3308,72 @@ class TestOSutModuleMethods(unittest.TestCase):
         p7 = openstudio.Point3d(14, 20, -5)
         p8 = openstudio.Point3d(-9, -9, -5)
 
-        # Stress tests.
-        m1 = "Invalid '+n collinears' (osut.collinears)"
-        m2 = "Invalid '-n collinears' (osut.collinears)"
+        # Stress test 'uniques'.
+        m0 = "'n points' str? expecting int (osut.uniques)"
 
+        # Invalid case.
+        uniks = osut.uniques([p0, p1, p2, p3], "osut")
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
+
+        # Valid, basic case.
+        uniks = osut.uniques([p0, p1, p2, p3])
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertEqual(o.status(), 0)
+
+        uniks = osut.uniques([p0, p1, p2, p3], 0)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertEqual(o.status(), 0)
+
+        # Valid, first 3 points.
+        uniks = osut.uniques([p0, p1, p2, p3], 3)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 3)
+        self.assertEqual(o.status(), 0)
+
+        # Valid, last 3 points.
+        uniks = osut.uniques([p0, p1, p2, p3], -3)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 3)
+        self.assertEqual(o.status(), 0)
+
+        # Valid, n = 5: returns original 4 uniques points.
+        uniks = osut.uniques([p0, p1, p2, p3], 5)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertEqual(o.status(), 0)
+
+        # Valid, n = -5: returns original 4 uniques points.
+        uniks = osut.uniques([p0, p1, p2, p3], -5)
+        self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
+        self.assertEqual(len(uniks), 4)
+        self.assertEqual(o.status(), 0)
+
+        # Stress tests collinears.
+        m0 = "'n points' str? expecting int (osut.collinears)"
+
+        # Invalid case - raise DEBUG message, yet returns valid collinears.
+        collinears = osut.collinears([p0, p1, p3, p8], "osut")
+        self.assertTrue(isinstance(collinears, openstudio.Point3dVector))
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
+
+        # Valid, basic case
         collinears = osut.collinears([p0, p1, p3, p8])
+        self.assertEqual(len(collinears), 1)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+
+        collinears = osut.collinears([p0, p1, p3, p8], 0)
         self.assertEqual(len(collinears), 1)
         self.assertTrue(osut.areSame(collinears[0], p0))
 
@@ -3321,35 +3382,38 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(osut.areSame(collinears[0], p0))
         self.assertTrue(osut.areSame(collinears[1], p1))
 
+        # Only 2 collinears, so request for first 3 is ignored.
         collinears = osut.collinears([p0, p1, p2, p3, p8], 3)
         self.assertEqual(len(collinears), 2)
         self.assertTrue(osut.areSame(collinears[0], p0))
         self.assertTrue(osut.areSame(collinears[1], p1))
 
+        # First collinear (out of 2).
         collinears = osut.collinears([p0, p1, p2, p3, p8], 1)
         self.assertEqual(len(collinears), 1)
         self.assertTrue(osut.areSame(collinears[0], p0))
 
+        # Last collinear (out of 2).
         collinears = osut.collinears([p0, p1, p2, p3, p8], -1)
         self.assertEqual(len(collinears), 1)
         self.assertTrue(osut.areSame(collinears[0], p1))
 
+        # First two vs last two: same result.
         collinears = osut.collinears([p0, p1, p2, p3, p8], -2)
         self.assertEqual(len(collinears), 2)
         self.assertTrue(osut.areSame(collinears[0], p0))
         self.assertTrue(osut.areSame(collinears[1], p1))
 
+        # Ignore n request when abs(n) > number of actual collinears.
         collinears = osut.collinears([p0, p1, p2, p3, p8], 6)
-        self.assertTrue(o.is_error())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m1)
-        self.assertEqual(o.clean(), DBG)
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
 
         collinears = osut.collinears([p0, p1, p2, p3, p8], -6)
-        self.assertTrue(o.is_error())
-        self.assertEqual(len(o.logs()), 1)
-        self.assertEqual(o.logs()[0]["message"], m2)
-        self.assertEqual(o.clean(), DBG)
+        self.assertEqual(len(collinears), 2)
+        self.assertTrue(osut.areSame(collinears[0], p0))
+        self.assertTrue(osut.areSame(collinears[1], p1))
 
         # CASE a1: 2x end-to-end line segments (returns matching endpoints).
         self.assertTrue(osut.doesLineIntersect([p0, p1], [p1, p2]))
@@ -3659,7 +3723,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         # [70,  0, 0]
         # [70, 45, 0]
         # [ 0, 45, 0]
-    
+
     def test27_polygon_attributes(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
