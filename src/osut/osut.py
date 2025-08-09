@@ -3470,14 +3470,6 @@ def lineIntersection(s1=[], s2=[]):
     xa1b1 = a.cross(a1b1)
     xa1b2 = a.cross(a1b2)
 
-    # if xa1b1.length() < CN.TOL2:
-    #     if isPointAlongSegment(a1, [a2, b1]): return None
-    #     if isPointAlongSegment(a2, [a1, b1]): return None
-    #
-    # if xa1b2.length() < CN.TOL2:
-    #     if isPointAlongSegment(a1, [a2, b2]): return None
-    #     if isPointAlongSegment(a2, [a1, b2]): return None
-
     # Both segment endpoints can't be 'behind' point.
     if a.dot(a1b1) < 0 and a.dot(a1b2) < 0: return None
 
