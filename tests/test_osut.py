@@ -3659,7 +3659,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         # [70,  0, 0]
         # [70, 45, 0]
         # [ 0, 45, 0]
-
+    
     def test27_polygon_attributes(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
@@ -5627,7 +5627,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(surface.vertices()), 12)
         self.assertAlmostEqual(surface.grossArea(), 5 * 20 - 1, places=2)
 
-        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         # Same as previous, yet overlapping 'plate' has both negative dX & dY,
         # while XY origin is set at top-right (not bottom-left) corner.
         #        ____ ____
@@ -5654,6 +5654,17 @@ class TestOSutModuleMethods(unittest.TestCase):
 
         self.assertEqual(o.status(), 0)
         del model
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        # Invalid input case.
+        plates = ["osut"]
+        slab = osut.genSlab(plates, z0)
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertTrue("str? expecting dict" in o.logs()[0]["message"])
+        self.assertTrue(isinstance(slab, openstudio.Point3dVector))
+        self.assertFalse(slab)
+        self.assertEqual(o.clean(), DBG)
 
     def test37_roller_shades(self):
         o = osut.oslg
