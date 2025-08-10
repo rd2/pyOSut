@@ -3194,7 +3194,7 @@ def uniques(pts=None, n=0) -> openstudio.Point3dVector:
             Requested number of unique points (0 returns all).
 
     Returns:
-        openstudio.Point3dVector: Unique points (see logs if empty).
+        openstudio.Point3dVector: Unique points (see logs).
 
     """
     mth = "osut.uniques"
@@ -3651,7 +3651,7 @@ def blc(pts=None) -> openstudio.Point3dVector:
 
 
 def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
-    """Returns sequential non-collinear points in an OpenStudio 3D point vector.
+    """Returns non-collinear points in an OpenStudio 3D point vector.
 
     Args:
         pts (openstudio.Point3dVector):
@@ -3703,7 +3703,7 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
 
 def collinears(pts=None, n=0) -> openstudio.Point3dVector:
     """
-    Returns sequential collinear points in an OpenStudio 3D point vector.
+    Returns collinear points in an OpenStudio 3D point vector.
 
     Args:
         pts (openstudio.Point3dVector):
@@ -3716,7 +3716,7 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
 
     """
     mth = "osut.collinears"
-    a   = []
+    a   = openstudio.Point3dVector()
     pts = uniques(pts)
     if len(pts) < 3: return pts
 
@@ -3727,7 +3727,7 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
         n = 0
 
     ncolls = nonCollinears(pts)
-    if not ncolls: return pts
+    if not ncolls: return a
 
     for pt in pts:
         if pt not in ncolls: a.append(pt)
@@ -3736,7 +3736,7 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
     if n > 0: a = a[0:n]
     if n < 0: a = a[n:]
 
-    return p3Dv(a)
+    return a
 
 
 def poly(pts=None, vx=False, uq=False, co=False, tt=False, sq="no") -> openstudio.Point3dVector:

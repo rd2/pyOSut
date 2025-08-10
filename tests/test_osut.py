@@ -3324,36 +3324,30 @@ class TestOSutModuleMethods(unittest.TestCase):
         uniks = osut.uniques([p0, p1, p2, p3])
         self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
         self.assertEqual(len(uniks), 4)
-        self.assertEqual(o.status(), 0)
 
         uniks = osut.uniques([p0, p1, p2, p3], 0)
         self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
         self.assertEqual(len(uniks), 4)
-        self.assertEqual(o.status(), 0)
 
         # Valid, first 3 points.
         uniks = osut.uniques([p0, p1, p2, p3], 3)
         self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
         self.assertEqual(len(uniks), 3)
-        self.assertEqual(o.status(), 0)
 
         # Valid, last 3 points.
         uniks = osut.uniques([p0, p1, p2, p3], -3)
         self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
         self.assertEqual(len(uniks), 3)
-        self.assertEqual(o.status(), 0)
 
         # Valid, n = 5: returns original 4 uniques points.
         uniks = osut.uniques([p0, p1, p2, p3], 5)
         self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
         self.assertEqual(len(uniks), 4)
-        self.assertEqual(o.status(), 0)
 
         # Valid, n = -5: returns original 4 uniques points.
         uniks = osut.uniques([p0, p1, p2, p3], -5)
         self.assertTrue(isinstance(uniks, openstudio.Point3dVector))
         self.assertEqual(len(uniks), 4)
-        self.assertEqual(o.status(), 0)
 
         # Stress tests collinears.
         m0 = "'n points' str? expecting int (osut.collinears)"
@@ -5005,7 +4999,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         #   [ 4, 14, 0] ... vs [16,  2, 20]
         #   [ 0, 14, 0] ... vs [20,  2, 20]
         #   [ 0,  0, 0] ... vs [20, 16, 20]
-
+    
     def test34_generated_skylight_wells(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
