@@ -1,6 +1,6 @@
 [project]
 name = "osut"
-version = "0.6.0"
+version = "0.6.1"
 description = "OpenStudio SDK utilities for Python"
 readme = "README.md"
 requires-python = ">=3.2"
