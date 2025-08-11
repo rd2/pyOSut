@@ -66,7 +66,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue("skylight" in osut.film())
         self.assertTrue("skylight" in osut.uo())
         self.assertEqual(osut.film().keys(), osut.uo().keys())
-
+    
     def test04_materials(self):
         material = osut.mats()["material"]
         sand     = osut.mats()["sand"]
@@ -3308,6 +3308,84 @@ class TestOSutModuleMethods(unittest.TestCase):
         p7 = openstudio.Point3d(14, 20, -5)
         p8 = openstudio.Point3d(-9, -9, -5)
 
+        # Stress test 'to_p3Dv'. 4 valid input cases.
+        # Valid case #1: a single Point3d.
+        vtx = osut.p3Dv(p0)
+        self.assertTrue(isinstance(vtx, openstudio.Point3dVector))
+        self.assertEqual(vtx[0], p0) # same object ID
+
+        # Valid case #2: a Point3dVector.
+        vtxx = openstudio.Point3dVector()
+        vtxx.append(p0)
+        vtxx.append(p1)
+        vtxx.append(p2)
+        vtxx.append(p3)
+        vtx = osut.p3Dv(vtxx)
+        self.assertTrue(isinstance(vtx, openstudio.Point3dVector))
+        self.assertEqual(vtx[ 0], p0) # same object ID
+        self.assertEqual(vtx[ 1], p1) # same object ID
+        self.assertEqual(vtx[ 2], p2) # same object ID
+        self.assertEqual(vtx[-1], p3) # same object ID
+
+        # Valid case #3: Surface vertices.
+        model = openstudio.model.Model()
+        surface = openstudio.model.Surface(vtxx, model)
+        self.assertTrue(isinstance(surface.vertices(), tuple)) # ! Point3dVector
+        self.assertEqual(len(surface.vertices()), 4)
+        vtx = osut.p3Dv(vtxx)
+        self.assertTrue(isinstance(vtx, openstudio.Point3dVector))
+        self.assertEqual(len(vtx), 4)
+        self.assertEqual(vtx[0], p0)
+        self.assertEqual(vtx[1], p1)
+        self.assertEqual(vtx[2], p2)
+        self.assertEqual(vtx[3], p3)
+
+        # Valid case #4: Array.
+        vtx = osut.p3Dv([p0, p1, p2, p3])
+        self.assertTrue(isinstance(vtx, openstudio.Point3dVector))
+        self.assertEqual(len(vtx), 4)
+        self.assertEqual(vtx[0], p0)
+        self.assertEqual(vtx[1], p1)
+        self.assertEqual(vtx[2], p2)
+        self.assertEqual(vtx[3], p3)
+
+        # Stress test 'nextUp'.
+        m0 = "Invalid 'points (2+)' arg #1 (osut.nextUp)"
+
+        # Invalid case.
+        pt = osut.nextUp([], p0)
+        self.assertFalse(pt)
+        self.assertTrue(o.is_warn())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
+
+        # Valid case.
+        pt = osut.nextUp([p0, p1, p2, p3], p0)
+        self.assertTrue(isinstance(pt, openstudio.Point3d))
+        self.assertEqual(pt, p1)
+
+        pt = osut.nextUp([p0, p0, p0], p0)
+        self.assertTrue(isinstance(pt, openstudio.Point3d))
+        self.assertEqual(pt, p0)
+
+        # Stress test 'segments'. Invalid case.
+        sgs = osut.segments(p3)
+        self.assertTrue(isinstance(sgs, openstudio.Point3dVectorVector))
+        self.assertFalse(sgs)
+        self.assertEqual(o.status(), 0) # nothing logged
+
+        sgs = osut.segments([p3, p3])
+        self.assertTrue(isinstance(sgs, openstudio.Point3dVectorVector))
+        self.assertFalse(sgs)
+        self.assertEqual(o.status(), 0) # nothing logged
+
+        # Valid case.
+        sgs = osut.segments([p0, p1, p2, p3])
+        self.assertTrue(isinstance(sgs, openstudio.Point3dVectorVector))
+        self.assertEqual(len(sgs), 4)
+        self.assertTrue(isinstance(sgs[-1], tuple)) # ! Point3dVector
+
         # Stress test 'uniques'.
         m0 = "'n points' str? expecting int (osut.uniques)"
 
@@ -3375,6 +3453,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(collinears), 2)
         self.assertTrue(osut.areSame(collinears[0], p0))
         self.assertTrue(osut.areSame(collinears[1], p1))
+        self.assertTrue(osut.isPointAlongSegment(p0, sgs[0]))
 
         # Only 2 collinears, so request for first 3 is ignored.
         collinears = osut.collinears([p0, p1, p2, p3, p8], 3)
@@ -3408,6 +3487,22 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(collinears), 2)
         self.assertTrue(osut.areSame(collinears[0], p0))
         self.assertTrue(osut.areSame(collinears[1], p1))
+
+        # Stress test isPointAlongSegment.
+        m0 = "'point' str? expecting Point3d (osut.p3Dv)"
+
+        # Invalid case.
+        self.assertFalse(osut.isPointAlongSegment(p3, "osut"))
+        self.assertTrue(o.is_debug())
+        self.assertEqual(len(o.logs()), 1)
+        self.assertEqual(o.logs()[0]["message"], m0)
+        self.assertEqual(o.clean(), DBG)
+
+        # Valid case.
+        pts = openstudio.Point3dVector()
+        pts.append(p0)
+        pts.append(p1)
+        self.assertFalse(osut.isPointAlongSegment(p3, pts))
 
         # CASE a1: 2x end-to-end line segments (returns matching endpoints).
         self.assertTrue(osut.doesLineIntersect([p0, p1], [p1, p2]))
@@ -4999,7 +5094,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         #   [ 4, 14, 0] ... vs [16,  2, 20]
         #   [ 0, 14, 0] ... vs [20,  2, 20]
         #   [ 0,  0, 0] ... vs [20, 16, 20]
-    
+
     def test34_generated_skylight_wells(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)

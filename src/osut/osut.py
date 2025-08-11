@@ -2737,7 +2737,10 @@ def p3Dv(pts=None) -> openstudio.Point3dVector:
     elif isinstance(pts, openstudio.Point3dVector):
         return pts
     elif isinstance(pts, openstudio.model.PlanarSurface):
-        pts = list(pts.vertices())
+        for vt in pts.vertices():
+            pt = openstudio.Point3d(vt.x(), vt.y(), vt.z())
+            v.append(pt)
+        return v
 
     try:
         pts = list(pts)
@@ -3056,7 +3059,7 @@ def nextUp(pts=None, pt=None):
         None: If invalid inputs (see logs).
 
     """
-    mth = "osut.nextUP"
+    mth = "osut.nextUp"
     pts = p3Dv(pts)
     cl  = openstudio.Point3d
 
@@ -3341,7 +3344,7 @@ def isPointAlongSegment(p0=None, sg=[]) -> bool:
 
     Returns:
         bool: Whether a 3D point lies ~along a 3D point segment.
-        False: If invalid inputs.
+        False: If invalid inputs (see logs).
 
     """
     mth = "osut.isPointAlongSegment"
@@ -3350,12 +3353,10 @@ def isPointAlongSegment(p0=None, sg=[]) -> bool:
 
     if not isinstance(p0, cl1):
         return oslg.mismatch("point", p0, cl1, mth, CN.DBG, False)
-    if not isSegment(sg):
-        return oslg.mismatch("segment", sg, cl2, mth, CN.DBG, False)
-
+    if not isSegment(sg): return False
     if holds(sg, p0): return True
 
-    a   = sg[0]
+    a   = sg[ 0]
     b   = sg[-1]
     ab  = b - a
     abn = b - a
@@ -3397,7 +3398,7 @@ def isPointAlongSegments(p0=None, sgs=[]) -> bool:
     if not sgs:
         return oslg.empty("segments", mth, CN.DBG, False)
     if not isinstance(p0, cl1):
-        return oslg.mismatch("point", p0, cl, mth, CN.DBG, False)
+        return oslg.mismatch("point", p0, cl1, mth, CN.DBG, False)
 
     for sg in sgs:
         if isPointAlongSegment(p0, sg): return True
