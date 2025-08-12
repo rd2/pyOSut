@@ -5890,7 +5890,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         del model
         self.assertEqual(o.status(), 0)
 
-    def test37_roller_shades(self):
+    def test38_space_height_width(self):
         o = osut.oslg
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.reset(DBG), DBG)
