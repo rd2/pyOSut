@@ -66,7 +66,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue("skylight" in osut.film())
         self.assertTrue("skylight" in osut.uo())
         self.assertEqual(osut.film().keys(), osut.uo().keys())
-    
+
     def test04_materials(self):
         material = osut.mats()["material"]
         sand     = osut.mats()["sand"]
@@ -5888,6 +5888,91 @@ class TestOSutModuleMethods(unittest.TestCase):
         model.save("./tests/files/osms/out/seb_ext5.osm", True)
 
         del model
+        self.assertEqual(o.status(), 0)
+
+    def test37_roller_shades(self):
+        o = osut.oslg
+        self.assertEqual(o.status(), 0)
+        self.assertEqual(o.reset(DBG), DBG)
+        self.assertEqual(o.level(), DBG)
+        translator = openstudio.osversion.VersionTranslator()
+
+        path = openstudio.path("./tests/files/osms/in/warehouse.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        fine = model.getSpaceByName("Zone2 Fine Storage")
+        self.assertTrue(fine)
+        fine = fine.get()
+
+        # The Fine Storage space has 2 floors, at different Z-axis levels:
+        # - main ground floor (slab on grade), Z=0.00m
+        # - mezzanine floor, adjacent to the office space ceiling below, Z=4.27m
+        self.assertTrue(len(osut.facets(fine, "all", "floor")), 2)
+        groundfloor = model.getSurfaceByName("Fine Storage Floor")
+        mezzanine   = model.getSurfaceByName("Office Roof Reversed")
+        self.assertTrue(groundfloor)
+        self.assertTrue(mezzanine)
+        groundfloor = groundfloor.get()
+        mezzanine   = mezzanine.get()
+
+        # The ground floor is L-shaped, floor surfaces have differenet Z=axis
+        # levels, etc. In the context of codes/standards like ASHRAE 90.1 or the
+        # Canadian NECB, determining what constitutes a space's 'height' and/or
+        # 'width' matters, namely with regards to geometry-based LPD rules
+        # (e.g. adjustments based on corridor 'width'). Not stating here what
+        # the definitive answers should be in all cases. There are however a few
+        # OSut functions that may be helpful.
+        #
+        # OSut's 'aligned' height and width functions were initially developed
+        # for non-flat surfaces, like walls and sloped roofs - particularly
+        # useful when such surfaces are rotated in 3D space. It's somewhat less
+        # intuitive when applied to horizontal surfaces like floors. In a
+        # nutshell, the functions lay out the surface in a 2D grid, aligning it
+        # along its 'bounded box'. It then determines a bounding box around the
+        # surface, once aligned:
+        # - 'aligned height' designates the narrowest edge of the bounding box
+        # - 'aligned width' designates the widest edge of the bounding box
+        #
+        # Useful? In some circumstances, maybe. One can argue that these may be
+        # of limited use for width-based LPD adjustment calculations.
+        self.assertAlmostEqual(osut.alignedHeight(groundfloor), 30.48, places=2)
+        self.assertAlmostEqual(osut.alignedWidth(groundfloor), 45.72, places=2)
+        self.assertAlmostEqual(osut.alignedHeight(mezzanine), 9.14, places=2)
+        self.assertAlmostEqual(osut.alignedWidth(mezzanine), 25.91, places=2)
+
+        # OSut's 'spaceHeight' and 'spaceWidth' are more suitable for height- or
+        # width-based LPD adjustement calculations. OSut sets a space's width as
+        # the length of the narrowest edge of the largest bounded box that fits
+        # within a collection of neighbouring floor surfaces. This is considered
+        # reasonable for a long corridor, with varying widths along its full
+        # length (e.g. occasional alcoves).
+        #
+        # Achtung! The function can be time consuming (multiple iterations) for
+        # very convoluted spaces (e.g. long corridors with multiple concavities).
+        self.assertAlmostEqual(osut.spaceHeight(fine), 8.53, places=2)
+        self.assertAlmostEqual(osut.spaceWidth(fine), 21.33, places=2)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+        path = openstudio.path("./tests/files/osms/out/seb_sky.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        openarea = model.getSpaceByName("Open area 1")
+        self.assertTrue(openarea)
+        openarea = openarea.get()
+
+        floor = osut.facets(openarea, "all", "floor")
+        self.assertEqual(len(floor), 1)
+        floor = floor[0]
+
+        self.assertAlmostEqual(osut.alignedHeight(floor), 6.88, places=2)
+        self.assertAlmostEqual(osut.alignedWidth(floor), 8.22, places=2)
+        self.assertAlmostEqual(osut.spaceHeight(openarea), 3.96, places=2)
+        self.assertAlmostEqual(osut.spaceWidth(openarea), 3.77, places=2)
+
         self.assertEqual(o.status(), 0)
 
 if __name__ == "__main__":

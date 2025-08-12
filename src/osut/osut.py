@@ -5243,15 +5243,12 @@ def spaceHeight(space=None) -> float:
         (float): Full height of space (0.0 if invalid input).
 
     """
-    if not isinstance(space, openstudio.model.Space):
-        return 0
+    hght = 0
+    if not isinstance(space, openstudio.model.Space): return 0
 
-    hght =  0
     minZ =  10000
     maxZ = -10000
 
-    # The solution considers all surface types: "Floor", "Wall", "RoofCeiling".
-    # No presumption that floor are necessarily at ground level.
     for surface in space.surfaces():
         zs   = [pt.z() for pt in surface.vertices()]
         minZ = min(minZ, min(zs))
@@ -5294,21 +5291,19 @@ def spaceWidth(space=None) -> float:
     #   - retain only other floor surfaces sharing same 3D plane
     #   - recover potential union between floor surfaces
     #   - fall back to largest floor surface if invalid union
+    #   - return width of largest bounded box
     floors = sorted(floors, key=lambda fl: fl.grossArea(), reverse=True)
     floor  = floors[0]
     plane  = floor.plane()
     t      = openstudio.Transformation.alignFace(floor.vertices())
     polyg  = list(poly(floor, False, True, True, t, "ulc"))
-
-    if not polyg:
-        oslg.clean()
-        return 0
+    if not polyg: return 0
 
     polyg.reverse()
-    polyg = p3Dv(polyg)
+    # polyg = p3Dv(polyg)
 
     if len(floors) > 1:
-        floors = [flr for flr in floors if plane.equal(fl.plane(), 0.001)]
+        floors = [flr for flr in floors if plane.equal(flr.plane(), 0.001)]
 
         if len(floors) > 1:
             polygs = [poly(flr, False, True, True, t, "ulc") for flr in floors]
@@ -5321,12 +5316,20 @@ def spaceWidth(space=None) -> float:
 
             union = openstudio.joinAll(polygs, 0.01)[0]
             polyg = poly(union, False, True, True)
+            if not polyg: return 0
 
-    box = boundedBox(polyg)
-    oslg.clean()
+    polyg = list(polyg)
+    polyg.reverse()
+    # box = boundedBox(polyg)
 
     # A bounded box's 'height', at its narrowest, is its 'width'.
-    return height(box)
+    # return height(box)
+
+    res = realignedFace(polyg)
+    if not res["box"]: return 0
+
+    # A bounded box's 'height', at its narrowest, is its 'width'.
+    return height(res["box"])
 
 
 def genAnchors(s=None, sset=[], tag="box") -> int:
