@@ -5300,7 +5300,6 @@ def spaceWidth(space=None) -> float:
     if not polyg: return 0
 
     polyg.reverse()
-    # polyg = p3Dv(polyg)
 
     if len(floors) > 1:
         floors = [flr for flr in floors if plane.equal(flr.plane(), 0.001)]
@@ -5320,10 +5319,6 @@ def spaceWidth(space=None) -> float:
 
     polyg = list(polyg)
     polyg.reverse()
-    # box = boundedBox(polyg)
-
-    # A bounded box's 'height', at its narrowest, is its 'width'.
-    # return height(box)
 
     res = realignedFace(polyg)
     if not res["box"]: return 0
