@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.2"
 authors = [ {name = "Denis Bourgeois", email = "denis@rd2.ca"} ]
 maintainers = [ {name = "Denis Bourgeois", email = "denis@rd2.ca"} ]
-# dependencies = ["oslg","openstudio>=3.6.1"]
 dependencies = ["oslg"]
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
