@@ -37,14 +37,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: python -m pip install --upgrade pip setuptools wheel oslg
+        run: python -m pip install --upgrade pip setuptools wheel openstudio oslg
       - name: Run unit tests
-        run: |
-          echo $(pwd)
-          echo $(ls)
-          docker pull nrel/openstudio:3.10.0
-          docker run --name test --rm -d -t -v $(pwd):/work -w /work nrel/openstudio:3.10.0
-          docker exec -t test pwd
-          docker exec -t test ls
-          docker exec -t python -m unittest
-          docker kill test
+        run: python -m unittest
