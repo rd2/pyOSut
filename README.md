@@ -6,6 +6,13 @@ Python implementation of the  _OSut_ Ruby gem for the OpenStudio SDK.
 - Ruby GitHub [repository](https://github.com/rd2/osut)
 
 ----
+
+_OSut_ interacts with _OpenStudio_:
+
+`pip install openstudio`
+
+----
+
 To download the _OSut_ Python package:
 
 `pip install --upgrade osut`
