@@ -107,8 +107,8 @@ _film = dict(
 
 # Default (~1980s) envelope Uo (W/m2•K), based on surface type.
 _uo = dict(
-      shading = None,   # N/A
-    partition = None,   # N/A
+      shading = None,  # N/A
+    partition = None,  # N/A
          wall = 0.384, # rated R14.8 hr•ft2F/Btu
          roof = 0.327, # rated R17.6 hr•ft2F/Btu
         floor = 0.317, # rated R17.9 hr•ft2F/Btu (exposed floor)
@@ -335,9 +335,8 @@ def genConstruction(model=None, specs=dict()):
         ide = "OSut.CON." + specs["type"]
     if specs["type"] not in uo():
         return oslg.invalid("surface type", mth, 2, CN.ERR)
-    if "uo" not in specs:
-        specs["uo"] = uo()[ specs["type"] ]
 
+    if "uo" not in specs: specs["uo"] = uo()[ specs["type"] ] # can be None
     u = specs["uo"]
 
     if u:
@@ -348,6 +347,8 @@ def genConstruction(model=None, specs=dict()):
 
         if u < 0:
             return oslg.negative(id + " Uo", mth, CN.ERR)
+        if round(u, 2) == 0:
+            return oslg.zero(id + " Uo", mth, CN.ERR)
         if u > 5.678:
             return oslg.invalid(id + " Uo (> 5.678)", mth, 2, CN.ERR)
 
@@ -581,7 +582,7 @@ def genConstruction(model=None, specs=dict()):
         a["compo"  ]["id"  ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "window":
-        a["glazing"]["u"   ]  = specs["uo"]
+        a["glazing"]["u"   ]  = u if u else uo()["window"]
         a["glazing"]["shgc"]  = 0.450
         if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
         a["glazing"]["id"  ]  = "OSut.window"
@@ -589,7 +590,7 @@ def genConstruction(model=None, specs=dict()):
         a["glazing"]["id"  ] += ".SHGC%d" % (a["glazing"]["shgc"]*100)
 
     elif specs["type"] == "skylight":
-        a["glazing"]["u"   ]  = specs["uo"]
+        a["glazing"]["u"   ]  = u if u else uo()["skylight"]
         a["glazing"]["shgc"]  = 0.450
         if "shgc" in specs: a["glazing"]["shgc"] = specs["shgc"]
         a["glazing"]["id"  ]  = "OSut.skylight"
@@ -599,14 +600,14 @@ def genConstruction(model=None, specs=dict()):
     if a["glazing"]:
         layers = openstudio.model.FenestrationMaterialVector()
 
-        u    = a["glazing"]["u"   ]
+        u0   = a["glazing"]["u"   ]
         shgc = a["glazing"]["shgc"]
         lyr  = model.getSimpleGlazingByName(a["glazing"]["id"])
 
         if lyr:
             lyr = lyr.get()
         else:
-            lyr = openstudio.model.SimpleGlazing(model, u, shgc)
+            lyr = openstudio.model.SimpleGlazing(model, u0, shgc)
             lyr.setName(a["glazing"]["id"])
 
         layers.append(lyr)
@@ -635,49 +636,54 @@ def genConstruction(model=None, specs=dict()):
 
             layers.append(lyr)
 
-    c  = openstudio.model.Construction(layers)
+    c = openstudio.model.Construction(layers)
     c.setName(ide)
 
     # Adjust insulating layer thickness or conductivity to match requested Uo.
-    if not a["glazing"]:
-        ro = 1 / specs["uo"] - film()[specs["type"]] if specs["uo"] else 0
+    if u and not a["glazing"]:
+        ro = 1 / u - flm
 
-        if specs["type"] == "door": # 1x layer, adjust conductivity
-            layer = c.getLayer(0).to_StandardOpaqueMaterial()
+        if ro > 0:
+            if specs["type"] == "door": # 1x layer, adjust conductivity
+                layer = c.getLayer(0).to_StandardOpaqueMaterial()
 
-            if not layer:
-                return oslg.invalid(id + " standard material?", mth, 0)
+                if not layer:
+                    return oslg.invalid(id + " standard material?", mth, 0)
 
-            layer = layer.get()
-            k     = layer.thickness() / ro
-            layer.setConductivity(k)
+                layer = layer.get()
+                k     = layer.thickness() / ro
+                layer.setConductivity(k)
 
-        elif ro > 0: # multiple layers, adjust insulating layer thickness
-            lyr = insulatingLayer(c)
+            else: # multiple layers, adjust insulating layer thickness
+                lyr = insulatingLayer(c)
 
-            if not lyr["index"] or not lyr["type"] or not lyr["r"]:
-                return oslg.invalid(id + " construction", mth, 0)
+                if not lyr["index"] or not lyr["type"] or not lyr["r"]:
+                    return oslg.invalid(id + " construction", mth, 0)
 
-            index = lyr["index"]
-            layer = c.getLayer(index).to_StandardOpaqueMaterial()
+                index = lyr["index"]
+                layer = c.getLayer(index).to_StandardOpaqueMaterial()
 
-            if not layer:
-                return oslg.invalid(id + " material %d" % index, mth, 0)
+                if not layer:
+                    return oslg.invalid(id + " material %d" % index, mth, 0)
 
-            layer = layer.get()
-            k     = layer.conductivity()
-            d     = (ro - rsi(c) + lyr["r"]) * k
+                layer = layer.get()
+                k     = layer.conductivity()
+                d     = (ro - rsi(c) + lyr["r"]) * k
 
-            if d < 0.03:
-                return oslg.invalid(id + " adjusted material thickness", mth, 0)
+                if d < 0.03:
+                    m = id + " adjusted material thickness"
+                    return oslg.invalid(m, mth, 0)
 
-            nom = re.sub(r'[^a-zA-Z]', '', layer.nameString())
-            nom = re.sub(r'OSut', '', nom)
-            nom = "OSut." + nom + ".%03d" % int(d * 1000)
+                nom = re.sub(r'[^a-zA-Z]', '', layer.nameString())
+                nom = re.sub(r'OSut', '', nom)
+                nom = "OSut." + nom + ".%03d" % int(d * 1000)
 
-            if not model.getStandardOpaqueMaterialByName(nom):
-                layer.setName(nom)
-                layer.setThickness(d)
+                if model.getStandardOpaqueMaterialByName(nom):
+                    omat = model.getStandardOpaqueMaterialByName(nom).get()
+                    c.setLayer(index, omat)
+                else:
+                    layer.setName(nom)
+                    layer.setThickness(d)
 
     return c
 
@@ -1650,7 +1656,7 @@ def scheduleIntervalMinMax(sched=None) -> dict:
         - "min" (float): min temperature. (None if invalid inputs - see logs).
         - "max" (float): max temperature. (None if invalid inputs - see logs).
     """
-    mth  = "osut.scheduleCompactMinMax"
+    mth  = "osut.scheduleIntervalMinMax"
     cl   = openstudio.model.ScheduleInterval
     vals = []
     res  = dict(min=None, max=None)
@@ -1658,10 +1664,19 @@ def scheduleIntervalMinMax(sched=None) -> dict:
     if not isinstance(sched, cl):
         return oslg.mismatch("sched", sched, cl, mth, CN.DBG, res)
 
-    vals = sched.timeSeries().values()
+    values = sched.timeSeries().values()
 
-    res["min"] = min(values)
-    res["max"] = max(values)
+    for i in range(len(values)):
+        try:
+            value = float(values[i])
+            vals.append(value)
+        except:
+            oslg.invalid("numerical at %d" % i, mth, 1, CN.ERR)
+
+    if not vals: return res
+
+    res["min"] = min(vals)
+    res["max"] = max(vals)
 
     try:
         res["min"] = float(res["min"])
@@ -2595,6 +2610,17 @@ def availabilitySchedule(model=None, avl=""):
 
     return schedule
 
+# ---- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---- #
+# This final set of utilities targets OpenStudio geometry. Many of the
+# following geometry methods rely on Boost as an OpenStudio dependency.
+# As per Boost requirements, points (e.g. vertical polygon) must be 'aligned':
+#   - first rotated/tilted as to lay flat along XY plane (Z-axis ~= 0)
+#   - initial Z-axis values now become Y-axis values
+#   - points with the lowest X-axis values are 'aligned' along X-axis (0)
+#   - points with the lowest Z-axis values are 'aligned' along Y-axis (0)
+#   - for several Boost methods, points must be clockwise in sequence
+#
+# Check OSut's poly() method, which offers such Boost-related options.
 
 def transforms(group=None) -> dict:
     """"Returns OpenStudio site/space transformation & rotation angle.
@@ -2698,7 +2724,7 @@ def p3Dv(pts=None) -> openstudio.Point3dVector:
         pts (list): OpenStudio 3D points.
 
     Returns:
-        openstudio.Point3dVector: Vector of 3D points (see logs if empty).
+        openstudio.Point3dVector: Vector of 3D points (see 'p3Dv' logs if empty).
 
     """
     mth = "osut.p3Dv"
@@ -2711,7 +2737,10 @@ def p3Dv(pts=None) -> openstudio.Point3dVector:
     elif isinstance(pts, openstudio.Point3dVector):
         return pts
     elif isinstance(pts, openstudio.model.PlanarSurface):
-        pts = list(pts.vertices())
+        for vt in pts.vertices():
+            pt = openstudio.Point3d(vt.x(), vt.y(), vt.z())
+            v.append(pt)
+        return v
 
     try:
         pts = list(pts)
@@ -3030,7 +3059,7 @@ def nextUp(pts=None, pt=None):
         None: If invalid inputs (see logs).
 
     """
-    mth = "osut.nextUP"
+    mth = "osut.nextUp"
     pts = p3Dv(pts)
     cl  = openstudio.Point3d
 
@@ -3168,7 +3197,7 @@ def uniques(pts=None, n=0) -> openstudio.Point3dVector:
             Requested number of unique points (0 returns all).
 
     Returns:
-        openstudio.Point3dVector: Unique points (see logs if empty).
+        openstudio.Point3dVector: Unique points (see logs).
 
     """
     mth = "osut.uniques"
@@ -3179,7 +3208,8 @@ def uniques(pts=None, n=0) -> openstudio.Point3dVector:
     try:
         n = int(n)
     except:
-        return oslg.mismatch("n unique points", n, int, mth, CN.DBG, v)
+        oslg.mismatch("n points", n, int, mth, CN.DBG)
+        n = 0
 
     for pt in pts:
         if not holds(v, pt): v.append(pt)
@@ -3314,7 +3344,7 @@ def isPointAlongSegment(p0=None, sg=[]) -> bool:
 
     Returns:
         bool: Whether a 3D point lies ~along a 3D point segment.
-        False: If invalid inputs.
+        False: If invalid inputs (see logs).
 
     """
     mth = "osut.isPointAlongSegment"
@@ -3323,12 +3353,10 @@ def isPointAlongSegment(p0=None, sg=[]) -> bool:
 
     if not isinstance(p0, cl1):
         return oslg.mismatch("point", p0, cl1, mth, CN.DBG, False)
-    if not isSegment(sg):
-        return oslg.mismatch("segment", sg, cl2, mth, CN.DBG, False)
-
+    if not isSegment(sg): return False
     if holds(sg, p0): return True
 
-    a   = sg[0]
+    a   = sg[ 0]
     b   = sg[-1]
     ab  = b - a
     abn = b - a
@@ -3370,7 +3398,7 @@ def isPointAlongSegments(p0=None, sgs=[]) -> bool:
     if not sgs:
         return oslg.empty("segments", mth, CN.DBG, False)
     if not isinstance(p0, cl1):
-        return oslg.mismatch("point", p0, cl, mth, CN.DBG, False)
+        return oslg.mismatch("point", p0, cl1, mth, CN.DBG, False)
 
     for sg in sgs:
         if isPointAlongSegment(p0, sg): return True
@@ -3443,14 +3471,6 @@ def lineIntersection(s1=[], s2=[]):
     # Reset.
     xa1b1 = a.cross(a1b1)
     xa1b2 = a.cross(a1b2)
-
-    if xa1b1.length() < CN.TOL2:
-        if isPointAlongSegment(a1, [a2, b1]): return None
-        if isPointAlongSegment(a2, [a1, b1]): return None
-
-    if xa1b2.length() < CN.TOL2:
-        if isPointAlongSegment(a1, [a2, b2]): return None
-        if isPointAlongSegment(a2, [a1, b2]): return None
 
     # Both segment endpoints can't be 'behind' point.
     if a.dot(a1b1) < 0 and a.dot(a1b2) < 0: return None
@@ -3632,7 +3652,7 @@ def blc(pts=None) -> openstudio.Point3dVector:
 
 
 def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
-    """Returns sequential non-collinear points in an OpenStudio 3D point vector.
+    """Returns non-collinear points in an OpenStudio 3D point vector.
 
     Args:
         pts (openstudio.Point3dVector):
@@ -3641,11 +3661,10 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
             Requested number of non-collinears (0 returns all).
 
     Returns:
-        openstudio.Point3dVector: non-collinears (see logs if empty).
+        openstudio.Point3dVector: non-collinears (see logs).
 
     """
     mth = "osut.nonCollinears"
-    v   = openstudio.Point3dVector()
     a   = []
     pts = uniques(pts)
     if len(pts) < 3: return pts
@@ -3653,12 +3672,8 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
     try:
         n = int(n)
     except:
-        oslg.mismatch("n non-collinears", n, int, mth, CN.DBG, v)
-
-    if n > len(pts):
-        return oslg.invalid("+n non-collinears", mth, 0, CN.ERR, v)
-    elif n < 0 and abs(n) > len(pts):
-        return oslg.invalid("-n non-collinears", mth, 0, CN.ERR, v)
+        oslg.mismatch("n points", n, int, mth, CN.DBG)
+        n = 0
 
     # Evaluate cross product of vectors of 3x sequential points.
     for i2, p2 in enumerate(pts):
@@ -3680,9 +3695,7 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
             a.rotate(1)
             a = list(a)
 
-    if n > len(a): return p3Dv(a)
-    if n < 0 and abs(n) > len(a): return p3Dv(a)
-
+    if abs(n) > len(a): n = 0
     if n > 0: a = a[0:n]
     if n < 0: a = a[n:]
 
@@ -3691,7 +3704,7 @@ def nonCollinears(pts=None, n=0) -> openstudio.Point3dVector:
 
 def collinears(pts=None, n=0) -> openstudio.Point3dVector:
     """
-    Returns sequential collinear points in an OpenStudio 3D point vector.
+    Returns collinear points in an OpenStudio 3D point vector.
 
     Args:
         pts (openstudio.Point3dVector):
@@ -3700,38 +3713,31 @@ def collinears(pts=None, n=0) -> openstudio.Point3dVector:
             Requested number of collinears (0 returns all).
 
     Returns:
-        openstudio.Point3dVector: collinears (see logs if empty).
+        openstudio.Point3dVector: collinears (see logs).
 
     """
     mth = "osut.collinears"
-    v   = openstudio.Point3dVector()
-    a   = []
+    a   = openstudio.Point3dVector()
     pts = uniques(pts)
     if len(pts) < 3: return pts
 
     try:
         n = int(n)
     except:
-        oslg.mismatch("n collinears", n, int, mth, CN.DBG, v)
-
-    if n > len(pts):
-        return oslg.invalid("+n collinears", mth, 0, CN.ERR, v)
-    elif n < 0 and abs(n) > len(pts):
-        return oslg.invalid("-n collinears", mth, 0, CN.ERR, v)
+        oslg.mismatch("n points", n, int, mth, CN.DBG)
+        n = 0
 
     ncolls = nonCollinears(pts)
-    if not ncolls: return pts
+    if not ncolls: return a
 
     for pt in pts:
         if pt not in ncolls: a.append(pt)
 
-    if n > len(a): return p3Dv(a)
-    if n < 0 and abs(n) > len(a): return p3Dv(a)
-
+    if abs(n) > len(a): n = 0
     if n > 0: a = a[0:n]
     if n < 0: a = a[n:]
 
-    return p3Dv(a)
+    return a
 
 
 def poly(pts=None, vx=False, uq=False, co=False, tt=False, sq="no") -> openstudio.Point3dVector:
@@ -5237,15 +5243,12 @@ def spaceHeight(space=None) -> float:
         (float): Full height of space (0.0 if invalid input).
 
     """
-    if not isinstance(space, openstudio.model.Space):
-        return 0
+    hght = 0
+    if not isinstance(space, openstudio.model.Space): return 0
 
-    hght =  0
     minZ =  10000
     maxZ = -10000
 
-    # The solution considers all surface types: "Floor", "Wall", "RoofCeiling".
-    # No presumption that floor are necessarily at ground level.
     for surface in space.surfaces():
         zs   = [pt.z() for pt in surface.vertices()]
         minZ = min(minZ, min(zs))
@@ -5288,21 +5291,18 @@ def spaceWidth(space=None) -> float:
     #   - retain only other floor surfaces sharing same 3D plane
     #   - recover potential union between floor surfaces
     #   - fall back to largest floor surface if invalid union
+    #   - return width of largest bounded box
     floors = sorted(floors, key=lambda fl: fl.grossArea(), reverse=True)
     floor  = floors[0]
     plane  = floor.plane()
     t      = openstudio.Transformation.alignFace(floor.vertices())
     polyg  = list(poly(floor, False, True, True, t, "ulc"))
-
-    if not polyg:
-        oslg.clean()
-        return 0
+    if not polyg: return 0
 
     polyg.reverse()
-    polyg = p3Dv(polyg)
 
     if len(floors) > 1:
-        floors = [flr for flr in floors if plane.equal(fl.plane(), 0.001)]
+        floors = [flr for flr in floors if plane.equal(flr.plane(), 0.001)]
 
         if len(floors) > 1:
             polygs = [poly(flr, False, True, True, t, "ulc") for flr in floors]
@@ -5315,12 +5315,16 @@ def spaceWidth(space=None) -> float:
 
             union = openstudio.joinAll(polygs, 0.01)[0]
             polyg = poly(union, False, True, True)
+            if not polyg: return 0
 
-    box = boundedBox(polyg)
-    oslg.clean()
+    polyg = list(polyg)
+    polyg.reverse()
+
+    res = realignedFace(polyg)
+    if not res["box"]: return 0
 
     # A bounded box's 'height', at its narrowest, is its 'width'.
-    return height(box)
+    return height(res["box"])
 
 
 def genAnchors(s=None, sset=[], tag="box") -> int:
@@ -6079,7 +6083,7 @@ def genSlab(pltz=[], z=0) -> openstudio.Point3dVector:
             slb = vtx
 
     # Once joined, re-adjust Z-axis coordinates.
-    if abs(z) > CN.TOL:
+    if round(z, 2) != 0.00:
         vtx = openstudio.Point3dVector()
 
         for pt in slb: vtx.append(openstudio.Point3d(pt.x(), pt.y(), z))
