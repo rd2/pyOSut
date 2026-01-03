@@ -46,10 +46,10 @@ class _CN:
     HEAD = 2.032         # standard 80" door
     SILL = 0.762         # standard 30" window sill
     NS   = "nameString"  # OpenStudio object identifier method
-    DMIN = 0.010         # min. material thickness
-    DMAX = 1.000         # max. material thickness
-    KMIN = 0.010         # min. material thermal conductivity
-    KMAX = 2.000         # max. material thermal conductivity
+    DMIN = 0.010         # min. insulating material thickness
+    DMAX = 1.000         # max. insulating material thickness
+    KMIN = 0.010         # min. insulating material thermal conductivity
+    KMAX = 2.000         # max. insulating material thermal conductivity
     UMAX = KMAX / DMIN   # material USi upper limit, 200.000
     UMIN = KMIN / DMAX   # material USi lower limit,   0.010
     RMIN =  1.0 / UMAX   # material RSi lower limit,   0.005 (or R-IP   0.03)
@@ -1473,7 +1473,8 @@ def defaultConstructionSet(s=None):
             set = spacetype.defaultConstructionSet().get()
 
             if holdsConstruction(set, base, ground, exterior, type): return set
-    elif aspace and aspace.spaceType():
+
+    if aspace and aspace.spaceType():
         spacetype = aspace.spaceType().get()
 
         if spacetype.defaultConstructionSet():
@@ -1488,7 +1489,8 @@ def defaultConstructionSet(s=None):
             set = story.defaultConstructionSet().get()
 
             if holdsConstruction(set, base, ground, exterior, type): return set
-    elif aspace and aspace.buildingStory():
+
+    if aspace and aspace.buildingStory():
         story = aspace.buildingStory().get()
 
         if story.defaultConstructionSet():
