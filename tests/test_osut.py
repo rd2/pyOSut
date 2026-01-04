@@ -1,6 +1,6 @@
 # BSD 3-Clause License
 #
-# Copyright (c) 2022-2025, rd2
+# Copyright (c) 2022-2026, rd2
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -130,7 +130,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(c.layers()), 4)
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
         self.assertEqual(c.layers()[1].nameString(), "OSut.drywall.015")
-        self.assertEqual(c.layers()[2].nameString(), "OSut.mineral.106")
+        self.assertEqual(c.layers()[2].nameString(), "OSut:K0.047:100")
         self.assertEqual(c.layers()[3].nameString(), "OSut.drywall.015")
         r = osut.rsi(c, osut.film()["wall"])
         u = osut.uo()["wall"]
@@ -192,7 +192,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.drywall.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.216")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=2)
@@ -214,7 +214,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.drywall.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.216")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
@@ -237,7 +237,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(len(c.layers()), 4)
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
         self.assertEqual(c.layers()[1].nameString(), "OSut.drywall.015")
-        self.assertEqual(c.layers()[2].nameString(), "OSut.mineral.210")
+        self.assertEqual(c.layers()[2].nameString(), "OSut:K0.024:100")
         self.assertEqual(c.layers()[3].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
@@ -259,7 +259,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 2)
         self.assertEqual(c.layers()[0].nameString(), "OSut.drywall.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.221")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["wall"])
@@ -360,7 +360,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.215")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=2)
@@ -382,7 +382,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.polyiso.108")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
         self.assertEqual(c.layers()[2].nameString(), "OSut.concrete.100")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
@@ -404,7 +404,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 2)
         self.assertEqual(c.layers()[0].nameString(), "OSut.concrete.200")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.polyiso.110")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["roof"])
@@ -441,7 +441,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 2)
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.cellulose.217")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
         r = osut.rsi(c, osut.film()["floor"])
@@ -462,7 +462,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.211")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.024:100")
         self.assertEqual(c.layers()[2].nameString(), "OSut.material.015")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
@@ -484,7 +484,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.material.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.214")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
         self.assertEqual(c.layers()[2].nameString(), "OSut.concrete.100")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
@@ -523,7 +523,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.sand.100")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.polyiso.109")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.010:043")
         self.assertEqual(c.layers()[2].nameString(), "OSut.concrete.100")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=3)
@@ -561,7 +561,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.concrete.200")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.mineral.100")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.037:075")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.428, places=3)
@@ -763,6 +763,7 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     def test07_construction_thickness(self):
         o = osut.oslg
+        print(o.logs())
         self.assertEqual(o.status(), 0)
         self.assertEqual(o.level(), DBG)
 
@@ -5101,6 +5102,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.reset(DBG), DBG)
         self.assertEqual(o.level(), DBG)
 
+        srr = 0.05
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
@@ -5109,33 +5111,78 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(model)
         model = model.get()
 
-        srr = 0.05
+        s = model.getSurfaceByName("Perimeter_ZN_1_ceiling")
+        self.assertTrue(s)
+        s = s.get()
+        self.assertTrue(s.isConstructionDefaulted()) # yet which set?
+
+        type = s.surfaceType()
+        self.assertEqual(type.lower(), "roofceiling")
+        base = s.construction()
+        self.assertTrue(base)
+        base = base.get()
+
+        # Check OpenStudio space-to-building hierarchy.
+        space = s.space()
+        self.assertTrue(space)
+        space = space.get()
+        self.assertFalse(space.defaultConstructionSet())
+
+        spacetype = space.spaceType()
+        self.assertTrue(spacetype)
+        spacetype = spacetype.get()
+        self.assertFalse(spacetype.defaultConstructionSet())
+
+        story = space.buildingStory()
+        self.assertTrue(story)
+        story = story.get()
+        self.assertFalse(story.defaultConstructionSet())
+
+        building = model.getBuilding()
+        self.assertTrue(building.defaultConstructionSet())
+        bset = building.defaultConstructionSet().get()
+        oID = bset.nameString()
+        self.assertEqual(oID, "90.1-2010 - SmOffice - ASHRAE 169-2013-3B")
+        self.assertFalse(osut.holdsConstruction(bset, base, False, False, type))
+
+        # Check for adjacent surface.
+        adjacent = s.adjacentSurface()
+        self.assertTrue(adjacent)
+        adjacent = adjacent.get()
+        atype    = adjacent.surfaceType()
+        self.assertEqual(atype.lower(), "floor")
+
+        attic = adjacent.space()
+        self.assertTrue(attic)
+        attic = attic.get()
+        self.assertFalse(attic.defaultConstructionSet())
+
+        spacetype = attic.spaceType()
+        self.assertTrue(spacetype)
+        spacetype = spacetype.get()
+        aset = spacetype.defaultConstructionSet()
+        self.assertTrue(aset)
+        aset = aset.get()
+        aID  = aset.nameString()
+        self.assertEqual(aID, "90.1-2010 -  - Attic - ASHRAE 169-2013-3B")
+        self.assertTrue(osut.holdsConstruction(aset, base, False, False, atype))
+
+        set = osut.defaultConstructionSet(s)
+        self.assertEqual(set, aset)
+
+        self.assertTrue(bset.defaultInteriorSurfaceConstructions())
+        self.assertTrue(aset.defaultInteriorSurfaceConstructions())
+        ib_set = bset.defaultInteriorSurfaceConstructions().get()
+        ia_set = aset.defaultInteriorSurfaceConstructions().get()
+        self.assertTrue(ib_set.wallConstruction())
+        self.assertFalse(ia_set.wallConstruction())
+        ib_wall = ib_set.wallConstruction().get().to_LayeredConstruction()
+        self.assertTrue(ib_wall)
+        ib_wall = ib_wall.get()
+        self.assertAlmostEqual(osut.rsi(ib_wall, 0.150), 0.31, places=2)
+
         core  = []
         attic = []
-
-        # Fetch default construction sets.
-        oID = "90.1-2010 - SmOffice - ASHRAE 169-2013-3B" # building
-        aID = "90.1-2010 -  - Attic - ASHRAE 169-2013-3B" # attic spacetype level
-        o_set = model.getDefaultConstructionSetByName(oID)
-        a_set = model.getDefaultConstructionSetByName(oID)
-        self.assertTrue(o_set)
-        self.assertTrue(a_set)
-        o_set = o_set.get()
-        a_set = a_set.get()
-        self.assertTrue(o_set.defaultInteriorSurfaceConstructions())
-        self.assertTrue(a_set.defaultInteriorSurfaceConstructions())
-        io_set = o_set.defaultInteriorSurfaceConstructions().get()
-        ia_set = a_set.defaultInteriorSurfaceConstructions().get()
-        self.assertTrue(io_set.wallConstruction())
-        self.assertTrue(ia_set.wallConstruction())
-        io_wall = io_set.wallConstruction().get().to_LayeredConstruction()
-        ia_wall = ia_set.wallConstruction().get().to_LayeredConstruction()
-        self.assertTrue(io_wall)
-        self.assertTrue(ia_wall)
-        io_wall = io_wall.get()
-        ia_wall = ia_wall.get()
-        self.assertEqual(io_wall, ia_wall) # 2x drywall layers
-        self.assertAlmostEqual(osut.rsi(io_wall, 0.150), 0.31, places=2)
 
         for space in model.getSpaces():
             ide = space.nameString()
@@ -5976,4 +6023,4 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(failfast=True)
