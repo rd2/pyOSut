@@ -5554,7 +5554,7 @@ def spaceWidth(space=None) -> float:
     polyg = list(polyg)
     polyg.reverse()
 
-    res = realignedFace(polyg)
+    res = realignedFace(polyg, True)
     if not res["box"]: return 0
 
     # A bounded box's 'height', at its narrowest, is its 'width'.

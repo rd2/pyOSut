@@ -5944,6 +5944,33 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.level(), DBG)
         translator = openstudio.osversion.VersionTranslator()
 
+        # Basic test: 'deep' space (vs X-axis).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(2,9,1))
+        vtx.append(openstudio.Point3d(2,1,1))
+        vtx.append(openstudio.Point3d(1,1,1))
+        vtx.append(openstudio.Point3d(1,9,1))
+
+        model = openstudio.model.Model()
+        space = openstudio.model.Space(model)
+        floor = openstudio.model.Surface(vtx, model)
+        floor.setSpace(space)
+        self.assertAlmostEqual(osut.spaceWidth(space),1,3)
+
+        # Basic test: 'narrow' space (vs X-axis).
+        vtx = openstudio.Point3dVector()
+        vtx.append(openstudio.Point3d(9,2,1))
+        vtx.append(openstudio.Point3d(9,1,1))
+        vtx.append(openstudio.Point3d(1,1,1))
+        vtx.append(openstudio.Point3d(1,2,1))
+
+        model = openstudio.model.Model()
+        space = openstudio.model.Space(model)
+        floor = openstudio.model.Surface(vtx, model)
+        floor.setSpace(space)
+        self.assertAlmostEqual(osut.spaceWidth(space),1,3)
+
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
         path = openstudio.path("./tests/files/osms/in/warehouse.osm")
         model = translator.loadModel(path)
         self.assertTrue(model)
