@@ -103,20 +103,22 @@ _mats = dict(
 # Default inside + outside air film resistances (m2.K/W).
 _film = dict(
       shading = 0.000, # NA
-    partition = 0.150, # uninsulated wood- or steel-framed wall
+      ceiling = 0.266, # interzone floor/ceiling
+    partition = 0.239, # interzone wall partition
          wall = 0.150, # un/insulated wall
-         roof = 0.140, # un/insulated roof
-        floor = 0.190, # un/insulated (exposed) floor
+         roof = 0.135, # un/insulated roof
+        floor = 0.192, # un/insulated (exposed) floor
      basement = 0.120, # un/insulated basement wall
-         slab = 0.160, # un/insulated basement slab or slab-on-grade
+         slab = 0.162, # un/insulated basement slab or slab-on-grade
          door = 0.150, # standard, 45mm insulated steel (opaque) door
        window = 0.150, # vertical fenestration, e.g. glazed doors, windows
-     skylight = 0.140  # e.g. domed 4' x 4' skylight
+     skylight = 0.135  # e.g. domed 4' x 4' skylight
     )
 
 # Default (~1980s) envelope Uo (W/m2•K), based on surface type.
 _uo = dict(
       shading = None,  # N/A
+      ceiling = None,  # N/A
     partition = None,  # N/A
          wall = 0.384, # rated R14.8 hr•ft2F/Btu
          roof = 0.327, # rated R17.6 hr•ft2F/Btu
@@ -307,6 +309,64 @@ def clamp(value, minimum, maximum) -> float:
     if value > maximum: return maximum
 
     return value
+
+
+def filmResistances(type="wall", tilt=2*math.pi) -> float:
+    """Returns surface air film resistance(s). Surface tilt-dependent values
+    are returned if a valid surface tilt [0, PI] is provided. Otherwise,
+    generic tilt-independent air film resistances are returned instead.
+
+    Args:
+        type (string):
+            Surface type, e.g. "roof", "wall", "partition", "ceiling"
+        tilt (float):
+            Surface tilt (in rad), optional
+
+    Returns:
+        float: Surface air film resistance(s)
+        0.0: If invalid inputs (see logs).
+
+    """
+    mth = "osut.filmResistances"
+
+    try:
+        tilt = float(tilt)
+    except:
+        return oslg.mismatch("surface tilt", tilt, float, mth, CN.DBG, 0.0)
+
+    try:
+        type = str(type)
+    except:
+        return oslg.mismatch("surface type", type, str, mth, CN.DBG, 0.0)
+
+    if type not in film():
+        return oslg.invalid("surface type", mth, 1, CN.DBG, 0.0)
+
+    # Generic, tilt-independent values.
+    r = film()[type]
+
+    if type == "shading":
+        return r
+    elif 0.0 <= tilt <= math.pi:
+        r = openstudio.model.PlanarSurface.stillAirFilmResistance(tilt)
+
+        if type == "basement" or type == "slab":
+            return r
+        elif type == "ceiling" or type == "partition":
+            # Interzone. Fetch reciprocal tilt, e.g. if tilt == 0°, tiltx = 180°
+            tiltx = tilt + math.pi
+
+            # Assuming tilt is contrained [0°, 180°] - constrain tiltx [0° 180°]:
+            #   e.g. tiltx == 210° if tilt ==  30°, so convert tiltx to 150°
+            #   e.g. tiltx == 330° if tilt == 150°, so convert tiltx to  30°
+            #   e.g. tiltx == 275° if tilt ==  95°, so convert tiltx to  85°
+            if tiltx > math.pi: tiltx = math.pi - tilt
+
+            r += openstudio.model.PlanarSurface.stillAirFilmResistance(tiltx)
+        else:
+            r += 0.03 # "MOVINGAIR_15MPH"
+
+    return r
 
 
 def areStandardOpaqueLayers(lc=None) -> bool:
@@ -715,7 +775,7 @@ def resetUo(lc=None, film=None, index=None, uo=None, uniq=False) -> float:
         mt.setName(id)
 
         if not mt.setThermalResistance(r):
-            oslg.log(CN.WRN, "Failed to reset %s: RSi%.2f (%s)" % (id, r, mth))
+            oslg.log(CN.DBG, "Failed to reset %s: RSi%.2f (%s)" % (id, r, mth))
             return 0.0
 
         lc.setLayer(index, mt)
@@ -745,12 +805,12 @@ def resetUo(lc=None, film=None, index=None, uo=None, uniq=False) -> float:
         mt.setName(id)
 
         if not mt.setThermalConductivity(k):
-            oslg.log(CN.WRN, "Failed to reset %s: K%.3f (%s)" % (id, k, mth))
+            oslg.log(CN.DBG, "Failed to reset %s: K%.3f (%s)" % (id, k, mth))
             return 0.0
 
         if not mt.setThickness(d):
             d = int(d*1000)
-            oslg.log(CN.WRN, "Failed to reset %s: %dmm (%s)" % (id, d, mth))
+            oslg.log(CN.DBG, "Failed to reset %s: %dmm (%s)" % (id, d, mth))
             return 0.0
 
         lc.setLayer(index, mt)
@@ -836,8 +896,36 @@ def genConstruction(model=None, specs=dict()):
         a["compo"]["d"  ] = d
         a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
+    elif specs["type"] == "ceiling":
+        if specs["clad"] != "none":
+            mt = "concrete"
+            d  = 0.015
+            if specs["clad"] == "light":  mt = "material"
+            if specs["clad"] == "medium":  d = 0.100
+            if specs["clad"] == "heavy":   d = 0.200
+            a["clad"]["mat"] = mats()[mt]
+            a["clad"]["d"  ] = d
+            a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        mt = "mineral"
+        d  = 0.100
+        if specs["frame"] == "medium": mt = "polyiso"
+        if specs["frame"] == "heavy":  mt = "cellulose"
+        if not u:                      mt = "material"
+        if not u:                       d = 0.015
+        a["compo"]["mat"] = mats()[mt]
+        a["compo"]["d"  ] = d
+        a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
+        if specs["finish"] != "none":
+            mt = "material"
+            d  = 0.015
+            a["finish"]["mat"] = mats()[mt]
+            a["finish"]["d"  ] = d
+            a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
+
     elif specs["type"] == "partition":
-        if not specs["clad"] == "none":
+        if specs["clad"] != "none":
             mt = "drywall"
             d  = 0.015
             a["clad"]["mat"] = mats()[mt]
@@ -855,7 +943,7 @@ def genConstruction(model=None, specs=dict()):
         a["compo"]["d"  ] = d
         a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"] == "none":
+        if specs["finish"] != "none":
             mt = "drywall"
             d  = 0.015
             a["finish"]["mat"] = mats()[mt]
@@ -863,7 +951,7 @@ def genConstruction(model=None, specs=dict()):
             a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "wall":
-        if not specs["clad"] == "none":
+        if specs["clad"] != "none":
             mt = "material"
             d  = 0.100
             if specs["clad"] == "medium": mt = "brick"
@@ -893,7 +981,7 @@ def genConstruction(model=None, specs=dict()):
         a["compo"]["d"  ] = d
         a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"] == "none":
+        if specs["finish"] != "none":
             mt = "concrete"
             d  = 0.015
             if specs["finish"] == "light":  mt = "drywall"
@@ -904,7 +992,7 @@ def genConstruction(model=None, specs=dict()):
             a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "roof":
-        if not specs["clad"] == "none":
+        if specs["clad"] != "none":
             mt = "concrete"
             d  = 0.015
             if specs["clad"] == "light": mt = "material"
@@ -924,7 +1012,7 @@ def genConstruction(model=None, specs=dict()):
         a["compo"]["d"  ] = d
         a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"] == "none":
+        if specs["finish"] != "none":
             mt = "concrete"
             d  = 0.015
             if specs["finish"] == "light":  mt = "drywall"
@@ -935,7 +1023,7 @@ def genConstruction(model=None, specs=dict()):
             a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "floor":
-        if not specs["clad"] == "none":
+        if specs["clad"] != "none":
             mt = "material"
             d  = 0.015
             a["clad"]["mat"] = mats()[mt]
@@ -952,7 +1040,7 @@ def genConstruction(model=None, specs=dict()):
         a["compo"]["d"  ] = d
         a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"] == "none":
+        if specs["finish"] != "none":
             mt = "concrete"
             d  = 0.015
             if specs["finish"] == "light": mt = "material"
@@ -969,7 +1057,7 @@ def genConstruction(model=None, specs=dict()):
         a["clad"]["d"  ] = d
         a["clad"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["frame"] == "none":
+        if specs["frame"] != "none":
             mt = "polyiso"
             d  = 0.025
             a["sheath"]["mat"] = mats()[mt]
@@ -983,7 +1071,7 @@ def genConstruction(model=None, specs=dict()):
         a["compo"]["d"  ] = d
         a["compo"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-        if not specs["finish"] == "none":
+        if specs["finish"] != "none":
             mt = "material"
             d  = 0.015
             a["finish"]["mat"] = mats()[mt]
@@ -991,7 +1079,7 @@ def genConstruction(model=None, specs=dict()):
             a["finish"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
     elif specs["type"] == "basement":
-        if not specs["clad"] == "none":
+        if specs["clad"] != "none":
             mt = "concrete"
             d  = 0.100
             if specs["clad"] == "light": mt = "material"
@@ -1018,7 +1106,7 @@ def genConstruction(model=None, specs=dict()):
             a["sheath"]["d"  ] = d
             a["sheath"]["id" ] = "OSut." + mt + ".%03d" % int(d * 1000)
 
-            if not specs["finish"] == "none":
+            if specs["finish"] != "none":
                 mt = "mineral"
                 d  = 0.075
                 a["compo"]["mat"] = mats()[mt]
@@ -2711,10 +2799,10 @@ def availabilitySchedule(model=None, avl=""):
         if not l.lowerLimitValue(): continue
         if not l.upperLimitValue(): continue
         if not l.numericType(): continue
-        if not int(l.lowerLimitValue().get()) == 0: continue
-        if not int(l.upperLimitValue().get()) == 1: continue
-        if not l.numericType().get().lower() == "discrete": continue
-        if not l.unitType().lower() == "availability": continue
+        if int(l.lowerLimitValue().get()) != 0: continue
+        if int(l.upperLimitValue().get()) != 1: continue
+        if l.numericType().get().lower() != "discrete": continue
+        if l.unitType().lower() != "availability": continue
         if ide != "hvac operation scheduletypelimits": continue
 
         limits = l

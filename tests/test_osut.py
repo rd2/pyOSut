@@ -60,8 +60,8 @@ class TestOSutModuleMethods(unittest.TestCase):
 
     def test03_dictionaries(self):
         self.assertEqual(len(osut.mats()),9)
-        self.assertEqual(len(osut.film()),10)
-        self.assertEqual(len(osut.uo()),10)
+        self.assertEqual(len(osut.film()),11)
+        self.assertEqual(len(osut.uo()),11)
         self.assertTrue("concrete" in osut.mats())
         self.assertTrue("skylight" in osut.film())
         self.assertTrue("skylight" in osut.uo())
@@ -160,26 +160,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertEqual(o.status(), 0)
         del model
 
-        # Alternative to (uninsulated) partition (more inputs, same outcome).
-        specs = dict(type="wall", clad="none", uo=None)
-        model = openstudio.model.Model()
-        c = osut.genConstruction(model, specs)
-        self.assertEqual(o.status(), 0)
-        self.assertFalse(o.logs())
-        self.assertTrue(c)
-        self.assertTrue(isinstance(c, openstudio.model.Construction))
-        self.assertEqual(c.nameString(), "OSut.CON.wall")
-        self.assertTrue(c.layers())
-        self.assertEqual(len(c.layers()), 3)
-        self.assertEqual(c.layers()[0].nameString(), "OSut.drywall.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut.material.015")
-        self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
-        self.assertTrue("uo" in specs)
-        self.assertEqual(specs["uo"], None)
-        self.assertFalse(o.logs())
-        self.assertEqual(o.status(), 0)
-        del model
-
         # Insulated partition variant.
         specs = dict(type="partition", uo=0.214)
         model = openstudio.model.Model()
@@ -192,7 +172,7 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertTrue(c.layers())
         self.assertEqual(len(c.layers()), 3)
         self.assertEqual(c.layers()[0].nameString(), "OSut.drywall.015")
-        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.023:100")
+        self.assertEqual(c.layers()[1].nameString(), "OSut:K0.024:100")
         self.assertEqual(c.layers()[2].nameString(), "OSut.drywall.015")
         self.assertTrue("uo" in specs)
         self.assertAlmostEqual(specs["uo"], 0.214, places=2)
@@ -906,13 +886,6 @@ class TestOSutModuleMethods(unittest.TestCase):
         model = model.get()
         mdl   = openstudio.model.Model()
 
-        # cl1 = openstudio.model.DefaultConstructionSet
-        # cl2 = openstudio.model.LayeredConstruction
-        # cl2 = openstudio.model.Construction
-        # id1 = cl1.__name__
-        # id2 = cl2.__name__
-        # id3 = cl3.__name__
-
         t1 = "RoofCeiling"
         t2 = "Wall"
         t3 = "Floor"
@@ -1136,6 +1109,259 @@ class TestOSutModuleMethods(unittest.TestCase):
         version = int("".join(openstudio.openStudioVersion().split(".")))
         translator = openstudio.osversion.VersionTranslator()
 
+        # PlanarSurface method 'filmResistance' reports standard interior or
+        # exterior air film resistances for DISCRETE tilts, per ASHRAE Fundamentals.
+        #   https://github.com/NatLabRockies/OpenStudio/blob/
+        #   8008ef767fdc0f9d3dd3fabd383da15d009aef76/src/model/
+        #   PlanarSurface.cpp#L843
+
+        # EnergyPlus reported film resistances for INTERZONE walls.
+        #   - insulated INTERZONE skylight well walls:
+        #     - U    with film: 0.292 (R    with film: 3.425)
+        #     - U without film: 0.314 (R without film: 3.185)
+        #   TOTAL film resistance = 0.240 (~same as OpenStudio)
+        #
+        # ... vs other INTERZONE walls:
+        #     - U    with film: 2.511 (R    with film: 0.398)
+        #     - U without film: 6.299 (R without film: 0.159)
+        #   TOTAL film resistance = 0.239 (same as OpenStudio)
+
+        # Surface type identifiers to fetch filmResistance values.
+        fts = dict()
+        fts["STILLAIR_HORIZONTALSURFACE_HEATFLOWSUPWARD"  ] = 0.107427212046
+        fts["STILLAIR_45DEGREESURFACE_HEATFLOWSUPWARD"    ] = 0.109188313883
+        fts["STILLAIR_VERTICALSURFACE"                    ] = 0.119754924904
+        fts["STILLAIR_45DEGREESURFACE_HEATFLOWSDOWNWARD"  ] = 0.133843739599
+        fts["STILLAIR_HORIZONTALSURFACE_HEATFLOWSDOWNWARD"] = 0.162021368988
+        fts["MOVINGAIR_15MPH"                             ] = 0.029938731226
+        fts["MOVINGAIR_7P5MPH"                            ] = 0.044027545921
+
+        for i in list(openstudio.model.FilmResistanceType.getValues()):
+            t1 = openstudio.model.FilmResistanceType(i)
+            t2 = openstudio.model.FilmResistanceType(list(fts.keys())[i])
+            r  = openstudio.model.PlanarSurface.filmResistance(t1)
+            self.assertEqual(t1, t2)
+            self.assertAlmostEqual(r, list(fts.values())[i])
+
+            if i > 4: continue
+            # PlanarSurface method 'stillAirFilmResistance' supports a CONTINUOUS
+            # tilt-dependent interior air film resistance.
+            #   https://github.com/NatLabRockies/OpenStudio/blob/
+            #   8008ef767fdc0f9d3dd3fabd383da15d009aef76/src/model/
+            #   PlanarSurface.cpp#L867
+            deg = i * 45
+            rad = deg * math.pi/180.0
+            rsi = openstudio.model.PlanarSurface.stillAirFilmResistance(rad)
+            # per = 100 * (r - rsi) / r
+            # print(i, deg, r, rsi, per)
+            # 0:   0: 0.10743 0.10604  1.29
+            # 1:  45: 0.10919 0.10944 -0.23
+            # 2:  90: 0.11975 0.11965  0.09
+            # 3: 135: 0.13384 0.13665 -2.10
+            # 4: 180: 0.16202 0.16045  0.97
+            if deg < 45 or deg > 90: continue
+
+            # The method is used for (opaque) Surfaces. The correlation/regression
+            # isn't perfect, yet appears fairly reliable for intermediate angles
+            # between ~0° and 90°.
+            self.assertAlmostEqual(rsi, r, places=3)
+
+        # Surface class method 'filmResistance' is different (than PlanarSurface).
+        # It reports the sum of interior and exterior surface air film resistances,
+        # specific to a given surface.
+        #   https://github.com/NatLabRockies/OpenStudio/blob/
+        #   8008ef767fdc0f9d3dd3fabd383da15d009aef76/src/model/
+        #   Surface.cpp#L1400-L1419
+        #
+        # The method relies on 'isPartOfEnvelope', which unfortunately returns
+        # FALSE for insulated INTERZONE surfaces, e.g.:
+        #   - floors of an UNCONDITIONED attic
+        #   - ceiling of an UNCONDITIONED crawlspace
+        #
+        # These are definitely envelope surfaces.
+        #   https://github.com/NatLabRockies/OpenStudio/blob/
+        #   8008ef767fdc0f9d3dd3fabd383da15d009aef76/src/model/
+        #   Surface.cpp#L1243-L1247
+        #
+        # For INTERZONE surfaces, 'filmResistance' simply doubles the reported still
+        # air (interior) film resistance. The solution either underestimates or
+        # overestimates calculated surface air film resistances for non-vertical
+        # surfaces. Although such an approximation is less of an issue when dealing
+        # with highly insulated constructions, caution may be required when
+        # attempting to accommodate key standards like ASHRAE 90.1:
+        #
+        # "building envelope" (90.1 2022, 2025):
+        #   "the EXTERIOR plus the SEMIEXTERIOR portions of a building. For the
+        #    purposes of determining building envelope requirements, the
+        #    classifications are defined as follows:
+        #      - EXTERIOR building envelope: the elements of a building that
+        #        separate CONDITIONED spaces from the exterior.
+        #      - SEMIEXTERIOR building envelope: the elements of a building that
+        #        separate CONDITIONED space from UNCONDITIONED space or that enclose
+        #        SEMIHEATED spaces through which thermal energy may be transferred
+        #        to or from the EXTERIOR, to or from UNCONDITIONED spaces, or to or
+        #        from CONDITIONED spaces."
+        #
+        # This issue is discussed here:
+        #   https://github.com/NatLabRockies/EnergyPlus/issues/9470
+        #
+        # And in part discussed here:
+        #  https://www.ashrae.org/file%20library/technical%20resources/
+        #  standards%20and%20guidelines/standards%20intepretations/
+        #  ic-90.1-2019-8.pdf
+
+        # Testing this outcome, first with an UNCONDITIONED attic case.
+        self.assertEqual(o.clean(), DBG)
+
+        path  = openstudio.path("./tests/files/osms/out/office_attic.osm")
+        model = translator.loadModel(path)
+        self.assertTrue(model)
+        model = model.get()
+
+        attic = model.getSpaceByName("Attic")
+        self.assertTrue(attic)
+        attic = attic.get()
+        self.assertTrue(osut.isUnconditioned(attic))
+
+        # Test attic (insulated) floors, then their adjacent ceilings.
+        for surface in model.getSurfaces():
+            if surface.surfaceType().lower() != "floor": continue
+            if surface.outsideBoundaryCondition().lower() != "surface": continue
+
+            space = surface.space()
+            self.assertTrue(space)
+            space = space.get()
+            self.assertEqual(space, attic)
+
+            id = surface.nameString()
+            self.assertIn("attic_floor", id.lower())
+
+            # A surface's 'tilt' points outward (from its parent space), e.g. a
+            # horizontal attic floor faces downward, or 180°.
+            tilt = surface.tilt()
+            self.assertAlmostEqual(tilt, math.pi, places=4)
+
+            r1 = openstudio.model.PlanarSurface.stillAirFilmResistance(tilt) * 2
+            r2 = surface.filmResistance()
+            r3 = osut.filmResistances("ceiling")
+            r4 = osut.filmResistances("ceiling", tilt)
+            self.assertAlmostEqual(r1, 0.321, places=3)
+            self.assertAlmostEqual(r2, 0.321, places=3)
+            self.assertAlmostEqual(r3, 0.266, places=3)
+            self.assertAlmostEqual(r4, 0.266, places=3)
+
+            # Test adjacent ceilings.
+            ceiling = surface.adjacentSurface()
+            self.assertTrue(ceiling)
+            ceiling = ceiling.get()
+
+            nom = ceiling.nameString()
+            self.assertIn("_ceiling", nom)
+
+            # A horizontal ceiling faces upward, or 0°.
+            tilt = ceiling.tilt()
+            self.assertAlmostEqual(tilt, 0, places=4)
+
+            r1 = openstudio.model.PlanarSurface.stillAirFilmResistance(tilt) * 2
+            r2 = ceiling.filmResistance()
+            r3 = osut.filmResistances("ceiling")
+            r4 = osut.filmResistances("ceiling", tilt)
+            self.assertAlmostEqual(r1, 0.212, places=3) # not 0.321!
+            self.assertAlmostEqual(r2, 0.212, places=3) # not 0.321!
+            self.assertAlmostEqual(r3, 0.266, places=3) # same as floor above
+            self.assertAlmostEqual(r4, 0.266, places=3) # same as floor above
+
+            # OS-reported film resistances: 0.212 vs 0.321 - which one?
+            #
+            # ----------------------------------------------------------------------
+            # FYI, EnergyPlus reported (standard condition) U-factors:
+            #
+            #   - attic floors:
+            #       - U    with film: 0.151 (R    with film: 6.623)
+            #       - U without film: 0.158 (R without film: 6.329)
+            #     TOTAL film resistance = 0.267 ?
+            #
+            #   - adjacent ceilings below:
+            #       - U    with film: 0.151 (R    with film: 6.623)
+            #       - U without film: 0.158 (R without film: 6.329)
+            #     TOTAL film resistance = 0.267 !
+            #
+            # Regardless of how EnergyPlus determines combined film resistances,
+            # they are reported consistently, from either direction.
+            #
+            # Reminder:
+            #   fts["STILLAIR_HORIZONTALSURFACE_HEATFLOWSUPWARD"  ] = ~0.107
+            #   fts["STILLAIR_HORIZONTALSURFACE_HEATFLOWSDOWNWARD"] = ~0.162
+            #
+            # ... the sum of both = 0.269 (pretty close)
+            #
+            # Similarly:
+            #   OpenStudio::Model::PlanarSurface.stillAirFilmResistance(  0°) = 0.106
+            #   OpenStudio::Model::PlanarSurface.stillAirFilmResistance(180°) = 0.160
+            #
+            # ... the sum of both = 0.266 (even closer).
+
+        # Skylight well walls?
+        for surface in attic.surfaces():
+            if surface.surfaceType().lower() != "wall": continue
+
+            # Skylight well walls are vertical.
+            tilt = surface.tilt()
+            self.assertAlmostEqual(tilt, math.pi/2, places=4)
+            self.assertEqual(surface.outsideBoundaryCondition().lower(), "surface")
+
+            r1 = openstudio.model.PlanarSurface.stillAirFilmResistance(tilt) * 2
+            r2 = surface.filmResistance()
+            self.assertAlmostEqual(r1, 0.239, places=2)
+            self.assertAlmostEqual(r2, 0.239, places=2)
+
+            # Adjacent skylight well walls?
+            adjacent = surface.adjacentSurface()
+            self.assertTrue(adjacent)
+            adjacent = adjacent.get()
+
+            r1 = openstudio.model.PlanarSurface.stillAirFilmResistance(tilt) * 2
+            r2 = adjacent.filmResistance()
+            r3 = osut.filmResistances("partition")
+            r4 = osut.filmResistances("partition", tilt)
+            self.assertAlmostEqual(r1, 0.239, places=3)
+            self.assertAlmostEqual(r2, 0.239, places=3)
+            self.assertAlmostEqual(r3, 0.239, places=3)
+            self.assertAlmostEqual(r4, 0.239, places=3)
+
+        # Differenet from interzone walls in CONDITIONED, occupied spaces?
+        for space in model.getSpaces():
+            if space != attic: continue
+
+            for surface in space.surfaces():
+                if surface.surfaceType().lower() != "wall": continue
+                if surface.outsideBoundaryCondition().lower() != "surface": continue
+
+                tilt = surface.tilt()
+                self.assertAlmostEqual(tilt, math.pi/2, places=4)
+
+                r1 = openstudio.model.PlanarSurface.stillAirFilmResistance(tilt) * 2
+                r2 = surface.filmResistance()
+                r3 = osut.filmResistances("partition")
+                r4 = osut.filmResistances("partition", tilt)
+                self.assertAlmostEqual(r1, 0.239, places=3)
+                self.assertAlmostEqual(r2, 0.239, places=3)
+                self.assertAlmostEqual(r3, 0.239, places=3)
+                self.assertAlmostEqual(r4, 0.239, places=3)
+
+        # EnergyPlus reported film resistances for INTERZONE walls.
+        #   - insulated INTERZONE skylight well walls:
+        #     - U    with film: 0.292 (R    with film: 3.425)
+        #     - U without film: 0.314 (R without film: 3.185)
+        #   TOTAL film resistance = 0.240 (~same as OpenStudio)
+        #
+        # ... vs other INTERZONE walls:
+        #     - U    with film: 2.511 (R    with film: 0.398)
+        #     - U without film: 6.299 (R without film: 0.159)
+        #   TOTAL film resistance = 0.239 (same as OpenStudio)
+        # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- #
+
+        # Repeat for plenum cases.
         path  = openstudio.path("./tests/files/osms/out/seb2.osm")
         model = translator.loadModel(path)
         self.assertTrue(model)
@@ -1157,22 +1383,71 @@ class TestOSutModuleMethods(unittest.TestCase):
             lc = lc.get().to_LayeredConstruction()
             self.assertTrue(lc)
             lc = lc.get()
+            r1 = s.filmResistance()
 
-            if s.isGroundSurface(): # 4x slabs on grade in SEB model
-                self.assertAlmostEqual(s.filmResistance(), 0.160, places=3)
-                self.assertAlmostEqual(osut.rsi(lc, s.filmResistance()), 0.448, places=3)
-                self.assertEqual(o.status(), 0)
-            else:
-                if s.surfaceType() == "Wall":
-                    self.assertAlmostEqual(s.filmResistance(), 0.150, places=3)
-                    self.assertAlmostEqual(osut.rsi(lc, s.filmResistance()), 2.616, places=3)
-                    self.assertEqual(o.status(), 0)
+            if s.isPartOfEnvelope(): # i.e. outdoor-facing or ground-facing only
+                if s.isGroundSurface(): # 4x slabs on grade in SEB model
+                    r2 = osut.filmResistances("slab")
+                    r3 = osut.filmResistances("slab", s.tilt())
+                    self.assertAlmostEqual(r1, 0.160, places=3)
+                    self.assertAlmostEqual(r2, 0.162, places=3)
+                    self.assertAlmostEqual(r3, 0.160, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r1), 0.448, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r2), 0.450, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r3), 0.448, places=3)
+                elif s.surfaceType().lower() == "wall":
+                    r2 = osut.filmResistances("wall")
+                    r3 = osut.filmResistances("wall", s.tilt())
+                    self.assertAlmostEqual(r1, 0.150, places=3)
+                    self.assertAlmostEqual(r2, 0.150, places=3)
+                    self.assertAlmostEqual(r3, 0.150, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r1), 2.616, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r2), 2.617, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r3), 2.616, places=3)
                 else: # RoofCeiling
-                    self.assertAlmostEqual(s.filmResistance(), 0.136, places=3)
-                    self.assertAlmostEqual(osut.rsi(lc, s.filmResistance()), 5.631, places=3)
-                    self.assertEqual(o.status(), 0)
+                    self.assertEqual(s.surfaceType().lower(), "roofceiling")
+                    r2 = osut.filmResistances("roof")
+                    r3 = osut.filmResistances("roof", s.tilt())
+                    self.assertAlmostEqual(r1, 0.136, places=3)
+                    self.assertAlmostEqual(r2, 0.135, places=3)
+                    self.assertAlmostEqual(r3, 0.136, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r1), 5.631, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r2), 5.630, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r3), 5.631, places=3)
+            else:
+                self.assertEqual(s.outsideBoundaryCondition().lower(), "surface")
+
+                if s.surfaceType().lower() == "wall":
+                    r2 = osut.filmResistances("wall")
+                    r3 = osut.filmResistances("wall", s.tilt())
+                    self.assertAlmostEqual(r1, 0.239, places=3)
+                    self.assertAlmostEqual(r2, 0.239, places=3)
+                    self.assertAlmostEqual(r3, 0.239, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r1), 0.680, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r2), 0.680, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r3), 0.680, places=3)
+                elif s.surfaceType().lower() == "roofceiling":
+                    r2 = osut.filmResistances("ceiling")
+                    r3 = osut.filmResistances("ceiling", s.tilt())
+                    self.assertAlmostEqual(r1, 0.212, places=3) # attic ceiling
+                    self.assertAlmostEqual(r2, 0.266, places=3)
+                    self.assertAlmostEqual(r3, 0.266, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r1), 0.331, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r2), 0.386, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r3), 0.386, places=3)
+                else:
+                    self.assertEqual(s.surfaceType().lower(), "floor")
+                    r2 = osut.filmResistances("ceiling")
+                    r3 = osut.filmResistances("ceiling", s.tilt())
+                    self.assertAlmostEqual(r1, 0.321, places=3) # attic floor
+                    self.assertAlmostEqual(r2, 0.266, places=3)
+                    self.assertAlmostEqual(r3, 0.266, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r1), 0.440, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r2), 0.386, places=3)
+                    self.assertAlmostEqual(osut.rsi(lc, r3), 0.386, places=3)
 
         # Stress tests.
+        self.assertEqual(o.status(), 0)
         self.assertAlmostEqual(osut.rsi("", 0.150), 0, places=2)
         self.assertTrue(o.is_debug())
         self.assertEqual(len(o.logs()), 1)
@@ -5255,9 +5530,10 @@ class TestOSutModuleMethods(unittest.TestCase):
         self.assertAlmostEqual(round(ratio, 2), srr)
 
         # Reset attic default construction set for insulated interzone walls.
+        flm  = osut.filmResistances("partition")
         opts = dict(type="partition", uo=0.3)
         construction = osut.genConstruction(model, opts)
-        self.assertAlmostEqual(osut.rsi(construction, 0.150), 1/0.3, places=2)
+        self.assertAlmostEqual(osut.rsi(construction, flm), 1/0.3, places=2)
         self.assertTrue(ia_set.setWallConstruction(construction))
         if o.logs(): print(o.logs())
 
