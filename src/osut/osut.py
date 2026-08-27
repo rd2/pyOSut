@@ -533,7 +533,7 @@ def rsi(lc=None, film=0.0, t=0.0) -> float:
         if m.to_StandardOpaqueMaterial():
             rsi += m.to_StandardOpaqueMaterial().get().thermalResistance()
         elif m.to_MasslessOpaqueMaterial():
-            rsi += m.to_MasslessOpaqueMaterial()
+            rsi += m.to_MasslessOpaqueMaterial().get().thermalResistance()
         elif m.to_RoofVegetation():
             rsi += m.to_RoofVegetation().get().thermalResistance()
         elif m.to_AirGap():
@@ -563,7 +563,7 @@ def insulatingLayer(lc=None) -> dict:
     mth = "osut.insulatingLayer"
     cl  = openstudio.model.LayeredConstruction
     res = dict(index=None, type=None, r=0.0)
-    i   = 0  # iterator
+    i   = 0 # iterator
 
     if not isinstance(lc, cl):
         return oslg.mismatch("lc", lc, cl, mth, CN.DBG, res)
@@ -572,11 +572,11 @@ def insulatingLayer(lc=None) -> dict:
         if l.to_MasslessOpaqueMaterial():
             l = l.to_MasslessOpaqueMaterial().get()
 
-            if l.thermalResistance() < 0.001 or l.thermalResistance() < res["r"]:
+            if l.thermalResistance() < CN.RMIN or l.thermalResistance() < res["r"]:
                 i += 1
                 continue
             else:
-                res["r"    ] = m.thermalResistance()
+                res["r"    ] = l.thermalResistance()
                 res["index"] = i
                 res["type" ] = "massless"
 
@@ -585,7 +585,7 @@ def insulatingLayer(lc=None) -> dict:
             k = l.thermalConductivity()
             d = l.thickness()
 
-            if (d < 0.003) or (k > 3.0) or (d / k < res["r"]):
+            if (d < CN.DMIN) or (k > CN.KMAX) or (d / k < res["r"]):
                 i += 1
                 continue
             else:
